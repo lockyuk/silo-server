@@ -44,13 +44,6 @@ const FILTERS: { value: State | "all"; label: string }[] = [
   { value: "pending", label: "Waiting" },
 ];
 
-function lastRunSummary(data: Record<string, unknown> | undefined) {
-  const n = (key: string) => (typeof data?.[key] === "number" ? (data[key] as number) : null);
-  const downloaded = n("downloaded");
-  if (downloaded == null) return null;
-  return `${downloaded} downloaded, ${n("not_available") ?? 0} not available, ${n("failed") ?? 0} failed`;
-}
-
 /** Downloads TV theme songs into Silo's storage, never into media folders. */
 export function ThemeSongsSettings() {
   useEventChannel("tasks");
@@ -100,7 +93,6 @@ export function ThemeSongsSettings() {
 
   const config = data?.config;
   const counts = data?.counts;
-  const summary = lastRunSummary(task?.last_execution?.result_data);
 
   return (
     <FieldGroup
@@ -165,7 +157,7 @@ export function ThemeSongsSettings() {
           )}
           <p className="text-muted-foreground mt-1 text-xs">
             {task?.last_execution
-              ? `Last run ${formatDateTime(task.last_execution.completed_at)}${summary ? `: ${summary}` : ""}`
+              ? `Last run ${formatDateTime(task.last_execution.completed_at)}`
               : "Never run"}
           </p>
         </div>

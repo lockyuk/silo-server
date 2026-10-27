@@ -128,6 +128,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/taskmanager/tasks"
 	"github.com/Silo-Server/silo-server/internal/taskmanager/triggers"
 	"github.com/Silo-Server/silo-server/internal/telemetry"
+	"github.com/Silo-Server/silo-server/internal/themedownload"
 	"github.com/Silo-Server/silo-server/internal/themesongs"
 	"github.com/Silo-Server/silo-server/internal/transcodenode"
 	"github.com/Silo-Server/silo-server/internal/trickplay"
@@ -3201,7 +3202,14 @@ func main() {
 			taskMgr.Register(tasks.NewCleanupArtworkRevisionsTask(
 				metadata.NewArtworkRevisionGarbageCollector(deps.DB, deps.Blobs.Assets),
 			))
-			mediaImages := []blobgc.Namespace{chapterthumbs.BlobNamespace(), trickplay.BlobNamespace()}
+			themeDownloads := themedownload.New(deps.DB, deps.Blobs.Assets, settingsRepo, scanner.FFprobePathFromFFmpeg(cfg.Playback.FFmpegPath))
+			themesongs.UseDownloads(deps.DB, func(ctx context.Context, key string) (io.ReadCloser, error) {
+				body, _, err := deps.Blobs.Assets.Get(ctx, key)
+				return body, err
+			}, filepath.Join(os.TempDir(), "silo-theme-songs"))
+			taskMgr.Register(tasks.NewDownloadThemeSongsTask(themeDownloads))
+			deps.ThemeDownloads = themeDownloads
+			mediaImages := []blobgc.Namespace{chapterthumbs.BlobNamespace(), trickplay.BlobNamespace(), themedownload.BlobNamespace()}
 			// Replaced chapter images are queued by key; the sweep lists by file.
 			collected := append([]blobgc.Namespace{chapterthumbs.ImageBlobNamespace()}, mediaImages...)
 			if collector := blobgc.NewCollector(deps.DB, deps.Blobs.Assets, collected...); collector != nil {

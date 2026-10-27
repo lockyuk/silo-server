@@ -29,6 +29,24 @@ func (r *Repository) Find(ctx context.Context, id string, filter catalog.AccessF
 	if !ok {
 		return File{}, ErrNotFound
 	}
+	if d := downloads.Load(); d != nil {
+		series, err := d.seriesOf(ctx, n)
+		if err == nil {
+			_, files, err := r.Resolve(ctx, series, false, filter)
+			if err != nil {
+				return File{}, err
+			}
+			for _, f := range files {
+				if f.ID == id {
+					return f, nil
+				}
+			}
+			return File{}, ErrNotFound
+		}
+		if !errors.Is(err, ErrNotFound) {
+			return File{}, err
+		}
+	}
 	rows, err := r.pool.Query(ctx, `SELECT DISTINCT mf.content_id, COALESCE(e.season_id,''), e.season_number FROM item_theme_songs t
 		JOIN media_files mf ON mf.media_folder_id=t.media_folder_id
 		LEFT JOIN episodes e ON e.content_id=mf.episode_id
@@ -145,7 +163,30 @@ func (r *Repository) Resolve(ctx context.Context, id string, inherit bool, filte
 			return candidate.id, files, nil
 		}
 	}
+	// No folder theme anywhere in the chain: fall back to the series' download.
+	if d := downloads.Load(); d != nil {
+		for _, candidate := range owners {
+			if candidate.kind != ownerSeries {
+				continue
+			}
+			files, err := d.forSeries(ctx, candidate.id)
+			if err != nil {
+				return "", nil, err
+			}
+			if len(files) > 0 {
+				files[0].OwnerType = ownerSeries
+				return candidate.id, files, nil
+			}
+		}
+	}
 	return id, []File{}, nil
+}
+
+// HasFolderTheme reports whether a series has a theme file of its own, in its
+// folder, regardless of who may see it. Downloaded themes do not count.
+func (r *Repository) HasFolderTheme(ctx context.Context, seriesID string) (bool, error) {
+	files, err := r.files(ctx, owner{seriesID, ownerSeries, seriesID, 0}, catalog.AccessFilter{})
+	return len(files) > 0, err
 }
 
 func (r *Repository) files(ctx context.Context, target owner, filter catalog.AccessFilter) ([]File, error) {

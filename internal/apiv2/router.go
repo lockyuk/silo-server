@@ -230,6 +230,7 @@ type Dependencies struct {
 	NotificationEmailArtwork      NotificationEmailArtworkService
 	AdminEmailAlerts              AdminEmailAlertsService
 	AdminPushStyle                AdminPushStyleService
+	AdminThemeSongs               AdminThemeSongsService
 	NotificationRelay             NotificationRelayService
 	AdminNotificationPush         AdminNotificationPushService
 	NotificationInbox             NotificationInboxService

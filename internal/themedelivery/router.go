@@ -140,10 +140,15 @@ func (r *Router) Resolve(ctx context.Context, req Request) (Result, error) {
 			excluded[noderouting.ShapeProgressiveRemuxTranscodeProxy] = struct{}{}
 		}
 	}
+	// Workers have no copy of a downloaded theme, so only local routes apply.
+	planner := r.Planner
+	if req.File.Downloaded {
+		planner = nil
+	}
 	caps := &capabilityCache{infos: map[*nodepool.Node]playback.HWAccelInfo{}}
 	// Predicates run under the planner lock, which the planner reserves for
 	// cheap lookups: parse every stored report before resolving.
-	caps.warm(r.Planner)
+	caps.warm(planner)
 	proxyEligible := nodepool.ClientReachableVia(req.AccessPath, func(n *nodepool.Node) bool {
 		return caps.has(n, playback.TransportFeatureThemeAudioEgressV1) &&
 			(!converted || caps.has(n, playback.TransportFeatureProgressiveRemuxRelayV1))
@@ -156,7 +161,7 @@ func (r *Router) Resolve(ctx context.Context, req Request) (Result, error) {
 			caps.has(n, playback.TransportFeatureProgressiveRemuxExecutionV1) && caps.convertsAAC(n)
 	}
 	for {
-		decision, err := noderouting.Resolve(r.Planner, noderouting.ResolveRequest{
+		decision, err := noderouting.Resolve(planner, noderouting.ResolveRequest{
 			Request:                request,
 			SessionID:              id,
 			EstimatedBitrateKbps:   bitrate,

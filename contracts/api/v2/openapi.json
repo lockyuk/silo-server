@@ -36788,6 +36788,11 @@
           "series_title": {
             "type": "string"
           },
+          "thumbnail_url": {
+            "description": "Absolute poster link for a rich notification.",
+            "format": "uri-reference",
+            "type": "string"
+          },
           "type": {
             "type": "string"
           }

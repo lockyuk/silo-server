@@ -18,6 +18,10 @@ type AdminThemeSongsService interface {
 	List(context.Context) ([]themedownload.Series, error)
 	Retry(context.Context, string) (themedownload.Series, error)
 	Remove(context.Context, string) (themedownload.Series, error)
+	Skip(context.Context, string) (themedownload.Series, error)
+	Start(force bool, reason string) error
+	Status() (bool, string)
+	LastReport(context.Context) (*themedownload.Report, error)
 }
 
 type ThemeSongDownloadConfig struct {
@@ -29,7 +33,7 @@ type ThemeSongSeries struct {
 	ID           string     `json:"id"`
 	Title        string     `json:"title"`
 	TVDBID       string     `json:"tvdb_id" doc:"TheTVDB id the theme is looked up by; empty when the series has none."`
-	State        string     `json:"state" enum:"folder,downloaded,not_available,failed,pending" doc:"folder: a theme file in the series folder is used; downloaded: Silo's stored copy is used."`
+	State        string     `json:"state" enum:"folder,downloaded,not_available,failed,pending,skipped" doc:"folder: a theme file in the series folder is used; downloaded: Silo's stored copy is used; skipped: an admin stopped looking for one."`
 	Detail       string     `json:"detail,omitempty" doc:"Why the last download failed."`
 	CheckedAt    *time.Time `json:"checked_at,omitempty"`
 	DownloadedAt *time.Time `json:"downloaded_at,omitempty"`
@@ -41,12 +45,37 @@ type ThemeSongCounts struct {
 	NotAvailable int `json:"not_available"`
 	Failed       int `json:"failed"`
 	Pending      int `json:"pending"`
+	Skipped      int `json:"skipped"`
+}
+
+type ThemeSongRunReport struct {
+	Started      time.Time `json:"started"`
+	Finished     time.Time `json:"finished"`
+	Reason       string    `json:"reason"`
+	Error        string    `json:"error,omitempty"`
+	Series       int       `json:"series"`
+	Checked      int       `json:"checked"`
+	Downloaded   int       `json:"downloaded"`
+	NotAvailable int       `json:"not_available"`
+	Failed       int       `json:"failed"`
+	Skipped      int       `json:"skipped"`
+	Failures     []string  `json:"failures,omitempty"`
 }
 
 type AdminThemeSongs struct {
 	Config ThemeSongDownloadConfig `json:"config"`
 	Counts ThemeSongCounts         `json:"counts"`
 	Series []ThemeSongSeries       `json:"series"`
+	// Running and Progress describe a check in progress on this process.
+	Running  bool                `json:"running"`
+	Progress string              `json:"progress,omitempty"`
+	Report   *ThemeSongRunReport `json:"report,omitempty" doc:"The most recent check."`
+}
+
+type AdminThemeSongsRunInput struct {
+	Body struct {
+		Force bool `json:"force,omitempty" doc:"Ask again for themes the source lacked, without waiting for the recheck interval."`
+	}
 }
 
 type AdminThemeSongsOutput struct{ Body AdminThemeSongs }
@@ -102,9 +131,20 @@ func (reg *Registry) themeSongsOverview(ctx context.Context, svc AdminThemeSongs
 			out.Counts.NotAvailable++
 		case themedownload.StateFailed:
 			out.Counts.Failed++
+		case themedownload.StateSkipped:
+			out.Counts.Skipped++
 		default:
 			out.Counts.Pending++
 		}
+	}
+	out.Running, out.Progress = svc.Status()
+	report, err := svc.LastReport(ctx)
+	if err != nil {
+		return nil, serviceProblem(err)
+	}
+	if report != nil {
+		r := ThemeSongRunReport(*report)
+		out.Report = &r
 	}
 	return &AdminThemeSongsOutput{Body: out}, nil
 }
@@ -146,6 +186,38 @@ func registerAdminThemeSongs(reg *Registry) {
 				return nil, p
 			}
 			s, err := svc.Retry(ctx, in.ID)
+			if err != nil {
+				return nil, themeSongSeriesProblem(err)
+			}
+			return &AdminThemeSongSeriesOutput{Body: themeSongSeries(s)}, nil
+		})
+
+	run := themeSongsOperation(http.MethodPost, "/run", "runAdminThemeSongs", "Start a check for missing themes in the background; 409 while one runs.")
+	run.Errors = []int{http.StatusConflict}
+	Register(reg, run, func(ctx context.Context, in *AdminThemeSongsRunInput) (*AdminThemeSongsOutput, error) {
+		svc, p := reg.adminThemeSongs()
+		if p != nil {
+			return nil, p
+		}
+		reason := "run from the admin page"
+		if in.Body.Force {
+			reason = "recheck from the admin page"
+		}
+		if err := svc.Start(in.Body.Force, reason); errors.Is(err, themedownload.ErrRunning) {
+			return nil, NewProblem(TypeConflict, "A check is already running.")
+		} else if err != nil {
+			return nil, serviceProblem(err)
+		}
+		return reg.themeSongsOverview(ctx, svc)
+	})
+
+	Register(reg, themeSongsOperation(http.MethodPost, "/series/{id}/skip", "skipAdminThemeSong", "Delete one series' downloaded theme and stop looking for one until it is retried."),
+		func(ctx context.Context, in *AdminThemeSongSeriesInput) (*AdminThemeSongSeriesOutput, error) {
+			svc, p := reg.adminThemeSongs()
+			if p != nil {
+				return nil, p
+			}
+			s, err := svc.Skip(ctx, in.ID)
 			if err != nil {
 				return nil, themeSongSeriesProblem(err)
 			}

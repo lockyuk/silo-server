@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,8 +18,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Silo-Server/silo-server/internal/scanner"
@@ -29,6 +32,8 @@ const (
 	// SettingEnabled switches downloading on; it is off by default because it
 	// contacts a third-party server.
 	SettingEnabled = "theme_songs.download_enabled"
+	// SettingLastReport holds the most recent run's report, as JSON.
+	SettingLastReport = "theme_songs.last_report"
 	// SettingRecheckDays is how long a theme the source lacks waits before it
 	// is asked for again.
 	SettingRecheckDays = "theme_songs.recheck_days"
@@ -74,6 +79,10 @@ type Service struct {
 	sourceURL string
 	gap       time.Duration
 	now       func() time.Time
+
+	mu       sync.Mutex
+	running  bool
+	progress string
 	// probeAudio reads a download's audio format; tests replace ffprobe.
 	probeAudio func(ctx context.Context, data []byte) (themesongs.File, error)
 }
@@ -153,6 +162,8 @@ const (
 	StateNotAvailable = "not_available"
 	StateFailed       = "failed"
 	StatePending      = "pending"
+	// StateSkipped is a series an admin chose never to download a theme for.
+	StateSkipped = "skipped"
 )
 
 // List returns every TV series with files, and its theme state.
@@ -184,6 +195,8 @@ func (s *Service) List(ctx context.Context) ([]Series, error) {
 			sr.State = StateDownloaded
 		case outcome != nil && *outcome == "not_available":
 			sr.State = StateNotAvailable
+		case outcome != nil && *outcome == "skipped":
+			sr.State = StateSkipped
 		case outcome != nil && *outcome == "failed":
 			sr.State, sr.Detail = StateFailed, *detail
 		default:
@@ -210,17 +223,113 @@ func (s *Service) List(ctx context.Context) ([]Series, error) {
 
 // Report summarizes one run.
 type Report struct {
-	Checked      int      `json:"checked"`
-	Downloaded   int      `json:"downloaded"`
-	NotAvailable int      `json:"not_available"`
-	Failed       int      `json:"failed"`
-	Skipped      int      `json:"skipped" doc:"Series with a folder theme, a download, or a recent miss."`
-	Failures     []string `json:"failures,omitempty"`
+	Started      time.Time `json:"started"`
+	Finished     time.Time `json:"finished"`
+	Reason       string    `json:"reason"`
+	Error        string    `json:"error,omitempty"`
+	Series       int       `json:"series"`
+	Checked      int       `json:"checked"`
+	Downloaded   int       `json:"downloaded"`
+	NotAvailable int       `json:"not_available"`
+	Failed       int       `json:"failed"`
+	Skipped      int       `json:"skipped" doc:"Series with a folder theme, a download, or a recent miss."`
+	Failures     []string  `json:"failures,omitempty"`
+}
+
+// ErrRunning means a check is already running.
+var ErrRunning = errors.New("a theme song check is already running")
+
+func (s *Service) begin() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.running {
+		return false
+	}
+	s.running, s.progress = true, "Starting"
+	return true
+}
+
+func (s *Service) end() {
+	s.mu.Lock()
+	s.running, s.progress = false, ""
+	s.mu.Unlock()
+}
+
+func (s *Service) setProgress(message string) {
+	s.mu.Lock()
+	s.progress = message
+	s.mu.Unlock()
+}
+
+// Status reports whether a check is running and what it is doing.
+func (s *Service) Status() (bool, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.running, s.progress
 }
 
 // Run downloads the themes still missing. force asks again for themes the
-// source lacked, without waiting for the recheck interval. progress may be nil.
-func (s *Service) Run(ctx context.Context, force bool, progress func(percent float64, message string)) (Report, error) {
+// source lacked, without waiting for the recheck interval. reason is kept
+// with the run's report. progress may be nil. Only one check runs at a time.
+func (s *Service) Run(ctx context.Context, force bool, reason string, progress func(percent float64, message string)) (Report, error) {
+	if !s.begin() {
+		return Report{}, ErrRunning
+	}
+	defer s.end()
+	return s.runAndRecord(ctx, force, reason, progress)
+}
+
+// Start runs a check in the background, for the admin page.
+func (s *Service) Start(force bool, reason string) error {
+	if !s.begin() {
+		return ErrRunning
+	}
+	go func() {
+		defer s.end()
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Hour)
+		defer cancel()
+		_, _ = s.runAndRecord(ctx, force, reason, nil)
+	}()
+	return nil
+}
+
+func (s *Service) runAndRecord(ctx context.Context, force bool, reason string, progress func(percent float64, message string)) (Report, error) {
+	started := s.now()
+	report, err := s.run(ctx, force, func(percent float64, message string) {
+		s.setProgress(message)
+		if progress != nil {
+			progress(percent, message)
+		}
+	})
+	report.Started, report.Finished, report.Reason = started, s.now(), reason
+	if err != nil {
+		report.Error = err.Error()
+	}
+	if raw, marshalErr := json.Marshal(report); marshalErr == nil {
+		// A fresh context: a cancelled run still records how far it got.
+		saveCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if saveErr := s.settings.Set(saveCtx, SettingLastReport, string(raw)); saveErr != nil {
+			slog.WarnContext(ctx, "theme songs: run report not saved", "component", "themedownload", "error", saveErr)
+		}
+	}
+	return report, err
+}
+
+// LastReport returns the most recent run's report, or nil before the first.
+func (s *Service) LastReport(ctx context.Context) (*Report, error) {
+	raw, err := s.settings.Get(ctx, SettingLastReport)
+	if err != nil || raw == "" {
+		return nil, err
+	}
+	var report Report
+	if err := json.Unmarshal([]byte(raw), &report); err != nil {
+		return nil, nil
+	}
+	return &report, nil
+}
+
+func (s *Service) run(ctx context.Context, force bool, progress func(percent float64, message string)) (Report, error) {
 	var report Report
 	cfg, err := s.Config(ctx)
 	if err != nil {
@@ -231,10 +340,11 @@ func (s *Service) Run(ctx context.Context, force bool, progress func(percent flo
 		return report, err
 	}
 	recheck := time.Duration(cfg.RecheckDays) * 24 * time.Hour
+	report.Series = len(all)
 	var due []Series
 	for _, sr := range all {
 		switch {
-		case sr.State == StateFolder || sr.State == StateDownloaded:
+		case sr.State == StateFolder || sr.State == StateDownloaded || sr.State == StateSkipped:
 			report.Skipped++
 		case sr.State == StateNotAvailable && !force && sr.CheckedAt != nil && s.now().Sub(*sr.CheckedAt) < recheck:
 			report.Skipped++
@@ -247,7 +357,7 @@ func (s *Service) Run(ctx context.Context, force bool, progress func(percent flo
 			return report, err
 		}
 		if progress != nil {
-			progress(float64(i)*100/float64(len(due)), "Checking "+sr.Title)
+			progress(float64(i)*100/float64(len(due)), fmt.Sprintf("Checking %s (%d of %d)", sr.Title, i+1, len(due)))
 		}
 		if i > 0 && s.gap > 0 {
 			select {
@@ -315,15 +425,43 @@ func (s *Service) Retry(ctx context.Context, seriesID string) (Series, error) {
 	return Series{}, themesongs.ErrNotFound
 }
 
+// Skip deletes a series' downloaded theme and stops looking for one, until
+// an admin retries it.
+func (s *Service) Skip(ctx context.Context, seriesID string) (Series, error) {
+	if _, err := s.one(ctx, seriesID); err != nil {
+		return Series{}, err
+	}
+	if err := s.deleteDownload(ctx, seriesID); err != nil {
+		return Series{}, err
+	}
+	if _, err := s.pool.Exec(ctx, `INSERT INTO theme_song_checks (series_id, checked_at, outcome, detail) VALUES ($1, $2, 'skipped', '')
+		ON CONFLICT (series_id) DO UPDATE SET checked_at = EXCLUDED.checked_at, outcome = EXCLUDED.outcome, detail = ''`,
+		seriesID, s.now()); err != nil {
+		return Series{}, err
+	}
+	return s.one(ctx, seriesID)
+}
+
+func (s *Service) deleteDownload(ctx context.Context, seriesID string) error {
+	var key string
+	err := s.pool.QueryRow(ctx, `DELETE FROM downloaded_theme_songs WHERE series_id = $1 RETURNING blob_key`, seriesID).Scan(&key)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := s.blobs.Delete(ctx, []string{key}); err != nil {
+		slog.WarnContext(ctx, "theme songs: stored theme not deleted; the orphan sweep will remove it", "component", "themedownload", "key", key, "error", err)
+	}
+	return nil
+}
+
 // Remove deletes a series' downloaded theme. The next run fetches it again
 // unless a folder theme has appeared.
 func (s *Service) Remove(ctx context.Context, seriesID string) (Series, error) {
-	var key string
-	err := s.pool.QueryRow(ctx, `DELETE FROM downloaded_theme_songs WHERE series_id = $1 RETURNING blob_key`, seriesID).Scan(&key)
-	if err == nil {
-		if _, err := s.blobs.Delete(ctx, []string{key}); err != nil {
-			slog.WarnContext(ctx, "theme songs: stored theme not deleted; the orphan sweep will remove it", "component", "themedownload", "key", key, "error", err)
-		}
+	if err := s.deleteDownload(ctx, seriesID); err != nil {
+		return Series{}, err
 	}
 	if _, err := s.pool.Exec(ctx, `DELETE FROM theme_song_checks WHERE series_id = $1`, seriesID); err != nil {
 		return Series{}, err

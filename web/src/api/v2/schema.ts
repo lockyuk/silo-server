@@ -5498,6 +5498,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v2/admin/theme-songs/run": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Start a check for missing themes in the background; 409 while one runs. */
+    post: operations["runAdminThemeSongs"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v2/admin/theme-songs/series/{id}": {
     parameters: {
       query?: never;
@@ -5526,6 +5543,23 @@ export interface paths {
     put?: never;
     /** Download one series' theme now, whatever its last outcome. A series with a folder theme is left alone. */
     post: operations["retryAdminThemeSong"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/admin/theme-songs/series/{id}/skip": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Delete one series' downloaded theme and stop looking for one until it is retried. */
+    post: operations["skipAdminThemeSong"];
     delete?: never;
     options?: never;
     head?: never;
@@ -20062,7 +20096,15 @@ export interface components {
     AdminThemeSongs: {
       config: components["schemas"]["ThemeSongDownloadConfig"];
       counts: components["schemas"]["ThemeSongCounts"];
+      progress?: string;
+      /** @description The most recent check. */
+      report?: components["schemas"]["ThemeSongRunReport"];
+      running: boolean;
       series: components["schemas"]["ThemeSongSeries"][];
+    };
+    AdminThemeSongsRunInputBody: {
+      /** @description Ask again for themes the source lacked, without waiting for the recheck interval. */
+      force?: boolean;
     };
     AdminTMDBImport: {
       description?: string;
@@ -32647,6 +32689,8 @@ export interface components {
       not_available: number;
       /** Format: int64 */
       pending: number;
+      /** Format: int64 */
+      skipped: number;
     };
     ThemeSongDownloadConfig: {
       /** @description Download theme songs for series without one in their folder. */
@@ -32656,6 +32700,27 @@ export interface components {
        * @description Days before a theme the source lacked is asked for again.
        */
       recheck_days: number;
+    };
+    ThemeSongRunReport: {
+      /** Format: int64 */
+      checked: number;
+      /** Format: int64 */
+      downloaded: number;
+      error?: string;
+      /** Format: int64 */
+      failed: number;
+      failures?: string[];
+      /** Format: date-time */
+      finished: string;
+      /** Format: int64 */
+      not_available: number;
+      reason: string;
+      /** Format: int64 */
+      series: number;
+      /** Format: int64 */
+      skipped: number;
+      /** Format: date-time */
+      started: string;
     };
     ThemeSongsCapability: {
       /** @description Whether the current principal may use the capability */
@@ -32688,10 +32753,10 @@ export interface components {
       downloaded_at?: string;
       id: string;
       /**
-       * @description folder: a theme file in the series folder is used; downloaded: Silo's stored copy is used.
+       * @description folder: a theme file in the series folder is used; downloaded: Silo's stored copy is used; skipped: an admin stopped looking for one.
        * @enum {string}
        */
-      state: "folder" | "downloaded" | "not_available" | "failed" | "pending";
+      state: "folder" | "downloaded" | "not_available" | "failed" | "pending" | "skipped";
       title: string;
       /** @description TheTVDB id the theme is looked up by; empty when the series has none. */
       tvdb_id: string;
@@ -84355,6 +84420,152 @@ export interface operations {
       };
     };
   };
+  runAdminThemeSongs: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AdminThemeSongsRunInputBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdminThemeSongs"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Timeout */
+      408: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
   deleteAdminThemeSong: {
     parameters: {
       query?: never;
@@ -84465,6 +84676,115 @@ export interface operations {
     };
   };
   retryAdminThemeSong: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        /** @description Series id. */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ThemeSongSeries"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  skipAdminThemeSong: {
     parameters: {
       query?: never;
       header?: {

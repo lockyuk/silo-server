@@ -403,8 +403,10 @@ POST /api/v2/admin/tasks/{key}/run	non-media
 GET /api/v2/admin/tasks/{key}/triggers	non-media
 PUT /api/v2/admin/tasks/{key}/triggers	non-media
 GET /api/v2/admin/theme-songs	non-media
+POST /api/v2/admin/theme-songs/run	non-media
 DELETE /api/v2/admin/theme-songs/series/{id}	non-media
 POST /api/v2/admin/theme-songs/series/{id}/retry	non-media
+POST /api/v2/admin/theme-songs/series/{id}/skip	non-media
 PUT /api/v2/admin/theme-songs/settings	non-media
 GET /api/v2/admin/trickplay/libraries	non-media
 GET /api/v2/admin/unmatched	non-media
@@ -1722,8 +1724,10 @@ POST /api/v2/admin/tasks/{key}/run	non-media
 GET /api/v2/admin/tasks/{key}/triggers	non-media
 PUT /api/v2/admin/tasks/{key}/triggers	non-media
 GET /api/v2/admin/theme-songs	non-media
+POST /api/v2/admin/theme-songs/run	non-media
 DELETE /api/v2/admin/theme-songs/series/{id}	non-media
 POST /api/v2/admin/theme-songs/series/{id}/retry	non-media
+POST /api/v2/admin/theme-songs/series/{id}/skip	non-media
 PUT /api/v2/admin/theme-songs/settings	non-media
 GET /api/v2/admin/trickplay/libraries	non-media
 GET /api/v2/admin/unmatched	non-media

@@ -13,7 +13,7 @@ import (
 // ThemeSongDownloader is the themedownload surface the task runs.
 type ThemeSongDownloader interface {
 	Enabled(ctx context.Context) (bool, error)
-	Run(ctx context.Context, force bool, progress func(percent float64, message string)) (themedownload.Report, error)
+	Run(ctx context.Context, force bool, reason string, progress func(percent float64, message string)) (themedownload.Report, error)
 }
 
 // DownloadThemeSongsTask fetches TV theme songs into blob storage.
@@ -58,7 +58,7 @@ func (t *DownloadThemeSongsTask) Execute(ctx context.Context, progress taskmanag
 		progress.Report(100, "Theme song downloads are switched off")
 		return nil
 	}
-	report, err := t.downloader.Run(ctx, false, progress.Report)
+	report, err := t.downloader.Run(ctx, false, "scheduled task", progress.Report)
 	if data, marshalErr := json.Marshal(report); marshalErr == nil {
 		progress.SetResultData(data)
 	}

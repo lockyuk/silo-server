@@ -26876,6 +26876,11 @@ export interface components {
        */
       series_id?: string;
       series_title?: string;
+      /**
+       * Format: uri-reference
+       * @description Absolute poster link for a rich notification.
+       */
+      thumbnail_url?: string;
       type: string;
     };
     NotificationListOutputBody: {

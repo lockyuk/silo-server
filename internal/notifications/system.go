@@ -410,6 +410,7 @@ func (s *System) PayloadForRow(ctx context.Context, row DeliveryRow) DeliveryRow
 	payload.Actions = notificationActions(row)
 	if s != nil {
 		payload.ImageURL = s.richArtworkURL(ctx, row.BackdropPath, row.BackdropSourcePath, "backdrop", "w780")
+		payload.ThumbnailURL = s.richArtworkURL(ctx, row.PosterPath, row.PosterSourcePath, "poster", "w342")
 	}
 	if payload.PosterPath != "" {
 		payload.PosterURL = publicArtworkURL(payload.PosterPath)

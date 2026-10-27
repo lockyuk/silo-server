@@ -44,11 +44,12 @@ type DeliveryRowPayload struct {
 	PosterThumbhash string  `json:"poster_thumbhash,omitempty"`
 	// ImageURL is the title's backdrop for rich notifications, and Actions
 	// the buttons to offer; see NotificationDisplay.
-	ImageURL    string               `json:"image_url,omitempty"`
-	Actions     []NotificationAction `json:"actions,omitempty"`
-	ReasonFlags json.RawMessage      `json:"reason_flags"`
-	CreatedAt   time.Time            `json:"created_at"`
-	ReadAt      *time.Time           `json:"read_at"`
+	ImageURL     string               `json:"image_url,omitempty"`
+	ThumbnailURL string               `json:"thumbnail_url,omitempty"`
+	Actions      []NotificationAction `json:"actions,omitempty"`
+	ReasonFlags  json.RawMessage      `json:"reason_flags"`
+	CreatedAt    time.Time            `json:"created_at"`
+	ReadAt       *time.Time           `json:"read_at"`
 }
 
 // PayloadForRow converts a DeliveryRow into its wire shape.

@@ -26,8 +26,20 @@ func TestEpisodeKey(t *testing.T) {
 }
 
 func TestEvaluateRecipientReasons(t *testing.T) {
+	// These cases cover the follow-based reasons, so "every new episode"
+	// (on by default) is switched off.
 	prefs := DefaultPreferences(1, "p1")
+	prefs.NotifyNewEpisodes = false
 	episodeKey := EpisodeKey(2, 5)
+
+	t.Run("every new episode reaches back past the last notified", func(t *testing.T) {
+		everything := DefaultPreferences(1, "p1")
+		last := EpisodeKey(6, 13)
+		flags, ok := EvaluateRecipient(SeriesInterest{ContinueWatching: true, LastNotifiedEpisodeKey: &last}, everything, EpisodeKey(4, 2))
+		if !ok || !flags.NewRelease {
+			t.Fatalf("an older newly added episode was suppressed: %+v ok=%v", flags, ok)
+		}
+	})
 
 	t.Run("favorite matches", func(t *testing.T) {
 		flags, ok := EvaluateRecipient(SeriesInterest{Favorite: true}, prefs, episodeKey)
@@ -78,6 +90,7 @@ func TestEvaluateRecipientReasons(t *testing.T) {
 
 	t.Run("preferences are a hard gate", func(t *testing.T) {
 		disabled := DefaultPreferences(1, "p1")
+		disabled.NotifyNewEpisodes = false
 		disabled.NotifyFavorites = false
 		if _, ok := EvaluateRecipient(SeriesInterest{Favorite: true}, disabled, episodeKey); ok {
 			t.Fatal("disabled reason must not produce a delivery")

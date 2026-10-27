@@ -68,7 +68,7 @@ func NewEmailPrefsRepository(pool *pgxpool.Pool) *EmailPrefsRepository {
 
 // Get returns the profile's email prefs; missing rows default to mode off.
 func (r *EmailPrefsRepository) Get(ctx context.Context, profileID string) (EmailPrefs, error) {
-	prefs := EmailPrefs{ProfileID: profileID, Mode: EmailModeOff, Content: EmailContentFollowed}
+	prefs := EmailPrefs{ProfileID: profileID, Mode: EmailModeOff, Content: EmailContentAll}
 	err := r.pool.QueryRow(ctx, `
 		SELECT user_id, mode, custom_email, pending_email, pending_expires_at,
 		       watermark_created_at, watermark_id, last_digest_at,
@@ -157,7 +157,7 @@ func (r *EmailPrefsRepository) SetSends(ctx context.Context, userID int, profile
 func (r *EmailPrefsRepository) SetChoices(ctx context.Context, userID int, profileID string, c EmailChoices) error {
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO notification_email_prefs (profile_id, user_id, content, types, library_ids, max_age_hours)
-		VALUES ($1, $2, COALESCE($3, 'followed'), COALESCE($4, '{}'::text[]), COALESCE($5, '{}'::int[]), COALESCE($6, 0))
+		VALUES ($1, $2, COALESCE($3, 'all'), COALESCE($4, '{}'::text[]), COALESCE($5, '{}'::int[]), COALESCE($6, 0))
 		ON CONFLICT (profile_id) DO UPDATE SET
 			content = COALESCE($3, notification_email_prefs.content),
 			types = COALESCE($4, notification_email_prefs.types),

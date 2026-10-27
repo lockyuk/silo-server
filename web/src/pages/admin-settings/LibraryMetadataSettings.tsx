@@ -30,6 +30,7 @@ import {
   subtitleSyncExecutionOptions,
 } from "./playbackSettings.utils";
 import { SettingField, SettingFieldStatus } from "./SettingField";
+import { ThemeSongsSettings } from "./ThemeSongsSettings";
 import { WORKER_SETTING_DEFAULTS, hasWorkerOverrides } from "./settingsWorkerDefaults";
 
 // Skip markers are on Playback, search on its own Search page, and saving
@@ -397,6 +398,8 @@ export default function LibraryMetadataSettings() {
             )}
           </AdvancedSection>
         </FieldGroup>
+
+        <ThemeSongsSettings />
       </div>
 
       <SaveBar

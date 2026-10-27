@@ -41,6 +41,7 @@ export const v2Operations = {
   "DELETE /api/v2/admin/request-routes/{id}": "deleteRequestRoute",
   "DELETE /api/v2/admin/sections/{id}": "deleteAdminSection",
   "DELETE /api/v2/admin/subtitles/{id}": "deleteAdminStoredSubtitle",
+  "DELETE /api/v2/admin/theme-songs/series/{id}": "deleteAdminThemeSong",
   "DELETE /api/v2/admin/users/{id}": "deleteAdminUser",
   "DELETE /api/v2/admin/users/{id}/identities/{identity_id}": "deleteAdminUserIdentity",
   "DELETE /api/v2/admin/users/{id}/profiles/{profile_id}/sections":
@@ -271,6 +272,7 @@ export const v2Operations = {
   "GET /api/v2/admin/tasks/{key}/history": "listAdminTaskHistory",
   "GET /api/v2/admin/tasks/{key}/metrics": "getAdminTaskMetrics",
   "GET /api/v2/admin/tasks/{key}/triggers": "getAdminTaskSchedule",
+  "GET /api/v2/admin/theme-songs": "getAdminThemeSongs",
   "GET /api/v2/admin/trickplay/libraries": "listAdminTrickplayLibraries",
   "GET /api/v2/admin/unmatched": "listAdminUnmatchedFiles",
   "GET /api/v2/admin/users": "listAdminUsers",
@@ -728,6 +730,7 @@ export const v2Operations = {
   "POST /api/v2/admin/subtitle-providers/{provider}/test": "testAdminSubtitleProvider",
   "POST /api/v2/admin/tasks/{key}/cancel": "cancelAdminTask",
   "POST /api/v2/admin/tasks/{key}/run": "runAdminTask",
+  "POST /api/v2/admin/theme-songs/series/{id}/retry": "retryAdminThemeSong",
   "POST /api/v2/admin/users": "createAdminUser",
   "POST /api/v2/admin/users/{id}/identities": "createAdminUserIdentity",
   "POST /api/v2/admin/users/{id}/impersonate": "impersonateAdminUser",
@@ -899,6 +902,7 @@ export const v2Operations = {
   "PUT /api/v2/admin/settings/{key}": "updateAdminSetting",
   "PUT /api/v2/admin/subtitle-providers/{provider}": "updateAdminSubtitleProviderConfiguration",
   "PUT /api/v2/admin/tasks/{key}/triggers": "updateAdminTaskSchedule",
+  "PUT /api/v2/admin/theme-songs/settings": "updateAdminThemeSongSettings",
   "PUT /api/v2/admin/users/{id}": "updateAdminUser",
   "PUT /api/v2/admin/users/{id}/profiles/{profile_id}/sections":
     "replaceAdminUserProfileSectionOverrides",

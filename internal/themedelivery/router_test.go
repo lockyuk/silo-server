@@ -145,6 +145,23 @@ func TestDefaultPolicyRoutesOriginalThroughProxy(t *testing.T) {
 	}
 }
 
+// A downloaded theme's cache copy exists only on API nodes, so it is served
+// locally even where a worker would serve a folder theme.
+func TestDownloadedThemeStaysOnTheAPINode(t *testing.T) {
+	for _, delivery := range []themesongs.Delivery{themesongs.DeliveryOriginal, themesongs.DeliveryConverted} {
+		planner := &fakePlanner{proxies: []*nodepool.Node{themeProxy(t)}, transcodes: []*nodepool.Node{themeTranscode(t)}}
+		req := themeRequest(delivery)
+		req.File.Downloaded = true
+		result, err := newRouter(planner, &fakeRecipes{}, config.DefaultPlaybackRoutingPolicy(), true).Resolve(t.Context(), req)
+		if err != nil {
+			t.Fatalf("%s: %v", delivery, err)
+		}
+		if !result.Local() || result.Shape.NeedsProxyNode() || result.Shape.NeedsTranscodeNode() {
+			t.Fatalf("%s: shape = %+v url=%q", delivery, result.Shape, result.URL)
+		}
+	}
+}
+
 func TestDefaultPolicyConvertsOnTranscodeNodeRelayedByProxy(t *testing.T) {
 	planner := &fakePlanner{proxies: []*nodepool.Node{themeProxy(t)}, transcodes: []*nodepool.Node{themeTranscode(t)}}
 	recipes := &fakeRecipes{}

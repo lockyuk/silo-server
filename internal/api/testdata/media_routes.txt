@@ -400,6 +400,10 @@ GET /api/v2/admin/tasks/{key}/metrics	non-media
 POST /api/v2/admin/tasks/{key}/run	non-media
 GET /api/v2/admin/tasks/{key}/triggers	non-media
 PUT /api/v2/admin/tasks/{key}/triggers	non-media
+GET /api/v2/admin/theme-songs	non-media
+DELETE /api/v2/admin/theme-songs/series/{id}	non-media
+POST /api/v2/admin/theme-songs/series/{id}/retry	non-media
+PUT /api/v2/admin/theme-songs/settings	non-media
 GET /api/v2/admin/trickplay/libraries	non-media
 GET /api/v2/admin/unmatched	non-media
 GET /api/v2/admin/users	non-media
@@ -1712,6 +1716,10 @@ GET /api/v2/admin/tasks/{key}/metrics	non-media
 POST /api/v2/admin/tasks/{key}/run	non-media
 GET /api/v2/admin/tasks/{key}/triggers	non-media
 PUT /api/v2/admin/tasks/{key}/triggers	non-media
+GET /api/v2/admin/theme-songs	non-media
+DELETE /api/v2/admin/theme-songs/series/{id}	non-media
+POST /api/v2/admin/theme-songs/series/{id}/retry	non-media
+PUT /api/v2/admin/theme-songs/settings	non-media
 GET /api/v2/admin/trickplay/libraries	non-media
 GET /api/v2/admin/unmatched	non-media
 GET /api/v2/admin/users	non-media

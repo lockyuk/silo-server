@@ -72,6 +72,9 @@ type File struct {
 	Path          string
 	Size          int64
 	Modified      time.Time
+	// Downloaded marks a theme Silo fetched into blob storage; Path is its
+	// local cache copy, which only API nodes have.
+	Downloaded bool
 }
 
 type Store interface {

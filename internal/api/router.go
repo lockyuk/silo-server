@@ -90,6 +90,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/taskmanager"
 	"github.com/Silo-Server/silo-server/internal/taskmanager/repository"
 	"github.com/Silo-Server/silo-server/internal/themedelivery"
+	"github.com/Silo-Server/silo-server/internal/themedownload"
 	"github.com/Silo-Server/silo-server/internal/themesongs"
 	"github.com/Silo-Server/silo-server/internal/trickplay"
 	"github.com/Silo-Server/silo-server/internal/usercollections"
@@ -223,6 +224,7 @@ type Dependencies struct {
 	Trickplay                 interface{ ReconcileSoon() }   // seek preview service, reconciled after a library's trickplay setting changes (nil when not configured)
 	TrickplayReader           *trickplay.Reader              // published seek previews for players (nil when not configured)
 	TrickplayAdmin            *trickplay.Admin               // seek preview status and regeneration for administrators (nil when not configured)
+	ThemeDownloads            *themedownload.Service         // downloaded TV theme songs (nil without blob storage)
 	LibraryMonitoring         apiv2.LibraryMonitoringService // real-time monitoring status for the v2 admin read (may be nil)
 	ActivityLogWriter         activitylog.Writer
 	ActivityLogRepo           *activitylog.Repo
@@ -2830,6 +2832,9 @@ func newChiRouter(deps Dependencies) chi.Router {
 		if deps.Notifications.EmailAlerts != nil {
 			v2deps.AdminEmailAlerts = deps.Notifications.EmailAlerts
 			v2deps.NotificationEmailAlertLinks = handlers.NewEmailAlertLinksHandler(deps.Notifications.EmailAlerts)
+		}
+		if deps.ThemeDownloads != nil {
+			v2deps.AdminThemeSongs = deps.ThemeDownloads
 		}
 		v2deps.NotificationDiscordManagement = newDiscordNotificationsHandler(deps, profileTokenService)
 		v2deps.NotificationEmailVerification = deps.Notifications.EmailVerification

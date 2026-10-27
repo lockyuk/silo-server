@@ -62,6 +62,7 @@ import { FieldGroup } from "./FieldGroup";
 import { SaveBar } from "@/components/SaveBar";
 import { SettingField, SettingFieldStatus } from "./SettingField";
 import ServerNotificationChannels from "./ServerNotificationChannels";
+import EmailAlertsPanel from "./EmailAlertsPanel";
 
 /**
  * Operator kill switches for the whole pipeline. Both default on and only
@@ -1069,14 +1070,14 @@ export default function NotificationsAdminSettings() {
               <div className="py-3.5">
                 <SettingFieldStatus tone="muted">
                   <span>
-                    Templates, design, recipients and the digest schedule are on the{" "}
-                    <Link
-                      to="/admin/settings/email-alerts"
+                    Templates, design, recipients and the digest schedule are in{" "}
+                    <a
+                      href="#email-alerts"
                       className="text-foreground font-medium underline underline-offset-2"
                     >
-                      Email alerts page
-                    </Link>
-                    .
+                      Email alerts
+                    </a>{" "}
+                    below.
                   </span>
                 </SettingFieldStatus>
               </div>
@@ -1267,6 +1268,10 @@ export default function NotificationsAdminSettings() {
             </div>
           </ChannelCard>
         </FieldGroup>
+
+        <section id="email-alerts" aria-label="Email alerts" className="scroll-mt-4">
+          <EmailAlertsPanel />
+        </section>
 
         {/* ── Processing: everything here has a working default ── */}
         <FieldGroup

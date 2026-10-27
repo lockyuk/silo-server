@@ -15650,6 +15650,11 @@ export interface components {
       email: string;
       /** @enum {string} */
       mode?: "instant" | "daily" | "weekly";
+      /**
+       * @description Send only the newest episode or movie.
+       * @enum {string}
+       */
+      pick?: "episode" | "movie";
       /** @description Unsaved settings to test; omitted uses the saved ones. */
       settings?: components["schemas"]["EmailAlertSettings"];
     };
@@ -24323,6 +24328,11 @@ export interface components {
     };
     EmailAlertRunReport: {
       errors?: string[];
+      /**
+       * Format: int64
+       * @description Items the sent emails covered.
+       */
+      items: number;
       reason: string;
       /** Format: int64 */
       recipients: number;
@@ -24360,6 +24370,7 @@ export interface components {
     };
     EmailAlertsOverview: {
       defaults: components["schemas"]["EmailAlertSettings"];
+      from_address: string;
       libraries: components["schemas"]["EmailAlertLibrary"][];
       log: components["schemas"]["EmailAlertLogEntry"][];
       max_age_options: components["schemas"]["EmailAlertMaxAgeOption"][];
@@ -24371,6 +24382,7 @@ export interface components {
       report: components["schemas"]["EmailAlertRunReport"];
       server_name: string;
       settings: components["schemas"]["EmailAlertSettings"];
+      smtp_host: string;
     };
     EmailAlertTemplates: {
       /** @description Mustache template for the HTML body. */

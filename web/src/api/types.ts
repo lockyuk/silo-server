@@ -3069,6 +3069,8 @@ export interface NotificationPreferences {
   notify_new_episodes: boolean;
   /** Every new movie the profile can open. */
   notify_new_movies: boolean;
+  /** Instant phone and browser push. Off keeps notifications in the inbox only. */
+  push_enabled: boolean;
 }
 
 export interface NotificationReadEventPayload {

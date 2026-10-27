@@ -100,6 +100,15 @@ func scanPushDeliveryAttempts(rows pgx.Rows) ([]PushDeliveryAttempt, error) {
 	return attempts, rows.Err()
 }
 
+// profilePushOn is the SQL condition that the row's profile has not switched
+// push off (a missing preferences row means on). table names the row's
+// relation, which carries user_id and profile_id.
+func profilePushOn(table string) string {
+	return `NOT EXISTS (SELECT 1 FROM notification_preferences np
+		WHERE np.user_id = ` + table + `.user_id AND np.profile_id = ` + table + `.profile_id
+		  AND NOT np.push_enabled)`
+}
+
 // ListEnabledPushByProfiles loads delivery-eligible push devices for the
 // admin-enabled platforms, keyed by account and profile: profile IDs repeat
 // across accounts.
@@ -115,7 +124,8 @@ func (r *PushDeviceRepository) ListEnabledPushByProfiles(ctx context.Context, tx
 		  AND platform = ANY($3)
 		  AND provider = ANY($4)
 		  AND push_mode = $5
-		  AND enabled`,
+		  AND enabled
+		  AND `+profilePushOn("push_devices"),
 		userIDs, profileIDs, platforms, []string{PushProviderSiloRelay, PushProviderFCMDirect}, PushModePrivatePush)
 	if err != nil {
 		return nil, fmt.Errorf("list enabled push devices: %w", err)

@@ -162,6 +162,20 @@ function PreferencesSection() {
           onCheckedChange={(checked) => updatePrefs.mutate({ enabled: checked })}
         />
       </div>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm">Phone and browser push</div>
+          <div className="text-muted-foreground text-xs">
+            Instant alerts on your devices. Off keeps them in your inbox; email follows its own
+            setting.
+          </div>
+        </div>
+        <Switch
+          checked={prefs.push_enabled ?? true}
+          disabled={!prefs.enabled}
+          onCheckedChange={(checked) => updatePrefs.mutate({ push_enabled: checked })}
+        />
+      </div>
       {REASON_FIELDS.map((field) => (
         <div key={field.key} className="flex items-center justify-between gap-3">
           <div className="text-sm">{field.label}</div>

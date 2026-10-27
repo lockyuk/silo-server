@@ -36868,6 +36868,10 @@
             ],
             "minLength": 1,
             "type": "string"
+          },
+          "push_enabled": {
+            "description": "Instant phone and browser push. Off keeps notifications in the inbox only; email follows its own setting.",
+            "type": "boolean"
           }
         },
         "required": [
@@ -36878,7 +36882,8 @@
           "notify_continue_watching",
           "notify_next_up",
           "notify_new_episodes",
-          "notify_new_movies"
+          "notify_new_movies",
+          "push_enabled"
         ],
         "type": "object"
       },
@@ -36904,6 +36909,9 @@
             "type": "boolean"
           },
           "notify_watchlist": {
+            "type": "boolean"
+          },
+          "push_enabled": {
             "type": "boolean"
           }
         },

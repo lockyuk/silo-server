@@ -147,7 +147,8 @@ func (r *WebPushRepository) ListEnabledByProfiles(ctx context.Context, tx pgx.Tx
 	userIDs, profileIDs := profileKeyArrays(profiles)
 	rows, err := tx.Query(ctx,
 		`SELECT `+webPushColumns+` FROM web_push_subscriptions
-		WHERE (user_id, profile_id) IN (SELECT * FROM unnest($1::int[], $2::text[])) AND enabled`,
+		WHERE (user_id, profile_id) IN (SELECT * FROM unnest($1::int[], $2::text[])) AND enabled
+		  AND `+profilePushOn("web_push_subscriptions"),
 		userIDs, profileIDs)
 	if err != nil {
 		return nil, fmt.Errorf("list enabled web push subscriptions: %w", err)

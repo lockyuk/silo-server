@@ -26907,6 +26907,8 @@ export interface components {
        * @example 1
        */
       profile_id: string;
+      /** @description Instant phone and browser push. Off keeps notifications in the inbox only; email follows its own setting. */
+      push_enabled: boolean;
     };
     NotificationPreferencesPatch: {
       enabled?: boolean;
@@ -26916,6 +26918,7 @@ export interface components {
       notify_new_movies?: boolean;
       notify_next_up?: boolean;
       notify_watchlist?: boolean;
+      push_enabled?: boolean;
     };
     NotificationPushCapability: {
       available: boolean;

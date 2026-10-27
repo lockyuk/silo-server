@@ -21,7 +21,10 @@ func EvaluateRecipient(interest SeriesInterest, prefs Preferences, episodeKey in
 	if !prefs.Enabled {
 		return ReasonFlags{}, false
 	}
-	if interest.LastNotifiedEpisodeKey != nil && *interest.LastNotifiedEpisodeKey >= episodeKey {
+	// A profile that asked for every new episode hears about any episode
+	// newly added, including one older than the last it was told about (a
+	// back-filled season); the per-episode unique key still stops repeats.
+	if !prefs.NotifyNewEpisodes && interest.LastNotifiedEpisodeKey != nil && *interest.LastNotifiedEpisodeKey >= episodeKey {
 		return ReasonFlags{}, false
 	}
 	flags := ActiveReasons(interest, prefs)

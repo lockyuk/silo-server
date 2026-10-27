@@ -996,8 +996,8 @@ func (a *EmailAlerts) UpdateRecipientChoices(ctx context.Context, rec EmailAlert
 		}
 	}
 	if rec.Kind == EmailRecipientProfile {
-		if rec.Content != EmailContentAll {
-			rec.Content = EmailContentFollowed
+		if rec.Content != EmailContentFollowed {
+			rec.Content = EmailContentAll
 		}
 		return a.repo.UpdateProfileRecipient(ctx, rec.UserID, rec.ProfileID, rec.Mode, rec.Content, rec.Types, rec.LibraryIDs, rec.MaxAgeHours)
 	}

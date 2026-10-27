@@ -5,7 +5,6 @@ import {
   captureNotificationAuthority,
 } from "@/api/v2/notifications";
 import { useState } from "react";
-import { Link } from "react-router";
 import {
   AlertTriangle,
   KeyRound,
@@ -65,106 +64,7 @@ import { useAvailableUserLibraries } from "@/hooks/queries/libraries";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { formatRelativeTime } from "@/lib/date";
 
-const REASON_FIELDS = [
-  { key: "notify_favorites", label: "Favorites" },
-  { key: "notify_watchlist", label: "Watchlist" },
-  { key: "notify_continue_watching", label: "Continue Watching" },
-  { key: "notify_next_up", label: "Next Up" },
-] as const;
-
-// Webhooks additionally carry the request.fulfilled toggle; it is not an
-// episode reason, so the profile preferences section keeps REASON_FIELDS.
-const WEBHOOK_NOTIFY_FIELDS = [
-  ...REASON_FIELDS,
-  { key: "notify_new_releases", label: "New releases" },
-  { key: "notify_requests", label: "Requests" },
-] as const;
-
-// "Everything new" preferences: deliveries that need no series relationship.
-const NEW_RELEASE_FIELDS = [
-  {
-    key: "notify_new_episodes",
-    label: "Every new episode",
-    hint: "Any show in your libraries, followed or not",
-  },
-  { key: "notify_new_movies", label: "Every new movie", hint: "Any movie added to your libraries" },
-] as const;
-
-const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
 type WebhookNotifyKey = (typeof WEBHOOK_NOTIFY_FIELDS)[number]["key"];
-
-function PreferencesSection() {
-  const { data: prefs, isLoading } = useNotificationPreferences();
-  const updatePrefs = useUpdateNotificationPreferences();
-  const { data: capability } = useNotificationCapability();
-
-  if (isLoading || !prefs) {
-    return (
-      <SettingsGroup title="New Release Notifications">
-        <Skeleton className="h-24 w-full" />
-      </SettingsGroup>
-    );
-  }
-
-  return (
-    <SettingsGroup
-      title="New Release Notifications"
-      description={
-        <>
-          Choose which series relationships notify this profile when a new episode arrives, or ask
-          to hear about everything new.
-          {capability?.series?.available && (
-            <>
-              {" "}
-              <Link
-                to="/notifications?view=series"
-                className="text-foreground underline underline-offset-4"
-              >
-                See which series notify you
-              </Link>
-            </>
-          )}
-        </>
-      }
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-sm font-medium">Enable notifications</div>
-          <div className="text-muted-foreground text-xs">Master switch for this profile</div>
-        </div>
-        <Switch
-          checked={prefs.enabled}
-          onCheckedChange={(checked) => updatePrefs.mutate({ enabled: checked })}
-        />
-      </div>
-      {REASON_FIELDS.map((field) => (
-        <div key={field.key} className="flex items-center justify-between gap-3">
-          <div className="text-sm">{field.label}</div>
-          <Switch
-            checked={prefs[field.key as keyof NotificationPreferences] as boolean}
-            disabled={!prefs.enabled}
-            onCheckedChange={(checked) => updatePrefs.mutate({ [field.key]: checked })}
-          />
-        </div>
-      ))}
-      <div className="pt-2 text-sm font-medium">Everything new</div>
-      {NEW_RELEASE_FIELDS.map((field) => (
-        <div key={field.key} className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-sm">{field.label}</div>
-            <div className="text-muted-foreground text-xs">{field.hint}</div>
-          </div>
-          <Switch
-            checked={Boolean(prefs[field.key as keyof NotificationPreferences])}
-            disabled={!prefs.enabled}
-            onCheckedChange={(checked) => updatePrefs.mutate({ [field.key]: checked })}
-          />
-        </div>
-      ))}
-    </SettingsGroup>
-  );
-}
 
 /**
  * Destination address for this profile's emails. There is no account-email
@@ -265,6 +165,24 @@ function EmailDestinationRow({ prefs }: { prefs: NotificationEmailPreferences })
     </div>
   );
 }
+
+// Reason filters a personal webhook can choose from.
+const REASON_FIELDS = [
+  { key: "notify_favorites", label: "Favorites" },
+  { key: "notify_watchlist", label: "Watchlist" },
+  { key: "notify_continue_watching", label: "Continue Watching" },
+  { key: "notify_next_up", label: "Next Up" },
+] as const;
+
+// Webhooks additionally carry the request.fulfilled toggle; it is not an
+// episode reason.
+const WEBHOOK_NOTIFY_FIELDS = [
+  ...REASON_FIELDS,
+  { key: "notify_new_releases", label: "New releases" },
+  { key: "notify_requests", label: "Requests" },
+] as const;
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 function Pill({
   on,
@@ -468,23 +386,6 @@ function EmailSection() {
             disabled={updatePrefs.isPending}
             onChange={(ids) => save({ library_ids: ids })}
           />
-          <div className="space-y-2">
-            <div className="text-sm">What to send</div>
-            <div className="flex flex-wrap gap-2">
-              <Pill
-                on={prefs.content !== "all"}
-                label="Shows I follow"
-                disabled={updatePrefs.isPending}
-                onClick={() => save({ content: "followed" })}
-              />
-              <Pill
-                on={prefs.content === "all"}
-                label="Everything new"
-                disabled={updatePrefs.isPending}
-                onClick={() => save({ content: "all" })}
-              />
-            </div>
-          </div>
         </>
       )}
     </SettingsGroup>
@@ -942,8 +843,6 @@ export default function NotificationsSettings() {
       />
 
       <NotificationStatus />
-
-      <PreferencesSection />
 
       <EmailSection />
 

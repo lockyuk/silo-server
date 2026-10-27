@@ -172,6 +172,8 @@ func DefaultPreferences(userID int, profileID string) Preferences {
 		NotifyWatchlist:        true,
 		NotifyContinueWatching: true,
 		NotifyNextUp:           true,
+		NotifyNewEpisodes:      true,
+		NotifyNewMovies:        true,
 		PushEnabled:            true,
 	}
 }

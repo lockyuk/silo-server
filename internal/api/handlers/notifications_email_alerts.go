@@ -127,13 +127,6 @@ func (h *EmailAlertLinksHandler) HandleManage(w http.ResponseWriter, r *http.Req
 		} else if len(types) == 1 {
 			next.Types = types
 		}
-		if rec.Kind == notifications.EmailRecipientProfile {
-			if form.Get("content") == notifications.EmailContentAll {
-				next.Content = notifications.EmailContentAll
-			} else {
-				next.Content = notifications.EmailContentFollowed
-			}
-		}
 		next.Enabled = form.Get("enabled") == "on"
 		if !next.Enabled {
 			next.Mode = ""
@@ -162,12 +155,6 @@ func emailAlertManageForm(token string, r notifications.EmailAlertRecipient, s e
 	var b strings.Builder
 	b.WriteString(`<form method="post"><input type="hidden" name="token" value="` + html.EscapeString(token) + `">`)
 	b.WriteString(`<label class="row"><input type="checkbox" name="enabled"` + checked(r.Enabled && r.Mode != "") + `> Send me alerts</label>`)
-	if r.Kind == notifications.EmailRecipientProfile {
-		b.WriteString(`<fieldset><legend>What to send</legend>`)
-		b.WriteString(`<label class="row"><input type="radio" name="content" value="followed"` + checked(r.Content != notifications.EmailContentAll) + `> Shows I follow</label>`)
-		b.WriteString(`<label class="row"><input type="radio" name="content" value="all"` + checked(r.Content == notifications.EmailContentAll) + `> Everything new I can watch</label>`)
-		b.WriteString(`</fieldset>`)
-	}
 	b.WriteString(`<fieldset><legend>How often</legend>`)
 	b.WriteString(`<label class="row"><input type="radio" name="mode" value="instant"` + checked(r.Mode == emailalerts.ModeInstant || r.Mode == "") + `> As soon as something is added</label>`)
 	b.WriteString(fmt.Sprintf(`<label class="row"><input type="radio" name="mode" value="instant_daily"%s> As soon as something is added, plus a daily digest at %02d:00</label>`, checked(r.Mode == emailalerts.ModeInstantDaily), s.Schedule.DailyHour))

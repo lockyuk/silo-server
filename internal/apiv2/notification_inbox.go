@@ -65,7 +65,11 @@ type NotificationPushContent struct {
 	Synopsis string `json:"synopsis,omitempty" doc:"Shown when the notification is expanded."`
 	Image    string `json:"image" enum:"poster,backdrop,none" doc:"Which image the admin chose."`
 	ImageURL string `json:"image_url,omitempty" format:"uri-reference"`
-	Count    int    `json:"count,omitempty" doc:"Episodes the push stands for, when it groups several."`
+	// Where the image shows, and whether there is an expanded view.
+	CollapsedImage bool `json:"collapsed_image" doc:"Show the image in the collapsed notification."`
+	ExpandedImage  bool `json:"expanded_image" doc:"Show the image in the expanded view."`
+	Expanded       bool `json:"expanded" doc:"Offer an expanded view; false keeps the notification collapsed."`
+	Count          int  `json:"count,omitempty" doc:"Episodes the push stands for, when it groups several."`
 }
 
 func notificationPushContentOf(p *notifications.PushContent) *NotificationPushContent {

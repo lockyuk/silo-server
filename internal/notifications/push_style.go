@@ -33,6 +33,11 @@ type PushContent struct {
 	// Image is poster, backdrop or none; ImageURL is that image's link.
 	Image    string `json:"image"`
 	ImageURL string `json:"image_url,omitempty"`
+	// CollapsedImage and ExpandedImage say where the image shows; Expanded
+	// whether there is an expanded view.
+	CollapsedImage bool `json:"collapsed_image"`
+	ExpandedImage  bool `json:"expanded_image"`
+	Expanded       bool `json:"expanded"`
 	// Count is how many episodes the push stands for; above 1 for a grouped
 	// push.
 	Count int `json:"count,omitempty"`
@@ -307,7 +312,8 @@ func (s *System) PushContentForRow(ctx context.Context, row DeliveryRow) *PushCo
 		slog.WarnContext(ctx, "push template failed; clients use their own text", "component", "notifications", "error", err)
 		return nil
 	}
-	out := &PushContent{Title: rendered.Title, Body: rendered.Body, Synopsis: rendered.Synopsis, Image: cfg.Image}
+	out := &PushContent{Title: rendered.Title, Body: rendered.Body, Synopsis: rendered.Synopsis, Image: cfg.Image,
+		CollapsedImage: cfg.CollapsedImage, ExpandedImage: cfg.ExpandedImage, Expanded: cfg.Expanded}
 	if len(group) > 1 {
 		out.Count = len(group)
 	}

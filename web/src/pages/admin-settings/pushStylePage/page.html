@@ -54,7 +54,7 @@
             </div>
             <div class="note-thumb" id="p-thumb-c"></div>
           </div>
-          <div class="note-label">Expanded</div>
+          <div class="note-label" id="label-expanded">Expanded</div>
           <div class="note" id="note-expanded">
             <div class="note-main">
               <div class="note-head"><span class="app-dot"></span>Silo · now</div>
@@ -84,6 +84,13 @@
         <button data-image="none" aria-pressed="false">No image</button>
       </div>
       <p class="hint">Poster sits beside the text; backdrop is a wide picture under it when expanded.</p>
+      <label class="check" style="margin-top:12px"><input type="checkbox" id="collapsed-image"> Show the image in the collapsed notification</label>
+      <label class="check"><input type="checkbox" id="expanded-image"> Show the image in the expanded view</label>
+    </div>
+    <div class="panel">
+      <h2>Expanded view</h2>
+      <label class="check"><input type="checkbox" id="expanded"> Offer an expanded view</label>
+      <p class="hint">Android opens the newest notification expanded whenever it has an expanded view, and the app cannot change that. Turn this off to keep every push collapsed, showing only the title, text and collapsed image.</p>
     </div>
     <div class="panel">
       <h2>Synopsis</h2>

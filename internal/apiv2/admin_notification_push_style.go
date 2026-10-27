@@ -19,20 +19,23 @@ type AdminPushStyleService interface {
 
 // PushStyleSettings mirrors pushstyle.Settings field for field.
 type PushStyleSettings struct {
-	EpisodeTitle string `json:"episode_title" doc:"Mustache template for a new episode's title. May use <b>, <i>, <u>, <s> and <font color>."`
-	EpisodeBody  string `json:"episode_body" doc:"Mustache template for a new episode's text."`
-	MovieTitle   string `json:"movie_title" doc:"Mustache template for a new movie's title."`
-	MovieBody    string `json:"movie_body" doc:"Mustache template for a new movie's text."`
-	GroupTitle   string `json:"group_title" doc:"Mustache template for the title of a push that stands for several episodes of one show."`
-	GroupBody    string `json:"group_body" doc:"Mustache template for that push's text."`
-	Image        string `json:"image" enum:"poster,backdrop,none"`
-	Synopsis     bool   `json:"synopsis" doc:"Show the synopsis when the notification is expanded."`
-	SynopsisMax  int    `json:"synopsis_max" minimum:"0" maximum:"1000" doc:"Longest synopsis, in characters; 0 uses the default."`
-	BatchMinutes int    `json:"batch_minutes" minimum:"0" maximum:"240" doc:"How long a new episode's push waits for more episodes of the same show; 0 sends at once."`
-	QuietEnabled bool   `json:"quiet_enabled"`
-	QuietStart   string `json:"quiet_start" doc:"HH:MM when pushes start being held."`
-	QuietEnd     string `json:"quiet_end" doc:"HH:MM when held pushes are sent."`
-	Timezone     string `json:"timezone" doc:"IANA time zone for quiet hours; empty uses the server's."`
+	EpisodeTitle   string `json:"episode_title" doc:"Mustache template for a new episode's title. May use <b>, <i>, <u>, <s> and <font color>."`
+	EpisodeBody    string `json:"episode_body" doc:"Mustache template for a new episode's text."`
+	MovieTitle     string `json:"movie_title" doc:"Mustache template for a new movie's title."`
+	MovieBody      string `json:"movie_body" doc:"Mustache template for a new movie's text."`
+	GroupTitle     string `json:"group_title" doc:"Mustache template for the title of a push that stands for several episodes of one show."`
+	GroupBody      string `json:"group_body" doc:"Mustache template for that push's text."`
+	Image          string `json:"image" enum:"poster,backdrop,none"`
+	CollapsedImage bool   `json:"collapsed_image" doc:"Show the image in the collapsed notification."`
+	ExpandedImage  bool   `json:"expanded_image" doc:"Show the image in the expanded view."`
+	Expanded       bool   `json:"expanded" doc:"Offer an expanded view. Android shows the newest notification expanded when it has one."`
+	Synopsis       bool   `json:"synopsis" doc:"Show the synopsis when the notification is expanded."`
+	SynopsisMax    int    `json:"synopsis_max" minimum:"0" maximum:"1000" doc:"Longest synopsis, in characters; 0 uses the default."`
+	BatchMinutes   int    `json:"batch_minutes" minimum:"0" maximum:"240" doc:"How long a new episode's push waits for more episodes of the same show; 0 sends at once."`
+	QuietEnabled   bool   `json:"quiet_enabled"`
+	QuietStart     string `json:"quiet_start" doc:"HH:MM when pushes start being held."`
+	QuietEnd       string `json:"quiet_end" doc:"HH:MM when held pushes are sent."`
+	Timezone       string `json:"timezone" doc:"IANA time zone for quiet hours; empty uses the server's."`
 }
 
 type PushStylePreview struct {

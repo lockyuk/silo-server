@@ -1,0 +1,109 @@
+<div class="ea-body"><div class="wrap">
+  <header>
+    <div>
+      <h1>Push notifications</h1>
+      <div class="sub">How phone notifications for new episodes and movies read, which image they show, and when they are sent. Applies to every profile.</div>
+    </div>
+    <div class="spacer"></div>
+    <span id="dirty" class="muted" hidden>Unsaved changes<span class="dirty-dot"></span></span>
+    <button class="primary" id="save" disabled>Save changes</button>
+  </header>
+
+  <div id="problems"></div>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="templates" aria-selected="true">Templates</button>
+    <button role="tab" data-tab="design" aria-selected="false">Image &amp; synopsis</button>
+    <button role="tab" data-tab="timing" aria-selected="false">Batching &amp; quiet hours</button>
+  </nav>
+
+  <section data-panel="templates">
+    <div class="editor">
+      <div class="panel">
+        <div class="row" style="margin-bottom:12px">
+          <div class="seg" role="group" aria-label="Template">
+            <button data-kind="episode" aria-pressed="true">New episode</button>
+            <button data-kind="movie" aria-pressed="false">New movie</button>
+            <button data-kind="group" aria-pressed="false">Several episodes</button>
+          </div>
+          <div class="spacer"></div>
+          <button id="reset-kind" class="small">Reset to default</button>
+        </div>
+        <label class="f"><span>Title</span><input type="text" id="t-title" maxlength="500" spellcheck="false"><small>About one line shows on a phone.</small></label>
+        <label class="f"><span>Text</span><textarea id="t-body" rows="3" maxlength="500" spellcheck="false"></textarea><small>Two lines show collapsed. Line breaks become spaces.</small></label>
+        <div class="vars" id="vars"></div>
+      </div>
+      <div class="panel">
+        <h2>Preview</h2>
+        <p class="hint" style="margin-top:-6px">A sample title rendered with your unsaved templates. Phones show only the text and image your app supports: the official Silo app keeps its own text.</p>
+        <div class="phone">
+          <div class="note" id="note-collapsed">
+            <div class="note-main">
+              <div class="note-head"><span class="app-dot"></span>Silo · now</div>
+              <div class="note-title" id="p-title"></div>
+              <div class="note-body clamp2" id="p-body"></div>
+            </div>
+            <div class="note-thumb" id="p-thumb-c"></div>
+          </div>
+          <div class="note-label">Expanded</div>
+          <div class="note" id="note-expanded">
+            <div class="note-main">
+              <div class="note-head"><span class="app-dot"></span>Silo · now</div>
+              <div class="note-row">
+                <div class="note-thumb big" id="p-thumb-e"></div>
+                <div>
+                  <div class="note-title" id="p-title-e"></div>
+                  <div class="note-body" id="p-body-e"></div>
+                  <div class="note-syn" id="p-syn"></div>
+                </div>
+              </div>
+              <div class="note-hero" id="p-hero"></div>
+            </div>
+          </div>
+        </div>
+        <div id="p-error" class="banner bad" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <section data-panel="design" hidden>
+    <div class="panel">
+      <h2>Image</h2>
+      <div class="seg" role="group" aria-label="Image" id="image">
+        <button data-image="poster" aria-pressed="false">Poster</button>
+        <button data-image="backdrop" aria-pressed="false">Backdrop</button>
+        <button data-image="none" aria-pressed="false">No image</button>
+      </div>
+      <p class="hint">Poster sits beside the text; backdrop is a wide picture under it when expanded.</p>
+    </div>
+    <div class="panel">
+      <h2>Synopsis</h2>
+      <label class="check"><input type="checkbox" id="synopsis"> Show the synopsis when the notification is expanded</label>
+      <label class="f" style="max-width:260px;margin-top:10px"><span>Longest synopsis</span><input type="number" id="synopsis-max" min="40" max="1000"><small>Characters; longer ones are cut at a word.</small></label>
+      <p class="hint">A push for several episodes has no synopsis.</p>
+    </div>
+  </section>
+
+  <section data-panel="timing" hidden>
+    <div class="panel">
+      <h2>Batch episodes of one show</h2>
+      <label class="f" style="max-width:320px"><span>Wait for more episodes for</span><input type="number" id="batch" min="0" max="240"><small>Minutes. A new episode's push waits this long; any more episodes of the same show that arrive meanwhile join it as one push ("3 new episodes"). 0 sends each at once.</small></label>
+    </div>
+    <div class="panel">
+      <h2>Quiet hours</h2>
+      <label class="check"><input type="checkbox" id="quiet"> Hold pushes during quiet hours and send them when they end</label>
+      <div class="row" style="margin-top:10px">
+        <label for="quiet-start">From</label><input type="time" id="quiet-start" style="max-width:140px">
+        <label for="quiet-end">until</label><input type="time" id="quiet-end" style="max-width:140px">
+      </div>
+      <label class="f" style="max-width:320px;margin-top:12px"><span>Time zone</span><input type="text" id="tz" placeholder="Server's time zone" spellcheck="false"><small>An IANA name such as Europe/London; blank uses the server's.</small></label>
+      <p class="hint">Held episodes of one show still batch together, so a night of new episodes arrives as one push in the morning.</p>
+    </div>
+  </section>
+
+  <div class="panel">
+    <h2>Send a test</h2>
+    <p class="muted">Pushes your profile's newest notification to your Android phones with the saved settings. Quiet hours and batching do not hold it.</p>
+    <div class="row"><button id="test">Send test to my phone</button><span id="test-result" class="muted"></span></div>
+  </div>
+</div></div>

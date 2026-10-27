@@ -50,9 +50,12 @@ type DeliveryRowPayload struct {
 	ImageURL     string               `json:"image_url,omitempty"`
 	ThumbnailURL string               `json:"thumbnail_url,omitempty"`
 	Actions      []NotificationAction `json:"actions,omitempty"`
-	ReasonFlags  json.RawMessage      `json:"reason_flags"`
-	CreatedAt    time.Time            `json:"created_at"`
-	ReadAt       *time.Time           `json:"read_at"`
+	// Push is the text and image the admin's push settings give this
+	// delivery's phone notification.
+	Push        *PushContent    `json:"push,omitempty"`
+	ReasonFlags json.RawMessage `json:"reason_flags"`
+	CreatedAt   time.Time       `json:"created_at"`
+	ReadAt      *time.Time      `json:"read_at"`
 }
 
 // PayloadForRow converts a DeliveryRow into its wire shape.

@@ -171,6 +171,9 @@ type pushSender struct {
 	serverID func(context.Context) (string, error)
 	// fcmDirect sends fcm_direct devices' pushes; nil when unconfigured.
 	fcmDirect *FCMDirect
+	// style holds pushes through quiet hours and gathers episodes of one
+	// show into one push; nil sends every push at once.
+	style *PushStyleRepository
 
 	// renewMu serializes credential renewal and replacement in this process;
 	// lastRelayReplacement is guarded by it.
@@ -237,6 +240,12 @@ func (s *pushSender) processAttempt(ctx context.Context, attempt PushDeliveryAtt
 		// same ID on another account, no longer gets the old owner's delivery.
 		if row.UserID != device.UserID || row.ProfileID != device.ProfileID {
 			return s.finalize(ctx, attempt, PushOutcomeFailed, "device_reassigned", "push device reassigned", nil, "", nil)
+		}
+		if until := s.holdOrGroup(ctx, attempt, device, row); !until.IsZero() {
+			if err := s.devices.deferPushAttempt(ctx, attempt.ID, until); err != nil && ctx.Err() == nil {
+				s.logger.WarnContext(ctx, "push attempt not held", "attempt_id", attempt.ID, "error", err)
+			}
+			return nil
 		}
 	}
 

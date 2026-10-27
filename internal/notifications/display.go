@@ -25,6 +25,8 @@ type NotificationDisplay struct {
 	ThumbnailURL string `json:"thumbnail_url,omitempty"`
 	// Actions are the buttons a rich notification offers, in display order.
 	Actions []NotificationAction `json:"actions,omitempty"`
+	// Push is the text and image the admin's push settings give it.
+	Push *PushContent `json:"push,omitempty"`
 }
 
 // Notification action IDs. Clients show the actions they implement and skip

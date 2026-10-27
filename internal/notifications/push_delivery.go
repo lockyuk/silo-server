@@ -19,6 +19,9 @@ const (
 	PushOutcomeDelivered = "delivered"
 	PushOutcomeRetrying  = "retrying"
 	PushOutcomeFailed    = "failed"
+	// PushOutcomeBatched closes an attempt whose delivery another, grouped
+	// push carried.
+	PushOutcomeBatched = "batched"
 )
 
 var (

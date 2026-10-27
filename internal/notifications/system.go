@@ -75,7 +75,9 @@ type System struct {
 	emailBrand                *mail.BrandLoader
 	emailVerificationDispatch *emailVerificationDispatcher
 	// EmailAlerts sends the new-media emails; nil without a mail sender.
-	EmailAlerts   *EmailAlerts
+	EmailAlerts *EmailAlerts
+	// PushStyle holds the admin's push templates, batching and quiet hours.
+	PushStyle     *PushStyleRepository
 	discordWorker *accountChannelWorker[int]
 	discordClient *discord.Client
 	// publicURL is the server's externally reachable base URL, used as the
@@ -148,6 +150,7 @@ func NewSystem(
 	var pushDeviceRepo *PushDeviceRepository
 	var pushSenderInst *pushSender
 	var pushDispatcher *PushDispatcher
+	pushStyle := NewPushStyleRepository(pool)
 	if cipher != nil {
 		webhookRepo = NewWebhookRepository(pool)
 		sender = newWebhookSender(webhookRepo, deliveries, cipher, settings)
@@ -158,6 +161,7 @@ func NewSystem(
 		pushDeviceRepo = NewPushDeviceRepository(pool)
 		pushDeviceService = NewPushDeviceService(pushDeviceRepo, cipher)
 		pushSenderInst = newPushSender(pushDeviceRepo, deliveries, cipher, settings)
+		pushSenderInst.style = pushStyle
 		// Pushes name the identity getServerIdentity reports, read through the
 		// raw settings repo as it is: a SECRET_KEY rotation must not change
 		// who the server is.
@@ -232,6 +236,7 @@ func NewSystem(
 	interest := NewInterestUpdater(pool, interests, stores, scopes)
 
 	system := &System{
+		PushStyle:           pushStyle,
 		Settings:            settings,
 		Releases:            releases,
 		Interests:           interests,
@@ -381,6 +386,7 @@ func (s *System) DisplayForRow(ctx context.Context, row DeliveryRow) Notificatio
 	}
 	display.ImageURL = s.richArtworkURL(ctx, row.BackdropPath, row.BackdropSourcePath, "backdrop", "w780")
 	display.ThumbnailURL = s.richArtworkURL(ctx, row.PosterPath, row.PosterSourcePath, "poster", "w342")
+	display.Push = s.PushContentForRow(ctx, row)
 	return display
 }
 
@@ -405,6 +411,7 @@ func (s *System) PayloadForRow(ctx context.Context, row DeliveryRow) DeliveryRow
 	if s != nil {
 		payload.ImageURL = s.richArtworkURL(ctx, row.BackdropPath, row.BackdropSourcePath, "backdrop", "w780")
 		payload.ThumbnailURL = s.richArtworkURL(ctx, row.PosterPath, row.PosterSourcePath, "poster", "w342")
+		payload.Push = s.PushContentForRow(ctx, row)
 	}
 	if payload.PosterPath != "" {
 		payload.PosterURL = publicArtworkURL(payload.PosterPath)

@@ -231,6 +231,7 @@ type Dependencies struct {
 	NotificationChannels          NotificationChannelService
 	NotificationEmailArtwork      NotificationEmailArtworkService
 	AdminEmailAlerts              AdminEmailAlertsService
+	AdminPushStyle                AdminPushStyleService
 	AdminThemeSongs               AdminThemeSongsService
 	Filmography                   FilmographyService
 	NotificationDiscordManagement NotificationDiscordManagementService

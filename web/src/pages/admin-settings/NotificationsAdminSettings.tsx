@@ -52,6 +52,7 @@ import { FieldGroup } from "./FieldGroup";
 import { SaveBar } from "@/components/SaveBar";
 import { SettingField, SettingFieldStatus } from "./SettingField";
 import EmailAlertsPanel from "./EmailAlertsPanel";
+import PushStylePanel from "./PushStylePanel";
 
 /**
  * Operator kill switches for the whole pipeline. Both default on and only
@@ -642,6 +643,20 @@ export default function NotificationsAdminSettings() {
           >
             <div className="settings-field-list">
               <MobilePushPrivacyDisclosure />
+              <div className="py-3.5">
+                <SettingFieldStatus tone="muted">
+                  <span>
+                    Templates, image, batching and quiet hours are in{" "}
+                    <a
+                      href="#push-style"
+                      className="text-foreground font-medium underline underline-offset-2"
+                    >
+                      Push notifications
+                    </a>{" "}
+                    below.
+                  </span>
+                </SettingFieldStatus>
+              </div>
               <AdvancedSection
                 id="notifications.push-relay"
                 count={PUSH_RELAY_ADVANCED_KEYS.length}
@@ -820,6 +835,10 @@ export default function NotificationsAdminSettings() {
 
         <section id="email-alerts" aria-label="Email alerts" className="scroll-mt-4">
           <EmailAlertsPanel />
+        </section>
+
+        <section id="push-style" aria-label="Push notifications" className="scroll-mt-4">
+          <PushStylePanel />
         </section>
 
         {/* ── Processing: everything here has a working default ── */}

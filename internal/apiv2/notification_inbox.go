@@ -34,26 +34,46 @@ type NotificationInboxService interface {
 // NotificationItem preserves event-specific reason data while normalizing IDs
 // and timestamps for the native API. Realtime retains its existing event shape.
 type NotificationItem struct {
-	ID              ID                      `json:"id"`
-	Type            string                  `json:"type"`
-	ProfileID       ID                      `json:"profile_id"`
-	LibraryID       *ID                     `json:"library_id,omitempty"`
-	SeriesID        *ID                     `json:"series_id,omitempty"`
-	EpisodeID       *ID                     `json:"episode_id,omitempty"`
-	SeriesTitle     string                  `json:"series_title,omitempty"`
-	EpisodeTitle    string                  `json:"episode_title,omitempty"`
-	SeasonNumber    *int                    `json:"season_number,omitempty"`
-	EpisodeNumber   *int                    `json:"episode_number,omitempty"`
-	PosterPath      string                  `json:"poster_path,omitempty"`
-	PosterURL       string                  `json:"poster_url,omitempty" format:"uri-reference"`
-	PosterThumbhash string                  `json:"poster_thumbhash,omitempty"`
-	Overview        string                  `json:"overview,omitempty" doc:"Synopsis of the episode, or of the movie, for a rich notification's text."`
-	ImageURL        string                  `json:"image_url,omitempty" format:"uri-reference" doc:"Wide backdrop for a rich notification."`
-	ThumbnailURL    string                  `json:"thumbnail_url,omitempty" format:"uri-reference" doc:"Absolute poster link for a rich notification."`
-	Actions         []NotificationAction    `json:"actions,omitempty" doc:"Buttons a rich notification offers, in display order. Clients skip action IDs they do not implement."`
-	ReasonFlags     NotificationReasonFlags `json:"reason_flags"`
-	CreatedAt       Instant                 `json:"created_at"`
-	ReadAt          NullableInstant         `json:"read_at"`
+	ID              ID                       `json:"id"`
+	Type            string                   `json:"type"`
+	ProfileID       ID                       `json:"profile_id"`
+	LibraryID       *ID                      `json:"library_id,omitempty"`
+	SeriesID        *ID                      `json:"series_id,omitempty"`
+	EpisodeID       *ID                      `json:"episode_id,omitempty"`
+	SeriesTitle     string                   `json:"series_title,omitempty"`
+	EpisodeTitle    string                   `json:"episode_title,omitempty"`
+	SeasonNumber    *int                     `json:"season_number,omitempty"`
+	EpisodeNumber   *int                     `json:"episode_number,omitempty"`
+	PosterPath      string                   `json:"poster_path,omitempty"`
+	PosterURL       string                   `json:"poster_url,omitempty" format:"uri-reference"`
+	PosterThumbhash string                   `json:"poster_thumbhash,omitempty"`
+	Overview        string                   `json:"overview,omitempty" doc:"Synopsis of the episode, or of the movie, for a rich notification's text."`
+	ImageURL        string                   `json:"image_url,omitempty" format:"uri-reference" doc:"Wide backdrop for a rich notification."`
+	ThumbnailURL    string                   `json:"thumbnail_url,omitempty" format:"uri-reference" doc:"Absolute poster link for a rich notification."`
+	Actions         []NotificationAction     `json:"actions,omitempty" doc:"Buttons a rich notification offers, in display order. Clients skip action IDs they do not implement."`
+	Push            *NotificationPushContent `json:"push,omitempty" doc:"Text and image from the server's push settings; clients that read it show it in place of their own text."`
+	ReasonFlags     NotificationReasonFlags  `json:"reason_flags"`
+	CreatedAt       Instant                  `json:"created_at"`
+	ReadAt          NullableInstant          `json:"read_at"`
+}
+
+// NotificationPushContent is a push notification rendered from the admin's
+// push templates.
+type NotificationPushContent struct {
+	Title    string `json:"title"`
+	Body     string `json:"body"`
+	Synopsis string `json:"synopsis,omitempty" doc:"Shown when the notification is expanded."`
+	Image    string `json:"image" enum:"poster,backdrop,none" doc:"Which image the admin chose."`
+	ImageURL string `json:"image_url,omitempty" format:"uri-reference"`
+	Count    int    `json:"count,omitempty" doc:"Episodes the push stands for, when it groups several."`
+}
+
+func notificationPushContentOf(p *notifications.PushContent) *NotificationPushContent {
+	if p == nil {
+		return nil
+	}
+	out := NotificationPushContent(*p)
+	return &out
 }
 
 // NotificationAction is one rich-notification button: play opens URL,
@@ -107,7 +127,7 @@ func (NotificationReasonFlags) Schema(huma.Registry) *huma.Schema {
 }
 
 func notificationItemOf(row notifications.DeliveryRowPayload) NotificationItem {
-	out := NotificationItem{ID: ID(row.ID), Type: row.Type, ProfileID: ID(row.ProfileID), SeriesTitle: row.SeriesTitle, EpisodeTitle: row.EpisodeTitle, SeasonNumber: row.SeasonNumber, EpisodeNumber: row.EpisodeNumber, PosterPath: row.PosterPath, PosterURL: row.PosterURL, PosterThumbhash: row.PosterThumbhash, Overview: row.Overview, ImageURL: row.ImageURL, ThumbnailURL: row.ThumbnailURL, Actions: notificationActionsOf(row.Actions), ReasonFlags: NotificationReasonFlags(row.ReasonFlags), CreatedAt: NewInstant(row.CreatedAt)}
+	out := NotificationItem{ID: ID(row.ID), Type: row.Type, ProfileID: ID(row.ProfileID), SeriesTitle: row.SeriesTitle, EpisodeTitle: row.EpisodeTitle, SeasonNumber: row.SeasonNumber, EpisodeNumber: row.EpisodeNumber, PosterPath: row.PosterPath, PosterURL: row.PosterURL, PosterThumbhash: row.PosterThumbhash, Overview: row.Overview, ImageURL: row.ImageURL, ThumbnailURL: row.ThumbnailURL, Actions: notificationActionsOf(row.Actions), Push: notificationPushContentOf(row.Push), ReasonFlags: NotificationReasonFlags(row.ReasonFlags), CreatedAt: NewInstant(row.CreatedAt)}
 	if row.LibraryID != nil {
 		out.LibraryID = new(ID(strconv.Itoa(*row.LibraryID)))
 	}
@@ -232,9 +252,10 @@ type NotificationPushDisplay struct {
 	Category   string `json:"category"`
 	URL        string `json:"url" format:"uri-reference"`
 	// Rich notification content; see NotificationItem.
-	ImageURL     string               `json:"image_url,omitempty" format:"uri-reference" doc:"Wide backdrop for a rich notification."`
-	ThumbnailURL string               `json:"thumbnail_url,omitempty" format:"uri-reference" doc:"Poster for a rich notification."`
-	Actions      []NotificationAction `json:"actions,omitempty" doc:"Buttons a rich notification offers, in display order."`
+	ImageURL     string                   `json:"image_url,omitempty" format:"uri-reference" doc:"Wide backdrop for a rich notification."`
+	ThumbnailURL string                   `json:"thumbnail_url,omitempty" format:"uri-reference" doc:"Poster for a rich notification."`
+	Actions      []NotificationAction     `json:"actions,omitempty" doc:"Buttons a rich notification offers, in display order."`
+	Push         *NotificationPushContent `json:"push,omitempty" doc:"Text and image from the server's push settings."`
 }
 type NotificationPushDisplayInput struct {
 	// Delivery IDs are ULIDs minted by the notification store (text, not UUID).
@@ -254,7 +275,7 @@ func registerNotificationInbox(reg *Registry) {
 		if err != nil {
 			return nil, serviceProblem(err)
 		}
-		return &NotificationPushDisplayOutput{Body: NotificationPushDisplay{DeliveryID: ID(view.DeliveryID), Title: view.Title, Body: view.Body, ThreadID: view.ThreadID, Category: view.Category, URL: view.URL, ImageURL: view.ImageURL, ThumbnailURL: view.ThumbnailURL, Actions: notificationActionsOf(view.Actions)}}, nil
+		return &NotificationPushDisplayOutput{Body: NotificationPushDisplay{DeliveryID: ID(view.DeliveryID), Title: view.Title, Body: view.Body, ThreadID: view.ThreadID, Category: view.Category, URL: view.URL, ImageURL: view.ImageURL, ThumbnailURL: view.ThumbnailURL, Actions: notificationActionsOf(view.Actions), Push: notificationPushContentOf(view.Push)}}, nil
 	})
 	cursors := NewCursors(reg.deps.CursorSecret)
 	Register(reg, notificationOperation(http.MethodGet, "/capabilities", "getNotificationCapabilities"), func(ctx context.Context, _ *CapabilityInput) (*NotificationCapabilitiesOutput, error) {

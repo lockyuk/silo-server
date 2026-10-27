@@ -169,6 +169,8 @@ type pushSender struct {
 	now                 func() time.Time
 	// serverID reads the deployment identity getServerIdentity reports.
 	serverID func(context.Context) (string, error)
+	// fcmDirect sends fcm_direct devices' pushes; nil when unconfigured.
+	fcmDirect *FCMDirect
 
 	// renewMu serializes credential renewal and replacement in this process;
 	// lastRelayReplacement is guarded by it.
@@ -288,6 +290,14 @@ func (s *pushSender) finalize(ctx context.Context, attempt PushDeliveryAttempt, 
 func (s *pushSender) send(ctx context.Context, attempt PushDeliveryAttempt, device *PushDevice, token string) (result pushSendResult) {
 	ctx, finishObservation := telemetry.StartDependency(ctx, "notifications", "worker", "push")
 	defer func() { finishObservation(deliveryObservationError(ctx, result.OK)) }()
+	if device.Provider == PushProviderFCMDirect {
+		deliveryID := attempt.ID
+		if attempt.NotificationDeliveryID != nil {
+			deliveryID = *attempt.NotificationDeliveryID
+		}
+		target, _ := s.relayTarget(ctx, device)
+		return s.fcmDirect.Send(ctx, token, deliveryID, target)
+	}
 	credential, err := s.prepareRelayCredential(ctx)
 	if err != nil {
 		return pushSendResult{HTTPStatus: http.StatusServiceUnavailable, Message: err.Error(), UpstreamReason: "relay_credential_unavailable"}

@@ -17,9 +17,13 @@ import (
 )
 
 const (
-	PushPlatformApple      = "apple"
-	PushPlatformAndroid    = "android"
-	PushProviderSiloRelay  = "silo_relay"
+	PushPlatformApple     = "apple"
+	PushPlatformAndroid   = "android"
+	PushProviderSiloRelay = "silo_relay"
+	// PushProviderFCMDirect sends straight to Firebase Cloud Messaging with
+	// the operator's own Firebase project (see FCMDirect), for app builds the
+	// Silo relay's project cannot reach.
+	PushProviderFCMDirect  = "fcm_direct"
 	PushModeOff            = "off"
 	PushModeInAppOnly      = "in_app_only"
 	PushModePrivatePush    = "private_push"
@@ -93,6 +97,8 @@ type FCMPushDeviceRegistration struct {
 	DeviceID  string
 	FCMToken  string
 	PushMode  string
+	// Provider is PushProviderSiloRelay when empty.
+	Provider string
 }
 
 type PushDeviceStore interface {
@@ -112,7 +118,13 @@ func NewPushDeviceRepository(pool *pgxpool.Pool) *PushDeviceRepository {
 type PushDeviceService struct {
 	store  PushDeviceStore
 	cipher *secret.Cipher
+	// fcmDirect, when set, admits fcm_direct Android registrations.
+	fcmDirect *FCMDirect
 }
+
+// FCMDirectAvailable reports whether Android installations may register with
+// the fcm_direct provider.
+func (s *PushDeviceService) FCMDirectAvailable() bool { return s != nil && s.fcmDirect != nil }
 
 func NewPushDeviceService(store PushDeviceStore, cipher *secret.Cipher) *PushDeviceService {
 	return &PushDeviceService{store: store, cipher: cipher}
@@ -621,7 +633,7 @@ func (r *PushDeviceRepository) insertFCM(ctx context.Context, tx pgx.Tx, registr
 		registration.ProfileID,
 		registration.DeviceID,
 		PushPlatformAndroid,
-		PushProviderSiloRelay,
+		defaultString(registration.Provider, PushProviderSiloRelay),
 		ciphertext,
 		fcmTokenHash(registration.FCMToken),
 		serverDeviceID,

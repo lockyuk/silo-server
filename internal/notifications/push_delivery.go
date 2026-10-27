@@ -113,10 +113,10 @@ func (r *PushDeviceRepository) ListEnabledPushByProfiles(ctx context.Context, tx
 		FROM push_devices
 		WHERE (user_id, profile_id) IN (SELECT * FROM unnest($1::int[], $2::text[]))
 		  AND platform = ANY($3)
-		  AND provider = $4
+		  AND provider = ANY($4)
 		  AND push_mode = $5
 		  AND enabled`,
-		userIDs, profileIDs, platforms, PushProviderSiloRelay, PushModePrivatePush)
+		userIDs, profileIDs, platforms, []string{PushProviderSiloRelay, PushProviderFCMDirect}, PushModePrivatePush)
 	if err != nil {
 		return nil, fmt.Errorf("list enabled push devices: %w", err)
 	}
@@ -192,10 +192,10 @@ func (r *PushDeviceRepository) EnqueueTestAttempt(ctx context.Context, platform,
 		FROM push_devices
 		WHERE profile_id = $1
 		  AND platform = $2
-		  AND provider = $3
+		  AND provider = ANY($3)
 		  AND push_mode = $4
 		  AND enabled`
-	args := []any{profileID, platform, PushProviderSiloRelay, PushModePrivatePush}
+	args := []any{profileID, platform, []string{PushProviderSiloRelay, PushProviderFCMDirect}, PushModePrivatePush}
 	if serverDeviceID != "" {
 		args = append(args, serverDeviceID)
 		query += fmt.Sprintf(" AND server_device_id = $%d", len(args))
@@ -229,7 +229,7 @@ func (r *PushDeviceRepository) EnqueueTestAttempt(ctx context.Context, platform,
 		INSERT INTO push_delivery_attempts
 			(id, notification_delivery_id, push_device_id, trigger_type, provider, platform, attempt_number, outcome)
 		VALUES ($1, $2, $3, $4, $5, $6, 0, $7)`+pushAttemptReturning,
-		attemptID, deliveryID, device.ID, PushTriggerTest, PushProviderSiloRelay, platform, PushOutcomePending)
+		attemptID, deliveryID, device.ID, PushTriggerTest, device.Provider, platform, PushOutcomePending)
 	if err != nil {
 		return nil, nil, fmt.Errorf("insert push test attempt: %w", err)
 	}

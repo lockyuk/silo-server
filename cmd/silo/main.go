@@ -2552,6 +2552,12 @@ func main() {
 			deps.EmailBrand,
 		)
 		notificationSystem.SetEmailArtwork(deps.Blobs.Assets, cfg.Auth.JWTSecret)
+		if direct, err := notifications.LoadFCMDirectFromEnv(); err != nil {
+			slog.Error("direct Firebase push disabled", "error", err)
+		} else if direct != nil {
+			notificationSystem.SetFCMDirect(direct)
+			slog.Info("direct Firebase push enabled", "project_id", direct.ProjectID())
+		}
 		userStoreProvider = notifications.WrapUserStoreProvider(userStoreProvider, notificationSystem)
 		deps.Notifications = notificationSystem
 

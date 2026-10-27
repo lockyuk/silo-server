@@ -36739,6 +36739,10 @@
             "minLength": 1,
             "type": "string"
           },
+          "overview": {
+            "description": "Synopsis of the episode, or of the movie, for a rich notification's text.",
+            "type": "string"
+          },
           "poster_path": {
             "type": "string"
           },

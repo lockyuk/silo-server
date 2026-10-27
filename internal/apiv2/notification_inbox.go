@@ -47,6 +47,7 @@ type NotificationItem struct {
 	PosterPath      string                  `json:"poster_path,omitempty"`
 	PosterURL       string                  `json:"poster_url,omitempty" format:"uri-reference"`
 	PosterThumbhash string                  `json:"poster_thumbhash,omitempty"`
+	Overview        string                  `json:"overview,omitempty" doc:"Synopsis of the episode, or of the movie, for a rich notification's text."`
 	ImageURL        string                  `json:"image_url,omitempty" format:"uri-reference" doc:"Wide backdrop for a rich notification."`
 	ThumbnailURL    string                  `json:"thumbnail_url,omitempty" format:"uri-reference" doc:"Absolute poster link for a rich notification."`
 	Actions         []NotificationAction    `json:"actions,omitempty" doc:"Buttons a rich notification offers, in display order. Clients skip action IDs they do not implement."`
@@ -106,7 +107,7 @@ func (NotificationReasonFlags) Schema(huma.Registry) *huma.Schema {
 }
 
 func notificationItemOf(row notifications.DeliveryRowPayload) NotificationItem {
-	out := NotificationItem{ID: ID(row.ID), Type: row.Type, ProfileID: ID(row.ProfileID), SeriesTitle: row.SeriesTitle, EpisodeTitle: row.EpisodeTitle, SeasonNumber: row.SeasonNumber, EpisodeNumber: row.EpisodeNumber, PosterPath: row.PosterPath, PosterURL: row.PosterURL, PosterThumbhash: row.PosterThumbhash, ImageURL: row.ImageURL, ThumbnailURL: row.ThumbnailURL, Actions: notificationActionsOf(row.Actions), ReasonFlags: NotificationReasonFlags(row.ReasonFlags), CreatedAt: NewInstant(row.CreatedAt)}
+	out := NotificationItem{ID: ID(row.ID), Type: row.Type, ProfileID: ID(row.ProfileID), SeriesTitle: row.SeriesTitle, EpisodeTitle: row.EpisodeTitle, SeasonNumber: row.SeasonNumber, EpisodeNumber: row.EpisodeNumber, PosterPath: row.PosterPath, PosterURL: row.PosterURL, PosterThumbhash: row.PosterThumbhash, Overview: row.Overview, ImageURL: row.ImageURL, ThumbnailURL: row.ThumbnailURL, Actions: notificationActionsOf(row.Actions), ReasonFlags: NotificationReasonFlags(row.ReasonFlags), CreatedAt: NewInstant(row.CreatedAt)}
 	if row.LibraryID != nil {
 		out.LibraryID = new(ID(strconv.Itoa(*row.LibraryID)))
 	}

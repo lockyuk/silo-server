@@ -23,10 +23,13 @@ import (
 
 // Email artwork kinds. A backdrop is dimmed toward the email canvas so the
 // title and synopsis drawn over it stay readable in clients that ignore CSS
-// overlays; a poster is re-encoded as is.
+// overlays; a wide backdrop, a poster and an episode still are re-encoded as
+// they are.
 const (
 	EmailArtworkBackdrop = "backdrop"
+	EmailArtworkWide     = "wide"
 	EmailArtworkPoster   = "poster"
+	EmailArtworkStill    = "still"
 )
 
 const (
@@ -34,6 +37,7 @@ const (
 	emailArtworkRoute        = "/api/v2/notifications/email/artwork/"
 	emailBackdropWidth       = 1280
 	emailPosterWidth         = 342
+	emailStillWidth          = 640
 	emailBackdropDim         = 0.62
 	emailArtworkCacheEntries = 256
 	emailArtworkCacheTTL     = 6 * time.Hour
@@ -60,6 +64,9 @@ type EmailArtwork struct {
 
 	mu    sync.Mutex
 	cache map[string]emailArtworkEntry
+	// backdropStyle, when set, gives the tint and dim (0-1) of dimmed
+	// backdrops; nil uses the email canvas and emailBackdropDim.
+	backdropStyle func(context.Context) (color.RGBA, float64)
 }
 
 type emailArtworkEntry struct {
@@ -113,7 +120,7 @@ func (a *EmailArtwork) parseToken(token string) (kind, contentID string, ok bool
 		return "", "", false
 	}
 	kind, contentID, found = strings.Cut(string(raw), ":")
-	if !found || contentID == "" || (kind != EmailArtworkBackdrop && kind != EmailArtworkPoster) {
+	if !found || contentID == "" || !validEmailArtworkKind(kind) {
 		return "", "", false
 	}
 	if !hmac.Equal([]byte(sig), []byte(a.signature(kind, contentID))) {
@@ -131,7 +138,14 @@ func (a *EmailArtwork) Serve(ctx context.Context, token string) ([]byte, error) 
 	if !ok {
 		return nil, ErrEmailArtworkNotFound
 	}
+	tint, dim := emailArtworkTint, emailBackdropDim
+	if kind == EmailArtworkBackdrop && a.backdropStyle != nil {
+		tint, dim = a.backdropStyle(ctx)
+	}
 	cacheKey := kind + ":" + contentID
+	if kind == EmailArtworkBackdrop {
+		cacheKey += fmt.Sprintf(":%02x%02x%02x:%.2f", tint.R, tint.G, tint.B, dim)
+	}
 	now := time.Now()
 	a.mu.Lock()
 	if entry, hit := a.cache[cacheKey]; hit && now.Before(entry.expires) {
@@ -149,9 +163,14 @@ func (a *EmailArtwork) Serve(ctx context.Context, token string) ([]byte, error) 
 		return nil, err
 	}
 	var out []byte
-	if kind == EmailArtworkBackdrop {
-		out, err = imageutil.EncodeEmailJPEG(raw, emailBackdropWidth, emailArtworkTint, emailBackdropDim)
-	} else {
+	switch kind {
+	case EmailArtworkBackdrop:
+		out, err = imageutil.EncodeEmailJPEG(raw, emailBackdropWidth, tint, dim)
+	case EmailArtworkWide:
+		out, err = imageutil.EncodeEmailJPEG(raw, emailBackdropWidth, emailArtworkTint, 0)
+	case EmailArtworkStill:
+		out, err = imageutil.EncodeEmailJPEG(raw, emailStillWidth, emailArtworkTint, 0)
+	default:
 		out, err = imageutil.EncodeEmailJPEG(raw, emailPosterWidth, emailArtworkTint, 0)
 	}
 	if err != nil {
@@ -172,16 +191,35 @@ func (a *EmailArtwork) Serve(ctx context.Context, token string) ([]byte, error) 
 	return out, nil
 }
 
+func validEmailArtworkKind(kind string) bool {
+	switch kind {
+	case EmailArtworkBackdrop, EmailArtworkWide, EmailArtworkPoster, EmailArtworkStill:
+		return true
+	}
+	return false
+}
+
+// SetBackdropStyle makes dimmed backdrops follow the email theme.
+func (a *EmailArtwork) SetBackdropStyle(style func(context.Context) (color.RGBA, float64)) {
+	if a != nil {
+		a.backdropStyle = style
+	}
+}
+
 // artworkPaths reads the stored artwork key and its provider source for one
-// title. An episode has no artwork of its own here; its series' is used.
+// title. A still is an episode's own; every other kind is a movie's or
+// series'.
 func (a *EmailArtwork) artworkPaths(ctx context.Context, kind, contentID string) (path, source string, err error) {
-	column, sourceColumn := "backdrop_path", "backdrop_source_path"
-	if kind == EmailArtworkPoster {
+	table, column, sourceColumn := "media_items", "backdrop_path", "backdrop_source_path"
+	switch kind {
+	case EmailArtworkPoster:
 		column, sourceColumn = "poster_path", "poster_source_path"
+	case EmailArtworkStill:
+		table, column, sourceColumn = "episodes", "still_path", "still_source_path"
 	}
 	err = a.pool.QueryRow(ctx, `
 		SELECT COALESCE(`+column+`, ''), COALESCE(`+sourceColumn+`, '')
-		FROM media_items WHERE content_id = $1`, contentID).Scan(&path, &source)
+		FROM `+table+` WHERE content_id = $1`, contentID).Scan(&path, &source)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "", ErrEmailArtworkNotFound
 	}

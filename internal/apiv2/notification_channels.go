@@ -40,6 +40,7 @@ type NotificationChannelService interface {
 	UnlinkDiscord(context.Context, int) error
 	EmailPreferences(context.Context, int, string) (notifications.EmailPreferencesState, error)
 	SetEmailMode(context.Context, int, string, string) error
+	SetEmailChoices(context.Context, int, string, notifications.EmailChoices) error
 	DiscordPrefsFor(context.Context, int) (notifications.DiscordPrefs, error)
 	SetDiscordMode(context.Context, int, string) error
 }
@@ -49,11 +50,24 @@ type NotificationChannelModeInput struct {
 		Mode string `json:"mode" enum:"off,per_episode,daily_digest,per_episode_and_digest,weekly_digest"`
 	}
 }
+type NotificationEmailPreferencesInput struct {
+	Body struct {
+		Mode        string    `json:"mode" enum:"off,per_episode,daily_digest,per_episode_and_digest,weekly_digest"`
+		Content     *string   `json:"content,omitempty" enum:"followed,all" doc:"What to email: shows the profile follows, or everything new it can open."`
+		Types       *[]string `json:"types,omitempty" doc:"Item types to include (movie, episode); empty includes both."`
+		LibraryIDs  *[]int    `json:"library_ids,omitempty" doc:"Libraries to include; empty includes every library the profile can open."`
+		MaxAgeHours *int      `json:"max_age_hours,omitempty" doc:"How recently an item must have been added to count as new, in hours; 0 uses the server default."`
+	}
+}
 type NotificationEmailPreferences struct {
-	Mode           string `json:"mode" enum:"off,per_episode,daily_digest,per_episode_and_digest,weekly_digest"`
-	CustomEmail    string `json:"custom_email"`
-	PendingEmail   string `json:"pending_email"`
-	CanEditAddress bool   `json:"can_edit_address"`
+	Mode           string   `json:"mode" enum:"off,per_episode,daily_digest,per_episode_and_digest,weekly_digest"`
+	CustomEmail    string   `json:"custom_email"`
+	PendingEmail   string   `json:"pending_email"`
+	CanEditAddress bool     `json:"can_edit_address"`
+	Content        string   `json:"content" enum:"followed,all" doc:"What to email: shows the profile follows, or everything new it can open."`
+	Types          []string `json:"types" doc:"Item types to include; empty includes both."`
+	LibraryIDs     []int    `json:"library_ids" doc:"Libraries to include; empty includes every library the profile can open."`
+	MaxAgeHours    int      `json:"max_age_hours" doc:"How recently an item must have been added to count as new, in hours; 0 uses the server default."`
 }
 type NotificationEmailPreferencesOutput struct{ Body NotificationEmailPreferences }
 type NotificationDiscordPreferences struct {
@@ -75,7 +89,18 @@ func (reg *Registry) notificationEmailState(ctx context.Context) (*NotificationE
 	if err != nil {
 		return nil, serviceProblem(err)
 	}
-	return &NotificationEmailPreferencesOutput{Body: NotificationEmailPreferences{Mode: view.Mode, CustomEmail: view.CustomEmail, PendingEmail: view.PendingEmail, CanEditAddress: !view.IsChild}}, nil
+	content := view.Content
+	if content == "" {
+		content = notifications.EmailContentFollowed
+	}
+	types, libraries := view.Types, view.LibraryIDs
+	if types == nil {
+		types = []string{}
+	}
+	if libraries == nil {
+		libraries = []int{}
+	}
+	return &NotificationEmailPreferencesOutput{Body: NotificationEmailPreferences{Mode: view.Mode, CustomEmail: view.CustomEmail, PendingEmail: view.PendingEmail, CanEditAddress: !view.IsChild, Content: content, Types: types, LibraryIDs: libraries, MaxAgeHours: view.MaxAgeHours}}, nil
 }
 func (reg *Registry) notificationDiscordState(ctx context.Context) (*NotificationDiscordPreferencesOutput, error) {
 	svc := reg.deps.NotificationChannels
@@ -134,13 +159,20 @@ func registerNotificationChannels(reg *Registry) {
 	})
 	emailWrite := notificationOperation(http.MethodPut, "/email-preferences", "updateNotificationEmailPreferences")
 	emailWrite.RetrySafety = RetrySafetyNonRetryable
-	emailWrite.Summary = "Set the acting profile's email delivery mode."
-	Register(reg, emailWrite, func(ctx context.Context, in *NotificationChannelModeInput) (*NotificationEmailPreferencesOutput, error) {
+	emailWrite.Summary = "Set the acting profile's email delivery mode and what its emails include."
+	Register(reg, emailWrite, func(ctx context.Context, in *NotificationEmailPreferencesInput) (*NotificationEmailPreferencesOutput, error) {
 		svc := reg.deps.NotificationChannels
 		if svc == nil {
 			return nil, unavailable("notification channels")
 		}
-		if err := svc.SetEmailMode(ctx, claimsFrom(ctx).UserID, profileFrom(ctx), in.Body.Mode); err != nil {
+		b := in.Body
+		if b.Content != nil || b.Types != nil || b.LibraryIDs != nil || b.MaxAgeHours != nil {
+			choices := notifications.EmailChoices{Content: b.Content, Types: b.Types, LibraryIDs: b.LibraryIDs, MaxAgeHours: b.MaxAgeHours}
+			if err := svc.SetEmailChoices(ctx, claimsFrom(ctx).UserID, profileFrom(ctx), choices); err != nil {
+				return nil, notificationChannelProblem(err)
+			}
+		}
+		if err := svc.SetEmailMode(ctx, claimsFrom(ctx).UserID, profileFrom(ctx), b.Mode); err != nil {
 			return nil, notificationChannelProblem(err)
 		}
 		return reg.notificationEmailState(ctx)

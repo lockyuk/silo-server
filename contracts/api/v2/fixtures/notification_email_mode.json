@@ -2,5 +2,9 @@
   "mode": "off",
   "custom_email": "verified@example.test",
   "pending_email": "",
-  "can_edit_address": false
+  "can_edit_address": false,
+  "content": "followed",
+  "types": [],
+  "library_ids": [],
+  "max_age_hours": 0
 }

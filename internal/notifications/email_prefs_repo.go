@@ -45,6 +45,11 @@ type EmailPrefs struct {
 	LastDigestAt        *time.Time
 	LastAttemptAt       *time.Time
 	ConsecutiveFailures int
+	// Email alert recipient choices.
+	Content     string
+	Types       []string
+	LibraryIDs  []int
+	MaxAgeHours int
 }
 
 // EmailPrefsRepository owns notification_email_prefs.
@@ -59,16 +64,18 @@ func NewEmailPrefsRepository(pool *pgxpool.Pool) *EmailPrefsRepository {
 
 // Get returns the profile's email prefs; missing rows default to mode off.
 func (r *EmailPrefsRepository) Get(ctx context.Context, profileID string) (EmailPrefs, error) {
-	prefs := EmailPrefs{ProfileID: profileID, Mode: EmailModeOff}
+	prefs := EmailPrefs{ProfileID: profileID, Mode: EmailModeOff, Content: EmailContentFollowed}
 	err := r.pool.QueryRow(ctx, `
 		SELECT user_id, mode, custom_email, pending_email, pending_expires_at,
 		       watermark_created_at, watermark_id, last_digest_at,
-		       last_attempt_at, consecutive_failures
+		       last_attempt_at, consecutive_failures,
+		       content, types, library_ids, max_age_hours
 		FROM notification_email_prefs WHERE profile_id = $1`,
 		profileID,
 	).Scan(&prefs.UserID, &prefs.Mode, &prefs.CustomEmail, &prefs.PendingEmail,
 		&prefs.PendingExpiresAt, &prefs.WatermarkCreatedAt, &prefs.WatermarkID,
-		&prefs.LastDigestAt, &prefs.LastAttemptAt, &prefs.ConsecutiveFailures)
+		&prefs.LastDigestAt, &prefs.LastAttemptAt, &prefs.ConsecutiveFailures,
+		&prefs.Content, &prefs.Types, &prefs.LibraryIDs, &prefs.MaxAgeHours)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return prefs, nil
 	}
@@ -112,6 +119,25 @@ func (r *EmailPrefsRepository) SetMode(ctx context.Context, userID int, profileI
 		profileID, userID, mode)
 	if err != nil {
 		return fmt.Errorf("set email mode: %w", err)
+	}
+	return nil
+}
+
+// SetChoices stores the profile's email alert choices; nil fields keep their
+// value. A missing row is created with mode off.
+func (r *EmailPrefsRepository) SetChoices(ctx context.Context, userID int, profileID string, c EmailChoices) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO notification_email_prefs (profile_id, user_id, content, types, library_ids, max_age_hours)
+		VALUES ($1, $2, COALESCE($3, 'followed'), COALESCE($4, '{}'::text[]), COALESCE($5, '{}'::int[]), COALESCE($6, 0))
+		ON CONFLICT (profile_id) DO UPDATE SET
+			content = COALESCE($3, notification_email_prefs.content),
+			types = COALESCE($4, notification_email_prefs.types),
+			library_ids = COALESCE($5, notification_email_prefs.library_ids),
+			max_age_hours = COALESCE($6, notification_email_prefs.max_age_hours),
+			updated_at = now()`,
+		profileID, userID, c.Content, c.Types, c.LibraryIDs, c.MaxAgeHours)
+	if err != nil {
+		return fmt.Errorf("set email choices: %w", err)
 	}
 	return nil
 }

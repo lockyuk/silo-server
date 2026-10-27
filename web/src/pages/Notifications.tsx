@@ -55,6 +55,9 @@ function notificationTitle(notification: AppNotification): string {
   if (notification.type === "episode.available") {
     return notification.series_title || "New episode available";
   }
+  if (notification.type === "movie.available") {
+    return notification.series_title || "New movie available";
+  }
   if (notification.type === "request.fulfilled") {
     return notification.series_title || "Request available";
   }
@@ -72,6 +75,9 @@ function notificationDescription(notification: AppNotification): string {
     return (
       [code, notification.episode_title].filter(Boolean).join(" — ") || "New episode available"
     );
+  }
+  if (notification.type === "movie.available") {
+    return "New movie in your library";
   }
   if (notification.type === "request.fulfilled") {
     const mediaType = notification.reason_flags?.media_type;
@@ -117,7 +123,12 @@ function notificationHref(notification: AppNotification): string | null {
 
 function reasonLabels(notification: AppNotification): string[] {
   const flags = notification.reason_flags ?? {};
-  return NOTIFICATION_REASONS.filter((reason) => flags[reason.key]).map((reason) => reason.label);
+  const labels: string[] = NOTIFICATION_REASONS.filter((reason) => flags[reason.key]).map(
+    (reason) => reason.label,
+  );
+  // "Everything new" explains a row only when no follow reason does.
+  if (labels.length === 0 && flags.new_release) labels.push("New release");
+  return labels;
 }
 
 function NotificationRow({

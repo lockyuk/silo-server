@@ -47,9 +47,35 @@ type NotificationItem struct {
 	PosterPath      string                  `json:"poster_path,omitempty"`
 	PosterURL       string                  `json:"poster_url,omitempty" format:"uri-reference"`
 	PosterThumbhash string                  `json:"poster_thumbhash,omitempty"`
+	ImageURL        string                  `json:"image_url,omitempty" format:"uri-reference" doc:"Wide backdrop for a rich notification."`
+	Actions         []NotificationAction    `json:"actions,omitempty" doc:"Buttons a rich notification offers, in display order. Clients skip action IDs they do not implement."`
 	ReasonFlags     NotificationReasonFlags `json:"reason_flags"`
 	CreatedAt       Instant                 `json:"created_at"`
 	ReadAt          NullableInstant         `json:"read_at"`
+}
+
+// NotificationAction is one rich-notification button: play opens URL,
+// mute_series mutes SeriesID, mark_read marks the notification read.
+type NotificationAction struct {
+	ID       string `json:"id" enum:"play,mute_series,mark_read"`
+	Title    string `json:"title"`
+	URL      string `json:"url,omitempty" format:"uri-reference"`
+	SeriesID *ID    `json:"series_id,omitempty"`
+}
+
+func notificationActionsOf(actions []notifications.NotificationAction) []NotificationAction {
+	if len(actions) == 0 {
+		return nil
+	}
+	out := make([]NotificationAction, 0, len(actions))
+	for _, action := range actions {
+		item := NotificationAction{ID: action.ID, Title: action.Title, URL: action.URL}
+		if action.SeriesID != "" {
+			item.SeriesID = new(ID(action.SeriesID))
+		}
+		out = append(out, item)
+	}
+	return out
 }
 
 // NotificationReasonFlags is a delivery's event-specific reason data: the
@@ -79,7 +105,7 @@ func (NotificationReasonFlags) Schema(huma.Registry) *huma.Schema {
 }
 
 func notificationItemOf(row notifications.DeliveryRowPayload) NotificationItem {
-	out := NotificationItem{ID: ID(row.ID), Type: row.Type, ProfileID: ID(row.ProfileID), SeriesTitle: row.SeriesTitle, EpisodeTitle: row.EpisodeTitle, SeasonNumber: row.SeasonNumber, EpisodeNumber: row.EpisodeNumber, PosterPath: row.PosterPath, PosterURL: row.PosterURL, PosterThumbhash: row.PosterThumbhash, ReasonFlags: NotificationReasonFlags(row.ReasonFlags), CreatedAt: NewInstant(row.CreatedAt)}
+	out := NotificationItem{ID: ID(row.ID), Type: row.Type, ProfileID: ID(row.ProfileID), SeriesTitle: row.SeriesTitle, EpisodeTitle: row.EpisodeTitle, SeasonNumber: row.SeasonNumber, EpisodeNumber: row.EpisodeNumber, PosterPath: row.PosterPath, PosterURL: row.PosterURL, PosterThumbhash: row.PosterThumbhash, ImageURL: row.ImageURL, Actions: notificationActionsOf(row.Actions), ReasonFlags: NotificationReasonFlags(row.ReasonFlags), CreatedAt: NewInstant(row.CreatedAt)}
 	if row.LibraryID != nil {
 		out.LibraryID = new(ID(strconv.Itoa(*row.LibraryID)))
 	}
@@ -141,10 +167,12 @@ type NotificationPreferences struct {
 	NotifyWatchlist        bool `json:"notify_watchlist"`
 	NotifyContinueWatching bool `json:"notify_continue_watching"`
 	NotifyNextUp           bool `json:"notify_next_up"`
+	NotifyNewEpisodes      bool `json:"notify_new_episodes" doc:"Every new episode the profile can open, followed or not."`
+	NotifyNewMovies        bool `json:"notify_new_movies" doc:"Every new movie the profile can open."`
 }
 
 func notificationPreferencesOf(p notifications.Preferences) NotificationPreferences {
-	return NotificationPreferences{ProfileID: ID(p.ProfileID), Enabled: p.Enabled, NotifyFavorites: p.NotifyFavorites, NotifyWatchlist: p.NotifyWatchlist, NotifyContinueWatching: p.NotifyContinueWatching, NotifyNextUp: p.NotifyNextUp}
+	return NotificationPreferences{ProfileID: ID(p.ProfileID), Enabled: p.Enabled, NotifyFavorites: p.NotifyFavorites, NotifyWatchlist: p.NotifyWatchlist, NotifyContinueWatching: p.NotifyContinueWatching, NotifyNextUp: p.NotifyNextUp, NotifyNewEpisodes: p.NotifyNewEpisodes, NotifyNewMovies: p.NotifyNewMovies}
 }
 
 type NotificationPreferencesOutput struct{ Body NotificationPreferences }
@@ -154,6 +182,8 @@ type NotificationPreferencesPatch struct {
 	NotifyWatchlist        *bool `json:"notify_watchlist,omitempty"`
 	NotifyContinueWatching *bool `json:"notify_continue_watching,omitempty"`
 	NotifyNextUp           *bool `json:"notify_next_up,omitempty"`
+	NotifyNewEpisodes      *bool `json:"notify_new_episodes,omitempty"`
+	NotifyNewMovies        *bool `json:"notify_new_movies,omitempty"`
 }
 type NotificationPreferencesInput struct {
 	RawBody []byte
@@ -195,6 +225,10 @@ type NotificationPushDisplay struct {
 	ThreadID   string `json:"thread_id,omitempty"`
 	Category   string `json:"category"`
 	URL        string `json:"url" format:"uri-reference"`
+	// Rich notification content; see NotificationItem.
+	ImageURL     string               `json:"image_url,omitempty" format:"uri-reference" doc:"Wide backdrop for a rich notification."`
+	ThumbnailURL string               `json:"thumbnail_url,omitempty" format:"uri-reference" doc:"Poster for a rich notification."`
+	Actions      []NotificationAction `json:"actions,omitempty" doc:"Buttons a rich notification offers, in display order."`
 }
 type NotificationPushDisplayInput struct {
 	// Delivery IDs are ULIDs minted by the notification store (text, not UUID).
@@ -214,7 +248,7 @@ func registerNotificationInbox(reg *Registry) {
 		if err != nil {
 			return nil, serviceProblem(err)
 		}
-		return &NotificationPushDisplayOutput{Body: NotificationPushDisplay{DeliveryID: ID(view.DeliveryID), Title: view.Title, Body: view.Body, ThreadID: view.ThreadID, Category: view.Category, URL: view.URL}}, nil
+		return &NotificationPushDisplayOutput{Body: NotificationPushDisplay{DeliveryID: ID(view.DeliveryID), Title: view.Title, Body: view.Body, ThreadID: view.ThreadID, Category: view.Category, URL: view.URL, ImageURL: view.ImageURL, ThumbnailURL: view.ThumbnailURL, Actions: notificationActionsOf(view.Actions)}}, nil
 	})
 	cursors := NewCursors(reg.deps.CursorSecret)
 	Register(reg, notificationOperation(http.MethodGet, "/capabilities", "getNotificationCapabilities"), func(ctx context.Context, _ *CapabilityInput) (*NotificationCapabilitiesOutput, error) {
@@ -390,7 +424,7 @@ func registerNotificationInbox(reg *Registry) {
 			}
 		}
 		b := in.Body
-		prefs, err := svc.PatchNotificationPreferences(ctx, claimsFrom(ctx).UserID, profileFrom(ctx), notifications.PreferencePatch{Enabled: b.Enabled, NotifyFavorites: b.NotifyFavorites, NotifyWatchlist: b.NotifyWatchlist, NotifyContinueWatching: b.NotifyContinueWatching, NotifyNextUp: b.NotifyNextUp})
+		prefs, err := svc.PatchNotificationPreferences(ctx, claimsFrom(ctx).UserID, profileFrom(ctx), notifications.PreferencePatch{Enabled: b.Enabled, NotifyFavorites: b.NotifyFavorites, NotifyWatchlist: b.NotifyWatchlist, NotifyContinueWatching: b.NotifyContinueWatching, NotifyNextUp: b.NotifyNextUp, NotifyNewEpisodes: b.NotifyNewEpisodes, NotifyNewMovies: b.NotifyNewMovies})
 		if err != nil {
 			return nil, serviceProblem(err)
 		}
@@ -461,9 +495,10 @@ type NotificationWebhookCapability struct {
 	SupportedTypes []string `json:"supported_types"`
 }
 type NotificationAccountChannelCapability struct {
-	Available  bool     `json:"available"`
-	Modes      []string `json:"modes"`
-	DigestHour int      `json:"digest_hour"`
+	Available     bool     `json:"available"`
+	Modes         []string `json:"modes"`
+	DigestHour    int      `json:"digest_hour"`
+	DigestWeekday int      `json:"digest_weekday" minimum:"0" maximum:"6" doc:"Day weekly digests go out, 0 = Sunday."`
 }
 
 func notificationCapabilitiesOf(v handlers.NotificationCapabilitiesView) NotificationCapabilities {
@@ -473,8 +508,8 @@ func notificationCapabilitiesOf(v handlers.NotificationCapabilitiesView) Notific
 		AndroidPush: NotificationPushCapability{Available: v.AndroidPush.Available, Provider: v.AndroidPush.Provider, SupportedModes: NonNil(v.AndroidPush.SupportedModes), DisplayToken: v.AndroidPush.DisplayToken},
 		WebPush:     NotificationWebPushCapability{Available: v.WebPush.Available, PublicKey: v.WebPush.PublicKey},
 		Webhooks:    NotificationWebhookCapability{Available: v.Webhooks.Available, MaxPerProfile: v.Webhooks.MaxPerProfile, SupportedTypes: NonNil(v.Webhooks.SupportedTypes)},
-		Email:       NotificationAccountChannelCapability{Available: v.Email.Available, Modes: NonNil(v.Email.Modes), DigestHour: v.Email.DigestHour},
-		Discord:     NotificationAccountChannelCapability{Available: v.Discord.Available, Modes: NonNil(v.Discord.Modes), DigestHour: v.Discord.DigestHour},
+		Email:       NotificationAccountChannelCapability{Available: v.Email.Available, Modes: NonNil(v.Email.Modes), DigestHour: v.Email.DigestHour, DigestWeekday: v.Email.DigestWeekday},
+		Discord:     NotificationAccountChannelCapability{Available: v.Discord.Available, Modes: NonNil(v.Discord.Modes), DigestHour: v.Discord.DigestHour, DigestWeekday: v.Discord.DigestWeekday},
 	}
 }
 func (c NotificationCapabilities) capabilityState() string {

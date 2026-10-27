@@ -13,6 +13,11 @@ import (
 // fallback.
 const DeliveryTypeEpisodeAvailable = "episode.available"
 
+// DeliveryTypeMovieAvailable announces a new movie to a profile that asked
+// to hear about every new movie. The movie's content id is in SeriesID, as
+// for request.fulfilled.
+const DeliveryTypeMovieAvailable = "movie.available"
+
 // SuppressedReasonSeriesBurst marks release events consumed by the per-series
 // burst cap without fanout.
 const SuppressedReasonSeriesBurst = "series_burst"
@@ -92,12 +97,14 @@ func (i SeriesInterest) HasAnyInterest() bool {
 }
 
 // ReasonFlags records which interest reasons matched for an
-// episode.available delivery.
+// episode.available or movie.available delivery. NewRelease means the
+// profile asked to hear about everything new of that kind.
 type ReasonFlags struct {
 	Favorite         bool `json:"favorite"`
 	Watchlist        bool `json:"watchlist"`
 	ContinueWatching bool `json:"continue_watching"`
 	NextUp           bool `json:"next_up"`
+	NewRelease       bool `json:"new_release,omitempty"`
 }
 
 // The reason names, as ReasonFlags' JSON keys spell them.
@@ -106,6 +113,7 @@ const (
 	ReasonWatchlist        = "watchlist"
 	ReasonContinueWatching = "continue_watching"
 	ReasonNextUp           = "next_up"
+	ReasonNewRelease       = "new_release"
 )
 
 // Has reports whether the named reason is set; an unknown name never is.
@@ -119,30 +127,36 @@ func (f ReasonFlags) Has(reason string) bool {
 		return f.ContinueWatching
 	case ReasonNextUp:
 		return f.NextUp
+	case ReasonNewRelease:
+		return f.NewRelease
 	}
 	return false
 }
 
 // Any reports whether at least one reason matched.
 func (f ReasonFlags) Any() bool {
-	return f.Favorite || f.Watchlist || f.ContinueWatching || f.NextUp
+	return f.Favorite || f.Watchlist || f.ContinueWatching || f.NextUp || f.NewRelease
 }
 
 // Preferences are the per-profile notification controls. Missing rows default
-// to all-enabled.
+// to every interest reason enabled and the "everything new" reasons off.
 type Preferences struct {
-	UserID                 int       `json:"-"`
-	ProfileID              string    `json:"profile_id"`
-	Enabled                bool      `json:"enabled"`
-	NotifyFavorites        bool      `json:"notify_favorites"`
-	NotifyWatchlist        bool      `json:"notify_watchlist"`
-	NotifyContinueWatching bool      `json:"notify_continue_watching"`
-	NotifyNextUp           bool      `json:"notify_next_up"`
-	UpdatedAt              time.Time `json:"-"`
+	UserID                 int    `json:"-"`
+	ProfileID              string `json:"profile_id"`
+	Enabled                bool   `json:"enabled"`
+	NotifyFavorites        bool   `json:"notify_favorites"`
+	NotifyWatchlist        bool   `json:"notify_watchlist"`
+	NotifyContinueWatching bool   `json:"notify_continue_watching"`
+	NotifyNextUp           bool   `json:"notify_next_up"`
+	// NotifyNewEpisodes and NotifyNewMovies ask for every new episode and
+	// movie the profile can open, followed or not.
+	NotifyNewEpisodes bool      `json:"notify_new_episodes"`
+	NotifyNewMovies   bool      `json:"notify_new_movies"`
+	UpdatedAt         time.Time `json:"-"`
 }
 
-// DefaultPreferences returns the all-enabled defaults for the profile on
-// userID's account.
+// DefaultPreferences returns the defaults for the profile on userID's
+// account: every interest reason on, the "everything new" reasons off.
 func DefaultPreferences(userID int, profileID string) Preferences {
 	return Preferences{
 		UserID:                 userID,
@@ -206,6 +220,15 @@ type DeliveryRow struct {
 	IMDBID          string
 	TMDBID          string
 	TVDBID          string
+	// Runtime (minutes), Tagline, and Networks describe the joined item for
+	// the email cards.
+	Runtime  int
+	Tagline  string
+	Networks []string
+	// BackdropPath and BackdropSourcePath are the joined item's wide artwork,
+	// the hero image of a rich push notification.
+	BackdropPath       string
+	BackdropSourcePath string
 }
 
 // InsertedDelivery identifies a delivery row actually inserted by a bulk

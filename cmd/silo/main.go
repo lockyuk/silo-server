@@ -2551,6 +2551,7 @@ func main() {
 			mail.NewSMTPSender(settingsRepo),
 			deps.EmailBrand,
 		)
+		notificationSystem.SetEmailArtwork(deps.Blobs.Assets, cfg.Auth.JWTSecret)
 		userStoreProvider = notifications.WrapUserStoreProvider(userStoreProvider, notificationSystem)
 		deps.Notifications = notificationSystem
 

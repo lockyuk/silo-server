@@ -25,6 +25,7 @@ type NotificationWebhookCreateInput struct {
 		NotifyWatchlist        *bool   `json:"notify_watchlist,omitempty"`
 		NotifyContinueWatching *bool   `json:"notify_continue_watching,omitempty"`
 		NotifyNextUp           *bool   `json:"notify_next_up,omitempty"`
+		NotifyNewReleases      *bool   `json:"notify_new_releases,omitempty"`
 		NotifyRequests         *bool   `json:"notify_requests,omitempty"`
 	}
 }
@@ -82,7 +83,7 @@ func registerNotificationDestinationCreate(reg *Registry) {
 			return nil, unavailable("notification destinations")
 		}
 		b := in.Body
-		row, secret, err := svc.CreateNotificationWebhook(ctx, claimsFrom(ctx).UserID, profileFrom(ctx), notifications.WebhookInput{Name: &b.Name, URL: &b.URL, Type: b.Type, NotifyFavorites: b.NotifyFavorites, NotifyWatchlist: b.NotifyWatchlist, NotifyContinueWatching: b.NotifyContinueWatching, NotifyNextUp: b.NotifyNextUp, NotifyRequests: b.NotifyRequests})
+		row, secret, err := svc.CreateNotificationWebhook(ctx, claimsFrom(ctx).UserID, profileFrom(ctx), notifications.WebhookInput{Name: &b.Name, URL: &b.URL, Type: b.Type, NotifyFavorites: b.NotifyFavorites, NotifyWatchlist: b.NotifyWatchlist, NotifyContinueWatching: b.NotifyContinueWatching, NotifyNextUp: b.NotifyNextUp, NotifyNewReleases: b.NotifyNewReleases, NotifyRequests: b.NotifyRequests})
 		if err != nil {
 			return nil, notificationDestinationCreateProblem(err)
 		}

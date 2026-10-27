@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Silo-Server/silo-server/internal/blobstore"
 	"github.com/Silo-Server/silo-server/internal/catalog"
 	"github.com/Silo-Server/silo-server/internal/discord"
 	evt "github.com/Silo-Server/silo-server/internal/events"
@@ -103,8 +104,12 @@ type System struct {
 	scopes ScopeResolver
 	users  UserLister
 	images ImageURLResolver
-	logger *slog.Logger
-	wg     sync.WaitGroup
+	// EmailArtwork serves the signed poster and backdrop links in
+	// notification emails; nil until SetEmailArtwork.
+	EmailArtwork *EmailArtwork
+	emailChannel *emailChannel
+	logger       *slog.Logger
+	wg           sync.WaitGroup
 }
 
 // NewSystem wires the notification system. hub may be nil (no realtime
@@ -275,6 +280,7 @@ func NewSystem(
 		system.EmailVerification = &EmailVerificationService{store: emailPrefs, cipher: cipher, profile: system.lookupProfile, linkBase: system.emailLinkBase, brand: emailBrand, dispatch: system.emailVerificationDispatch}
 	}
 	wsDispatcher.payload = system.PayloadForRow
+	system.emailChannel = emailChannelInst
 	if emailChannelInst != nil {
 		emailChannelInst.profileName = system.lookupProfileName
 	}
@@ -289,8 +295,30 @@ func NewSystem(
 	}
 	if webPushSenderInst != nil {
 		webPushSenderInst.payload = system.PayloadForRow
+		webPushSenderInst.display = system.DisplayForRow
 	}
 	return system
+}
+
+// SetEmailArtwork enables posters and dimmed backdrops in notification
+// emails, read from store (nil serves provider-hosted artwork only) and
+// signed with a key derived from jwtSecret.
+func (s *System) SetEmailArtwork(store blobstore.Store, jwtSecret string) {
+	if s == nil {
+		return
+	}
+	s.EmailArtwork = NewEmailArtwork(s.pool, store, jwtSecret)
+	if s.emailChannel != nil {
+		s.emailChannel.artwork = s.EmailArtwork
+	}
+}
+
+// ServeEmailArtwork returns the JPEG behind a signed email artwork link.
+func (s *System) ServeEmailArtwork(ctx context.Context, token string) ([]byte, error) {
+	if s == nil || s.EmailArtwork == nil {
+		return nil, ErrEmailArtworkNotFound
+	}
+	return s.EmailArtwork.Serve(ctx, token)
 }
 
 // SetImageResolver wires presigned poster URLs into notification payloads.
@@ -336,10 +364,39 @@ func (s *System) absoluteArtworkURL(ctx context.Context, url string) string {
 	return base + url
 }
 
+// DisplayForRow renders a delivery's native-notification display and
+// attaches absolute backdrop and poster links for rich notifications.
+func (s *System) DisplayForRow(ctx context.Context, row DeliveryRow) NotificationDisplay {
+	display := BuildNotificationDisplay(row)
+	if s == nil {
+		return display
+	}
+	display.ImageURL = s.richArtworkURL(ctx, row.BackdropPath, row.BackdropSourcePath, "backdrop", "w780")
+	display.ThumbnailURL = s.richArtworkURL(ctx, row.PosterPath, row.PosterSourcePath, "poster", "w342")
+	return display
+}
+
+// richArtworkURL resolves artwork for a notification a device fetches right
+// away: a public provider URL when one exists, else a presigned link to this
+// server's storage made absolute.
+func (s *System) richArtworkURL(ctx context.Context, path, sourcePath, imageType, size string) string {
+	if url := embedPosterURL(path, sourcePath); url != "" {
+		return url
+	}
+	if s.images == nil || path == "" {
+		return ""
+	}
+	return s.absoluteArtworkURL(ctx, s.images.PresignImageURL(ctx, path, imageType, size))
+}
+
 // PayloadForRow converts a row to its wire shape, attaching a presigned
 // poster URL when an image resolver is configured.
 func (s *System) PayloadForRow(ctx context.Context, row DeliveryRow) DeliveryRowPayload {
 	payload := PayloadForRow(row)
+	payload.Actions = notificationActions(row)
+	if s != nil {
+		payload.ImageURL = s.richArtworkURL(ctx, row.BackdropPath, row.BackdropSourcePath, "backdrop", "w780")
+	}
 	if payload.PosterPath != "" {
 		payload.PosterURL = publicArtworkURL(payload.PosterPath)
 		if payload.PosterURL == "" && s != nil && s.images != nil {

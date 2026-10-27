@@ -37,6 +37,7 @@ type emailSeriesGroup struct {
 type emailItems struct {
 	series   []emailSeriesGroup
 	episodes int
+	movies   []DeliveryRow
 	requests []DeliveryRow
 	others   []DeliveryRow
 }
@@ -45,6 +46,7 @@ type emailItems struct {
 func collateEmailItems(rows []DeliveryRow) emailItems {
 	var items emailItems
 	seenEpisodes := make(map[string]struct{}, len(rows))
+	seenMovies := make(map[string]struct{}, 4)
 	seenRequests := make(map[string]struct{}, 4)
 	groupIndex := make(map[string]int, 4)
 
@@ -75,6 +77,16 @@ func collateEmailItems(rows []DeliveryRow) emailItems {
 			}
 			items.series[idx].episodes = append(items.series[idx].episodes, row)
 			items.episodes++
+		case DeliveryTypeMovieAvailable:
+			key := row.ID
+			if row.SeriesID != nil && *row.SeriesID != "" {
+				key = *row.SeriesID
+			}
+			if _, ok := seenMovies[key]; ok {
+				continue
+			}
+			seenMovies[key] = struct{}{}
+			items.movies = append(items.movies, row)
 		case DeliveryTypeRequestFulfilled, DeliveryTypeRequestApproved, DeliveryTypeRequestDeclined:
 			// Key by (type, request): one request may legitimately produce an
 			// approved row and a fulfilled row in the same window.
@@ -193,9 +205,23 @@ func countPart(count int, singular, plural string) string {
 	return fmt.Sprintf("%d %s", count, plural)
 }
 
+// digestLabel names a digest send in copy; empty for per-item sends.
+func digestLabel(mode string) string {
+	switch mode {
+	case EmailModeDailyDigest:
+		return "daily"
+	case ChannelModeWeeklyDigest:
+		return "weekly"
+	}
+	return ""
+}
+
 // emailSubject builds the subject line from the collated items.
 func emailSubject(mode string, items emailItems) string {
-	parts := make([]string, 0, 3)
+	parts := make([]string, 0, 4)
+	if len(items.movies) > 0 {
+		parts = append(parts, countPart(len(items.movies), "new movie", "new movies"))
+	}
 	if items.episodes > 0 {
 		parts = append(parts, countPart(items.episodes, "new episode", "new episodes"))
 	}
@@ -211,10 +237,11 @@ func emailSubject(mode string, items emailItems) string {
 	}
 	summary := strings.Join(parts, ", ")
 
-	if mode == EmailModeDailyDigest {
-		return "Silo daily digest: " + summary
+	if label := digestLabel(mode); label != "" {
+		return "Silo " + label + " digest: " + summary
 	}
-	if items.episodes == 1 && len(items.requests) == 0 && len(items.others) == 0 {
+	single := len(items.requests) == 0 && len(items.others) == 0
+	if single && len(items.movies) == 0 && items.episodes == 1 {
 		row := items.series[0].episodes[0]
 		subject := genericEpisodeTitle
 		if items.series[0].title != untitledSeriesGroup {
@@ -225,10 +252,21 @@ func emailSubject(mode string, items emailItems) string {
 		}
 		return subject
 	}
-	if items.episodes == 0 && len(items.requests) == 1 && len(items.others) == 0 {
+	if single && items.episodes == 0 && len(items.movies) == 1 {
+		return "New movie: " + movieTitle(items.movies[0])
+	}
+	if items.episodes == 0 && len(items.movies) == 0 && len(items.requests) == 1 && len(items.others) == 0 {
 		return requestLine(items.requests[0])
 	}
 	return "Silo: " + summary
+}
+
+// movieTitle renders "Title (2024)", degrading to whichever part exists.
+func movieTitle(row DeliveryRow) string {
+	if row.SeriesTitle == "" {
+		return "New movie"
+	}
+	return titleWithYear(row.SeriesTitle, row.Year)
 }
 
 // itemURL builds a deep link; empty when no external URL is configured.
@@ -252,111 +290,309 @@ type emailComposeOptions struct {
 	// UnsubscribeURL is the tokenized one-click unsubscribe link; empty
 	// renders without one.
 	UnsubscribeURL string
+	// ArtworkURL returns the signed link for a title's poster or dimmed
+	// backdrop (EmailArtworkPoster, EmailArtworkBackdrop); nil renders cards
+	// without artwork.
+	ArtworkURL func(kind, contentID string) string
+}
+
+func (o emailComposeOptions) artwork(kind string, contentID *string) string {
+	if o.ArtworkURL == nil || contentID == nil || *contentID == "" {
+		return ""
+	}
+	return o.ArtworkURL(kind, *contentID)
+}
+
+// Card copy limits keep a long digest scannable.
+const (
+	emailSeriesOverviewMax  = 260
+	emailEpisodeOverviewMax = 220
+	emailMovieOverviewMax   = 360
+	emailPosterWidthPx      = 112
+)
+
+// emailAccent is the badge and episode-code colour: the server's accent, or
+// the default action colour.
+func emailAccent(brand mail.Brand) string {
+	if brand.AccentColor != "" {
+		return brand.AccentColor
+	}
+	return "#8b9cff"
+}
+
+// emailCardBuilder renders the HTML body of a notification email: one card
+// per series with its new episodes, one card per movie, then request and
+// other updates as plain lists. Every value is escaped here.
+type emailCardBuilder struct {
+	opts     emailComposeOptions
+	accent   string
+	body     strings.Builder
+	text     strings.Builder
+	rendered int
+}
+
+func (b *emailCardBuilder) full() bool { return b.rendered >= emailMaxItemsRendered }
+
+func (b *emailCardBuilder) sectionLabel(label string) {
+	b.text.WriteString("\n" + strings.ToUpper(label) + "\n")
+	top := "22px"
+	if b.body.Len() == 0 {
+		top = "4px"
+	}
+	b.body.WriteString(fmt.Sprintf(
+		`<div style="margin:%s 0 10px;font:700 12px/1.4 %s;letter-spacing:1.5px;text-transform:uppercase;color:%s;">%s</div>`,
+		top, mail.EmailFont, mail.EmailColorMuted, html.EscapeString(label)))
+}
+
+// cardOpen starts a card whose header cell carries the dimmed backdrop when
+// one exists. The background attribute is for Outlook, which ignores CSS
+// background images.
+func (b *emailCardBuilder) cardOpen(backdrop string) {
+	b.body.WriteString(fmt.Sprintf(
+		`<table role="presentation" width="100%%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;background:%s;border:1px solid %s;border-radius:12px;border-collapse:separate;overflow:hidden;">`,
+		mail.EmailColorCanvas, mail.EmailColorBorder))
+	if backdrop != "" {
+		bg := html.EscapeString(backdrop)
+		b.body.WriteString(fmt.Sprintf(
+			`<tr><td background="%s" style="padding:18px;background-color:%s;background-image:url('%s');background-size:cover;background-position:center;border-radius:12px 12px 0 0;">`,
+			bg, mail.EmailColorCanvas, bg))
+	} else {
+		b.body.WriteString(`<tr><td style="padding:18px;">`)
+	}
+}
+
+// headerRow lays the poster beside the title block.
+func (b *emailCardBuilder) headerRow(poster, alt, titleHTML string) {
+	b.body.WriteString(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>`)
+	if poster != "" {
+		b.body.WriteString(fmt.Sprintf(
+			`<td width="%d" valign="top" style="padding-right:16px;"><img src="%s" alt="%s" width="%d" style="display:block;width:%dpx;max-width:%dpx;border-radius:8px;border:0;"></td>`,
+			emailPosterWidthPx, html.EscapeString(poster), html.EscapeString(alt), emailPosterWidthPx, emailPosterWidthPx, emailPosterWidthPx))
+	}
+	b.body.WriteString(`<td valign="top">` + titleHTML + `</td></tr></table>`)
+}
+
+func (b *emailCardBuilder) cardClose() {
+	b.body.WriteString(`</td></tr></table>`)
+}
+
+func (b *emailCardBuilder) title(label, href, suffix string) string {
+	content := html.EscapeString(label)
+	if suffix != "" {
+		content += fmt.Sprintf(` <span style="font-weight:400;color:%s;">%s</span>`, mail.EmailColorMuted, html.EscapeString(suffix))
+	}
+	if href != "" {
+		content = fmt.Sprintf(`<a href="%s" style="color:%s;text-decoration:none;">%s</a>`, html.EscapeString(href), mail.EmailColorText, content)
+	}
+	return fmt.Sprintf(`<div style="font:700 19px/1.3 %s;color:%s;">%s</div>`, mail.EmailFont, mail.EmailColorText, content)
+}
+
+func metaLine(parts ...string) string {
+	kept := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part = strings.TrimSpace(part); part != "" {
+			kept = append(kept, part)
+		}
+	}
+	if len(kept) == 0 {
+		return ""
+	}
+	return fmt.Sprintf(`<div style="margin-top:4px;font:400 13px/1.5 %s;color:%s;">%s</div>`,
+		mail.EmailFont, mail.EmailColorMuted, html.EscapeString(strings.Join(kept, " · ")))
+}
+
+func paragraph(text string, max int, muted bool) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	color := mail.EmailColorText
+	if muted {
+		color = mail.EmailColorMuted
+	}
+	return fmt.Sprintf(`<div style="margin-top:10px;font:400 14px/1.55 %s;color:%s;">%s</div>`,
+		mail.EmailFont, color, html.EscapeString(truncateDisplayText(text, max)))
+}
+
+func genresText(genres []string) string {
+	if len(genres) > 3 {
+		genres = genres[:3]
+	}
+	return strings.Join(genres, ", ")
+}
+
+func runtimeText(minutes int) string {
+	if minutes <= 0 {
+		return ""
+	}
+	if minutes < 60 {
+		return fmt.Sprintf("%dm", minutes)
+	}
+	return fmt.Sprintf("%dh %02dm", minutes/60, minutes%60)
+}
+
+func ratingText(imdb, tmdb float64) string {
+	switch {
+	case imdb > 0:
+		return fmt.Sprintf("★ %.1f", imdb)
+	case tmdb > 0:
+		return fmt.Sprintf("★ %.1f", tmdb)
+	}
+	return ""
+}
+
+func (b *emailCardBuilder) seriesCard(group emailSeriesGroup) {
+	lead := group.episodes[0]
+	seriesID := &group.seriesID
+	b.text.WriteString(group.title + "\n")
+	b.cardOpen(b.opts.artwork(EmailArtworkBackdrop, seriesID))
+
+	network := ""
+	if len(lead.Networks) > 0 {
+		network = lead.Networks[0]
+	}
+	badge := countPart(len(group.episodes), "new episode", "new episodes")
+	header := b.title(group.title, itemURL(b.opts.BaseURL, group.seriesID), "") +
+		metaLine(network, genresText(lead.Genres), ratingText(lead.RatingIMDB, lead.RatingTMDB)) +
+		fmt.Sprintf(`<div style="display:inline-block;margin-top:10px;padding:3px 10px;border-radius:999px;background:%s;color:#ffffff;font:700 12px/1.6 %s;">%s</div>`,
+			b.accent, mail.EmailFont, html.EscapeString(badge))
+	if len(group.episodes) == 1 || lead.EpisodeOverview == "" {
+		header += paragraph(lead.SeriesOverview, emailSeriesOverviewMax, false)
+	}
+	b.headerRow(b.opts.artwork(EmailArtworkPoster, seriesID), group.title, header)
+	b.body.WriteString(`</td></tr><tr><td style="padding:2px 18px 16px;">`)
+
+	for _, row := range group.episodes {
+		b.rendered++
+		if b.rendered > emailMaxItemsRendered {
+			break
+		}
+		episodeID := ""
+		if row.EpisodeID != nil {
+			episodeID = *row.EpisodeID
+		}
+		b.text.WriteString("  " + episodeLine(row) + "\n")
+		code := episodeCode(row)
+		label := strings.TrimSpace(row.EpisodeTitle)
+		if code == "" && label == "" {
+			label = genericEpisodeTitle
+		}
+		var line strings.Builder
+		if code != "" {
+			line.WriteString(fmt.Sprintf(`<span style="color:%s;">%s</span>`, b.accent, html.EscapeString(code)))
+			if label != "" {
+				line.WriteString(" · ")
+			}
+		}
+		line.WriteString(html.EscapeString(label))
+		content := line.String()
+		if href := itemURL(b.opts.BaseURL, episodeID); href != "" {
+			content = fmt.Sprintf(`<a href="%s" style="color:%s;text-decoration:none;">%s</a>`, html.EscapeString(href), mail.EmailColorText, content)
+		}
+		b.body.WriteString(fmt.Sprintf(
+			`<div style="margin-top:12px;padding-top:12px;border-top:1px solid %s;"><div style="font:700 15px/1.4 %s;color:%s;">%s</div>%s</div>`,
+			mail.EmailColorRule, mail.EmailFont, mail.EmailColorText, content,
+			paragraph(row.EpisodeOverview, emailEpisodeOverviewMax, true)))
+	}
+	b.cardClose()
+}
+
+func (b *emailCardBuilder) movieCard(row DeliveryRow) {
+	b.rendered++
+	if b.rendered > emailMaxItemsRendered {
+		return
+	}
+	title := row.SeriesTitle
+	if title == "" {
+		title = "New movie"
+	}
+	b.text.WriteString("  " + movieTitle(row) + "\n")
+	itemID := ""
+	if row.SeriesID != nil {
+		itemID = *row.SeriesID
+	}
+	year := ""
+	if row.Year > 0 {
+		year = fmt.Sprintf("(%d)", row.Year)
+	}
+	b.cardOpen(b.opts.artwork(EmailArtworkBackdrop, row.SeriesID))
+	header := b.title(title, itemURL(b.opts.BaseURL, itemID), year) +
+		metaLine(genresText(row.Genres), runtimeText(row.Runtime), row.ContentRating, ratingText(row.RatingIMDB, row.RatingTMDB))
+	if tagline := strings.TrimSpace(row.Tagline); tagline != "" {
+		header += fmt.Sprintf(`<div style="margin-top:10px;font:italic 400 14px/1.5 %s;color:%s;">%s</div>`,
+			mail.EmailFont, b.accent, html.EscapeString(tagline))
+	}
+	header += paragraph(row.SeriesOverview, emailMovieOverviewMax, false)
+	b.headerRow(b.opts.artwork(EmailArtworkPoster, row.SeriesID), title, header)
+	b.cardClose()
+}
+
+// listItem renders one plain row for request and other updates.
+func (b *emailCardBuilder) listItem(plain, href string) {
+	b.rendered++
+	if b.rendered > emailMaxItemsRendered {
+		return
+	}
+	b.text.WriteString("  " + plain + "\n")
+	content := html.EscapeString(plain)
+	if href != "" {
+		content = fmt.Sprintf(`<a href="%s" style="color:%s;text-decoration:none;">%s</a>`,
+			html.EscapeString(href), mail.EmailColorText, content)
+	}
+	b.body.WriteString(fmt.Sprintf(
+		`<div style="padding:8px 2px;border-top:1px solid %s;font:400 14px/1.5 %s;color:%s;">%s</div>`,
+		mail.EmailColorRule, mail.EmailFont, mail.EmailColorText, content))
 }
 
 // composeNotificationEmail renders one email (text + HTML) for the given
 // delivery rows.
 func composeNotificationEmail(mode string, rows []DeliveryRow, opts emailComposeOptions) emailContent {
-	baseURL := opts.BaseURL
 	items := collateEmailItems(rows)
+	b := &emailCardBuilder{opts: opts, accent: emailAccent(opts.Brand)}
+	total := items.episodes + len(items.movies) + len(items.requests) + len(items.others)
 
-	var text strings.Builder
-	var body strings.Builder
-	rendered := 0
-	total := items.episodes + len(items.requests) + len(items.others)
-
-	// writeItem renders one row: plain feeds the text body; code (optional
-	// "S02E03" badge) and label feed the HTML row.
-	writeItem := func(plain, code, label, href string) {
-		rendered++
-		if rendered > emailMaxItemsRendered {
-			return
-		}
-		text.WriteString("  " + plain + "\n")
-		var inner strings.Builder
-		if code != "" {
-			inner.WriteString(fmt.Sprintf(`<span style="font:500 12px/1 %s;color:%s;">%s</span>`,
-				mail.EmailFontMono, mail.EmailColorMuted, html.EscapeString(code)))
-			if label != "" {
-				inner.WriteString("&nbsp;&nbsp;")
+	if len(items.series) > 0 {
+		b.sectionLabel("TV")
+		for _, group := range items.series {
+			if b.full() {
+				break
 			}
+			b.seriesCard(group)
 		}
-		inner.WriteString(html.EscapeString(label))
-		content := inner.String()
-		if href != "" {
-			content = fmt.Sprintf(`<a href="%s" style="color:%s;text-decoration:none;">%s</a>`,
-				html.EscapeString(href), mail.EmailColorText, content)
-		}
-		body.WriteString(fmt.Sprintf(
-			`<li style="margin:0;padding:8px 2px;border-top:1px solid %s;font:400 14px/1.5 %s;color:%s;">%s</li>`,
-			mail.EmailColorRule, mail.EmailFont, mail.EmailColorText, content))
 	}
-	writeHeading := func(title, href string) {
-		text.WriteString(title + "\n")
-		label := html.EscapeString(title)
-		if href != "" {
-			label = fmt.Sprintf(`<a href="%s" style="color:inherit;text-decoration:none;">%s</a>`,
-				html.EscapeString(href), label)
-		}
-		top := "22px"
-		if body.Len() == 0 {
-			top = "0"
-		}
-		body.WriteString(fmt.Sprintf(
-			`<h2 style="margin:%s 0 6px;font:600 15px/1.4 %s;color:%s;">%s</h2>`,
-			top, mail.EmailFont, mail.EmailColorText, label))
-	}
-	openList := func() { body.WriteString(`<ul style="margin:0;padding:0;list-style:none;">`) }
-	closeList := func() { body.WriteString(`</ul>`) }
-
-	for _, group := range items.series {
-		if rendered >= emailMaxItemsRendered {
-			break
-		}
-		writeHeading(group.title, itemURL(baseURL, group.seriesID))
-		openList()
-		for _, row := range group.episodes {
-			episodeID := ""
-			if row.EpisodeID != nil {
-				episodeID = *row.EpisodeID
+	if len(items.movies) > 0 && !b.full() {
+		b.sectionLabel("Movies")
+		for _, row := range items.movies {
+			if b.full() {
+				break
 			}
-			code := episodeCode(row)
-			label := row.EpisodeTitle
-			if code == "" && label == "" {
-				label = genericEpisodeTitle
-			}
-			writeItem(episodeLine(row), code, label, itemURL(baseURL, episodeID))
+			b.movieCard(row)
 		}
-		closeList()
 	}
-	if len(items.requests) > 0 && rendered < emailMaxItemsRendered {
+	if len(items.requests) > 0 && !b.full() {
 		heading := "Request updates"
 		if requestsAllFulfilled(items) {
 			heading = "Requests ready"
 		}
-		writeHeading(heading, "")
-		openList()
+		b.sectionLabel(heading)
 		for _, row := range items.requests {
 			seriesID := ""
 			if row.SeriesID != nil {
 				seriesID = *row.SeriesID
 			}
-			writeItem(requestLine(row), "", requestLine(row), itemURL(baseURL, seriesID))
+			b.listItem(requestLine(row), itemURL(opts.BaseURL, seriesID))
 		}
-		closeList()
 	}
-	if len(items.others) > 0 && rendered < emailMaxItemsRendered {
-		writeHeading("Other updates", "")
-		openList()
+	if len(items.others) > 0 && !b.full() {
+		b.sectionLabel("Other updates")
 		for _, row := range items.others {
-			writeItem(otherLine(row), "", otherLine(row), "")
+			b.listItem(otherLine(row), "")
 		}
-		closeList()
 	}
 	if remainder := total - emailMaxItemsRendered; remainder > 0 {
 		more := fmt.Sprintf("…and %d more in your Silo inbox.", remainder)
-		text.WriteString(more + "\n")
-		body.WriteString(fmt.Sprintf(`<p style="margin:14px 0 0;font:400 13px/1.5 %s;color:%s;">%s</p>`,
+		b.text.WriteString(more + "\n")
+		b.body.WriteString(fmt.Sprintf(`<p style="margin:14px 0 0;font:400 13px/1.5 %s;color:%s;">%s</p>`,
 			mail.EmailFont, mail.EmailColorMuted, html.EscapeString(more)))
 	}
 
@@ -365,7 +601,7 @@ func composeNotificationEmail(mode string, rows []DeliveryRow, opts emailCompose
 		forProfile = " for " + opts.ProfileName
 	}
 	intro := fmt.Sprintf("New in your library%s:", forProfile)
-	if mode == EmailModeDailyDigest {
+	if label := digestLabel(mode); label != "" {
 		intro = fmt.Sprintf("Here's what's new%s since the last digest:", forProfile)
 	}
 	subjectFor := ""
@@ -380,8 +616,8 @@ func composeNotificationEmail(mode string, rows []DeliveryRow, opts emailCompose
 	footer := fmt.Sprintf("You're receiving this because email notifications are enabled for"+
 		" %s on your Silo account. Manage them in Settings → Notifications.", profileLabel)
 	footerHTML := html.EscapeString(footer)
-	if baseURL != "" {
-		settingsURL := html.EscapeString(baseURL + "/settings/notifications")
+	if opts.BaseURL != "" {
+		settingsURL := html.EscapeString(opts.BaseURL + "/settings/notifications")
 		footerHTML = strings.Replace(footerHTML,
 			"Settings → Notifications",
 			fmt.Sprintf(`<a href="%s" style="color:%s;">Settings → Notifications</a>`,
@@ -397,13 +633,13 @@ func composeNotificationEmail(mode string, rows []DeliveryRow, opts emailCompose
 		Brand:      opts.Brand,
 		Preheader:  emailPreheader(items),
 		Title:      strings.TrimSuffix(intro, ":"),
-		BodyHTML:   body.String(),
+		BodyHTML:   b.body.String(),
 		FooterHTML: footerHTML,
 	})
 
 	return emailContent{
 		Subject: emailSubject(mode, items) + subjectFor,
-		Text:    intro + "\n\n" + text.String() + "\n" + footer + "\n",
+		Text:    intro + "\n" + b.text.String() + "\n" + footer + "\n",
 		HTML:    htmlBody,
 	}
 }
@@ -417,6 +653,9 @@ func emailPreheader(items emailItems) string {
 			return title + " · " + line
 		}
 		return line
+	}
+	if len(items.movies) > 0 {
+		return movieTitle(items.movies[0])
 	}
 	if len(items.requests) > 0 {
 		return requestLine(items.requests[0])

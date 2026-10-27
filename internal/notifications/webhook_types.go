@@ -54,6 +54,7 @@ type Webhook struct {
 	NotifyWatchlist         bool
 	NotifyContinueWatching  bool
 	NotifyNextUp            bool
+	NotifyNewReleases       bool
 	NotifyRequests          bool
 	ConsecutiveFailures     int
 	DisabledReason          *string
@@ -73,7 +74,8 @@ func (w Webhook) MatchesReasons(flags ReasonFlags) bool {
 	return (flags.Favorite && w.NotifyFavorites) ||
 		(flags.Watchlist && w.NotifyWatchlist) ||
 		(flags.ContinueWatching && w.NotifyContinueWatching) ||
-		(flags.NextUp && w.NotifyNextUp)
+		(flags.NextUp && w.NotifyNextUp) ||
+		(flags.NewRelease && w.NotifyNewReleases)
 }
 
 // DeliveryAttempt is one row of a per-target dispatch outbox / retry log.
@@ -117,6 +119,10 @@ func reasonLabelList(flags ReasonFlags) []string {
 	}
 	if flags.NextUp {
 		labels = append(labels, "Next Up")
+	}
+	// "Everything new" only explains a delivery no follow reason does.
+	if flags.NewRelease && len(labels) == 0 {
+		labels = append(labels, "New release")
 	}
 	return labels
 }

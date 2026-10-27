@@ -22,7 +22,9 @@ func NewInterestRepository(pool *pgxpool.Pool) *InterestRepository {
 // ListActiveBySeries loads candidate recipients for one (library, series).
 // This is the hot fanout query; it uses the partial active-interest index.
 // Profiles that muted the series are left out in the same query, so a mute
-// costs fanout no per-recipient read.
+// costs fanout no per-recipient read. Profiles that asked for every new
+// episode (notify_new_episodes) join as candidates without interest flags,
+// carrying the series' last-notified cursor when they have a row.
 func (r *InterestRepository) ListActiveBySeries(ctx context.Context, tx pgx.Tx, libraryID int, seriesID string) ([]SeriesInterest, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT psi.user_id, psi.profile_id, psi.library_id, psi.series_id,
@@ -34,7 +36,21 @@ func (r *InterestRepository) ListActiveBySeries(ctx context.Context, tx pgx.Tx, 
 		  AND (psi.favorite OR psi.watchlist OR psi.continue_watching OR psi.next_up_candidate)
 		  AND NOT EXISTS (
 			SELECT 1 FROM profile_series_notification_mutes m
-			WHERE m.series_id = psi.series_id AND m.user_id = psi.user_id AND m.profile_id = psi.profile_id)`,
+			WHERE m.series_id = psi.series_id AND m.user_id = psi.user_id AND m.profile_id = psi.profile_id)
+		UNION ALL
+		SELECT np.user_id, np.profile_id, $1, $2,
+		       false, false, false, false,
+		       NULL, NULL, psi.last_notified_episode_key,
+		       np.updated_at
+		FROM notification_preferences np
+		LEFT JOIN profile_series_interest psi
+		  ON psi.user_id = np.user_id AND psi.profile_id = np.profile_id
+		 AND psi.library_id = $1 AND psi.series_id = $2
+		WHERE np.enabled AND np.notify_new_episodes
+		  AND NOT COALESCE(psi.favorite OR psi.watchlist OR psi.continue_watching OR psi.next_up_candidate, false)
+		  AND NOT EXISTS (
+			SELECT 1 FROM profile_series_notification_mutes m
+			WHERE m.series_id = $2 AND m.user_id = np.user_id AND m.profile_id = np.profile_id)`,
 		libraryID, seriesID)
 	if err != nil {
 		return nil, fmt.Errorf("list series interest: %w", err)

@@ -14,6 +14,8 @@ import (
 //   - next_up notifies only when the episode is at or beyond the profile's
 //     next_expected_episode_key
 //   - suppress when last_notified_episode_key >= episode_key
+//   - new_release notifies on any newly available episode when the profile
+//     asked for every new episode
 //   - profile preferences are a hard gate: disabled reasons cannot match
 func EvaluateRecipient(interest SeriesInterest, prefs Preferences, episodeKey int) (ReasonFlags, bool) {
 	if !prefs.Enabled {
@@ -24,7 +26,17 @@ func EvaluateRecipient(interest SeriesInterest, prefs Preferences, episodeKey in
 	}
 	flags := ActiveReasons(interest, prefs)
 	flags.NextUp = flags.NextUp && episodeKey >= *interest.NextExpectedEpisodeKey
+	flags.NewRelease = prefs.NotifyNewEpisodes
 	return flags, flags.Any()
+}
+
+// EvaluateMovieRecipient applies the eligibility rule for a new movie: the
+// profile is enabled and asked for every new movie.
+func EvaluateMovieRecipient(prefs Preferences) (ReasonFlags, bool) {
+	if !prefs.Enabled || !prefs.NotifyNewMovies {
+		return ReasonFlags{}, false
+	}
+	return ReasonFlags{NewRelease: true}, true
 }
 
 // ActiveReasons is the part of the eligibility rules that does not depend on
@@ -44,10 +56,11 @@ func ActiveReasons(interest SeriesInterest, prefs Preferences) ReasonFlags {
 }
 
 // PartitionEventsByKind splits claimed events into episode events (which fan
-// out to profiles) and everything else (flat item kinds — movies, audiobooks,
-// ebooks — which only feed the server-channel broadcast sweep). Order is
-// preserved within each partition. The common all-episode batch returns the
-// input slice unchanged.
+// out to interested profiles) and everything else (flat item kinds — movies,
+// audiobooks, ebooks). Movies fan out to profiles that asked for every new
+// movie; the other flat kinds only feed the server-channel broadcast sweep.
+// Order is preserved within each partition. The common all-episode batch
+// returns the input slice unchanged.
 func PartitionEventsByKind(events []ReleaseEvent) (episodes, others []ReleaseEvent) {
 	allEpisodes := true
 	for _, event := range events {

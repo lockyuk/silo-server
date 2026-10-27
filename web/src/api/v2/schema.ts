@@ -9306,6 +9306,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v2/notifications/email/artwork/{token}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read a poster or dimmed backdrop linked from a notification email. */
+    get: operations["getNotificationEmailArtwork"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v2/notifications/email/unsubscribe": {
     parameters: {
       query?: never;
@@ -26662,7 +26679,24 @@ export interface components {
       available: boolean;
       /** Format: int64 */
       digest_hour: number;
+      /**
+       * Format: int64
+       * @description Day weekly digests go out, 0 = Sunday.
+       */
+      digest_weekday: number;
       modes: string[];
+    };
+    NotificationAction: {
+      /** @enum {string} */
+      id: "play" | "mute_series" | "mark_read";
+      /**
+       * @description Opaque identifier
+       * @example 1
+       */
+      series_id?: string;
+      title: string;
+      /** Format: uri-reference */
+      url?: string;
     };
     NotificationCapabilities: {
       /** @description Whether the current principal may use the capability */
@@ -26685,7 +26719,7 @@ export interface components {
     };
     NotificationChannelModeInputBody: {
       /** @enum {string} */
-      mode: "off" | "per_episode" | "daily_digest" | "per_episode_and_digest";
+      mode: "off" | "per_episode" | "daily_digest" | "per_episode_and_digest" | "weekly_digest";
     };
     NotificationCountOutputBody: {
       /** Format: int64 */
@@ -26720,13 +26754,13 @@ export interface components {
       link_failure?: string;
       linked: boolean;
       /** @enum {string} */
-      mode: "off" | "per_episode" | "daily_digest" | "per_episode_and_digest";
+      mode: "off" | "per_episode" | "daily_digest" | "per_episode_and_digest" | "weekly_digest";
     };
     NotificationEmailPreferences: {
       can_edit_address: boolean;
       custom_email: string;
       /** @enum {string} */
-      mode: "off" | "per_episode" | "daily_digest" | "per_episode_and_digest";
+      mode: "off" | "per_episode" | "daily_digest" | "per_episode_and_digest" | "weekly_digest";
       pending_email: string;
     };
     NotificationEmailVerificationCapability: {
@@ -26779,6 +26813,8 @@ export interface components {
       enabled: boolean;
     };
     NotificationItem: {
+      /** @description Buttons a rich notification offers, in display order. Clients skip action IDs they do not implement. */
+      actions?: components["schemas"]["NotificationAction"][];
       /**
        * Format: date-time
        * @description RFC 3339 instant in UTC with millisecond precision
@@ -26797,6 +26833,11 @@ export interface components {
        * @example 1
        */
       id: string;
+      /**
+       * Format: uri-reference
+       * @description Wide backdrop for a rich notification.
+       */
+      image_url?: string;
       /**
        * @description Opaque identifier
        * @example 1
@@ -26841,6 +26882,10 @@ export interface components {
       enabled: boolean;
       notify_continue_watching: boolean;
       notify_favorites: boolean;
+      /** @description Every new episode the profile can open, followed or not. */
+      notify_new_episodes: boolean;
+      /** @description Every new movie the profile can open. */
+      notify_new_movies: boolean;
       notify_next_up: boolean;
       notify_watchlist: boolean;
       /**
@@ -26853,6 +26898,8 @@ export interface components {
       enabled?: boolean;
       notify_continue_watching?: boolean;
       notify_favorites?: boolean;
+      notify_new_episodes?: boolean;
+      notify_new_movies?: boolean;
       notify_next_up?: boolean;
       notify_watchlist?: boolean;
     };
@@ -26863,6 +26910,8 @@ export interface components {
       supported_modes: string[];
     };
     NotificationPushDisplay: {
+      /** @description Buttons a rich notification offers, in display order. */
+      actions?: components["schemas"]["NotificationAction"][];
       body?: string;
       category: string;
       /**
@@ -26870,7 +26919,17 @@ export interface components {
        * @example 1
        */
       delivery_id: string;
+      /**
+       * Format: uri-reference
+       * @description Wide backdrop for a rich notification.
+       */
+      image_url?: string;
       thread_id?: string;
+      /**
+       * Format: uri-reference
+       * @description Poster for a rich notification.
+       */
+      thumbnail_url?: string;
       title: string;
       /** Format: uri-reference */
       url: string;
@@ -27027,6 +27086,7 @@ export interface components {
       name: string;
       notify_continue_watching?: boolean;
       notify_favorites?: boolean;
+      notify_new_releases?: boolean;
       notify_next_up?: boolean;
       notify_requests?: boolean;
       notify_watchlist?: boolean;
@@ -27063,6 +27123,7 @@ export interface components {
       name: string;
       notify_continue_watching: boolean;
       notify_favorites: boolean;
+      notify_new_releases: boolean;
       notify_next_up: boolean;
       notify_requests: boolean;
       notify_watchlist: boolean;
@@ -27078,6 +27139,7 @@ export interface components {
       name?: string;
       notify_continue_watching?: boolean;
       notify_favorites?: boolean;
+      notify_new_releases?: boolean;
       notify_next_up?: boolean;
       notify_requests?: boolean;
       notify_watchlist?: boolean;
@@ -116386,6 +116448,43 @@ export interface operations {
         content: {
           "application/problem+json": components["schemas"]["Problem"];
         };
+      };
+    };
+  };
+  getNotificationEmailArtwork: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Signed artwork reference minted into the email. */
+        token: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description JPEG artwork */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "image/jpeg": string;
+        };
+      };
+      /** @description Unknown or invalid artwork link */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Email artwork unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
     };
   };

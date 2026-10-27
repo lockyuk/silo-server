@@ -47,6 +47,7 @@ type WebhookInput struct {
 	NotifyWatchlist        *bool
 	NotifyContinueWatching *bool
 	NotifyNextUp           *bool
+	NotifyNewReleases      *bool
 	NotifyRequests         *bool
 }
 
@@ -163,6 +164,7 @@ func (s *WebhookService) Create(ctx context.Context, userID int, profileID strin
 		NotifyWatchlist:        boolOrDefault(input.NotifyWatchlist, true),
 		NotifyContinueWatching: boolOrDefault(input.NotifyContinueWatching, true),
 		NotifyNextUp:           boolOrDefault(input.NotifyNextUp, true),
+		NotifyNewReleases:      boolOrDefault(input.NotifyNewReleases, true),
 		NotifyRequests:         boolOrDefault(input.NotifyRequests, true),
 	}
 	hook.URLCiphertext, err = s.cipher.Encrypt(rawURL, webhookURLAAD(hook.ID))
@@ -399,6 +401,9 @@ func (s *WebhookService) applyWebhookInput(ctx context.Context, hook *Webhook, i
 	}
 	if input.NotifyNextUp != nil {
 		hook.NotifyNextUp = *input.NotifyNextUp
+	}
+	if input.NotifyNewReleases != nil {
+		hook.NotifyNewReleases = *input.NotifyNewReleases
 	}
 	if input.NotifyRequests != nil {
 		hook.NotifyRequests = *input.NotifyRequests

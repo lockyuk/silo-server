@@ -470,9 +470,11 @@ var adminSettingDefaults = map[string]string{
 	"notifications.email_enabled":                              "true",
 	"notifications.email.allow_per_episode":                    "true",
 	"notifications.email.digest_hour":                          "8",
+	"notifications.email.digest_weekday":                       "0",
 	"notifications.discord_enabled":                            "false",
 	"notifications.discord.allow_per_episode":                  "true",
 	"notifications.discord.digest_hour":                        "8",
+	"notifications.discord.digest_weekday":                     "0",
 	"notifications.discord.poster_mode":                        "provider",
 	"notifications.server_channels_enabled":                    "true",
 	"notifications.server_channels.batch_seconds":              "300",
@@ -773,6 +775,8 @@ func NormalizeAdminSetting(key, raw string) (string, error) {
 		return normalizeAdminInt(key, value, 1, 10000)
 	case "notifications.email.digest_hour", "notifications.discord.digest_hour":
 		return normalizeAdminInt(key, value, 0, 23)
+	case "notifications.email.digest_weekday", "notifications.discord.digest_weekday":
+		return normalizeAdminInt(key, value, 0, 6)
 	case "notifications.server_channels.batch_seconds":
 		return normalizeAdminInt(key, value, 120, 3600)
 	case "catalog.search.meilisearch.timeout_ms":

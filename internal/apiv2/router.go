@@ -228,6 +228,7 @@ type Dependencies struct {
 	AdminRecommendations          AdminRecommendationsService
 	AdminLiteraryWorks            AdminLiteraryWorkService
 	NotificationChannels          NotificationChannelService
+	NotificationEmailArtwork      NotificationEmailArtworkService
 	NotificationDiscordManagement NotificationDiscordManagementService
 	NotificationRelay             NotificationRelayService
 	AdminNotificationPush         AdminNotificationPushService

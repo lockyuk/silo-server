@@ -17,6 +17,60 @@ type NotificationDisplay struct {
 	ThreadID   string `json:"thread_id,omitempty"`
 	Category   string `json:"category"`
 	URL        string `json:"url"`
+	// ImageURL is the wide hero image (the title's backdrop) and
+	// ThumbnailURL its poster, for rich notifications. Both are absolute,
+	// short-lived artwork links set by System.DisplayForRow; absent when the
+	// title has no artwork or no image resolver is configured.
+	ImageURL     string `json:"image_url,omitempty"`
+	ThumbnailURL string `json:"thumbnail_url,omitempty"`
+	// Actions are the buttons a rich notification offers, in display order.
+	Actions []NotificationAction `json:"actions,omitempty"`
+}
+
+// Notification action IDs. Clients show the actions they implement and skip
+// unknown IDs.
+const (
+	// NotificationActionPlay starts playback of the delivery's episode or
+	// movie at URL (the web player route).
+	NotificationActionPlay = "play"
+	// NotificationActionMuteSeries mutes further notifications for the
+	// series: PUT /api/v2/notifications/series/{series_id}/mute.
+	NotificationActionMuteSeries = "mute_series"
+	// NotificationActionMarkRead marks the delivery read.
+	NotificationActionMarkRead = "mark_read"
+)
+
+// NotificationAction is one button on a rich notification. URL is the
+// in-app route the action opens; SeriesID names the series a mute_series
+// action mutes.
+type NotificationAction struct {
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	URL      string `json:"url,omitempty"`
+	SeriesID string `json:"series_id,omitempty"`
+}
+
+// notificationActions returns the buttons for a delivery: play for
+// something playable, mute for a series episode, and mark read.
+func notificationActions(row DeliveryRow) []NotificationAction {
+	var actions []NotificationAction
+	switch row.Type {
+	case DeliveryTypeEpisodeAvailable:
+		if row.EpisodeID != nil && *row.EpisodeID != "" {
+			actions = append(actions, NotificationAction{ID: NotificationActionPlay, Title: "Play", URL: "/watch/" + *row.EpisodeID})
+		}
+		if row.SeriesID != nil && *row.SeriesID != "" {
+			actions = append(actions, NotificationAction{ID: NotificationActionMuteSeries, Title: "Mute show", SeriesID: *row.SeriesID})
+		}
+	case DeliveryTypeMovieAvailable, DeliveryTypeRequestFulfilled:
+		if row.SeriesID != nil && *row.SeriesID != "" && (row.Type == DeliveryTypeMovieAvailable || row.MediaType == "movie") {
+			actions = append(actions, NotificationAction{ID: NotificationActionPlay, Title: "Play", URL: "/watch/" + *row.SeriesID})
+		}
+	}
+	if row.ID != "" {
+		actions = append(actions, NotificationAction{ID: NotificationActionMarkRead, Title: "Mark as read"})
+	}
+	return actions
 }
 
 // BuildNotificationDisplay renders a delivery into native-notification display
@@ -39,6 +93,17 @@ func BuildNotificationDisplay(row DeliveryRow) NotificationDisplay {
 		}
 		if row.EpisodeID != nil && *row.EpisodeID != "" {
 			display.URL = "/item/" + *row.EpisodeID
+		}
+	case DeliveryTypeMovieAvailable:
+		display.Category = "movie_available"
+		display.Title = "New movie available"
+		if row.SeriesTitle != "" {
+			display.Title = titleWithYear(row.SeriesTitle, row.Year)
+			display.Body = "New movie"
+		}
+		if row.SeriesID != nil && *row.SeriesID != "" {
+			display.ThreadID = "item:" + *row.SeriesID
+			display.URL = "/item/" + *row.SeriesID
 		}
 	case DeliveryTypeRequestFulfilled:
 		flags := parseRequestFlags(row.ReasonFlags)
@@ -94,6 +159,7 @@ func BuildNotificationDisplay(row DeliveryRow) NotificationDisplay {
 			display.Category = strings.ReplaceAll(row.Type, ".", "_")
 		}
 	}
+	display.Actions = notificationActions(row)
 	return display
 }
 

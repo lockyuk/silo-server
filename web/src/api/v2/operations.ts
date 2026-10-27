@@ -417,6 +417,7 @@ export const v2Operations = {
   "GET /api/v2/notifications/email-preferences": "getNotificationEmailPreferences",
   "GET /api/v2/notifications/email-preferences/address/capabilities":
     "getNotificationEmailVerificationCapabilities",
+  "GET /api/v2/notifications/email/artwork/{token}": "getNotificationEmailArtwork",
   "GET /api/v2/notifications/email/unsubscribe": "unsubscribeNotificationEmail",
   "GET /api/v2/notifications/email/verify": "verifyNotificationEmailAddress",
   "GET /api/v2/notifications/preferences": "getNotificationPreferences",

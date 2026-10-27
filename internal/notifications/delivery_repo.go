@@ -74,7 +74,12 @@ const deliveryRowSelect = `
 	       COALESCE(s.rating_tmdb, 0) AS rating_tmdb,
 	       COALESCE(s.imdb_id, '') AS imdb_id,
 	       COALESCE(s.tmdb_id, '') AS tmdb_id,
-	       COALESCE(s.tvdb_id, '') AS tvdb_id
+	       COALESCE(s.tvdb_id, '') AS tvdb_id,
+	       COALESCE(s.runtime, 0) AS runtime,
+	       COALESCE(s.tagline, '') AS tagline,
+	       COALESCE(s.networks, '{}'::text[]) AS networks,
+	       COALESCE(s.backdrop_path, '') AS backdrop_path,
+	       COALESCE(s.backdrop_source_path, '') AS backdrop_source_path
 	FROM notification_deliveries d
 	LEFT JOIN episodes e ON e.content_id = d.episode_id
 	LEFT JOIN media_items s ON s.content_id = d.series_id`
@@ -93,6 +98,8 @@ func scanDeliveryRows(rows pgx.Rows) ([]DeliveryRow, error) {
 			&row.MediaType, &row.Year, &row.SeriesOverview, &row.EpisodeOverview,
 			&row.Genres, &row.ContentRating, &row.RatingIMDB, &row.RatingTMDB,
 			&row.IMDBID, &row.TMDBID, &row.TVDBID,
+			&row.Runtime, &row.Tagline, &row.Networks,
+			&row.BackdropPath, &row.BackdropSourcePath,
 		); err != nil {
 			return nil, fmt.Errorf("scan delivery row: %w", err)
 		}

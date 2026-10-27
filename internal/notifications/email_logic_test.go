@@ -184,3 +184,53 @@ func TestComposeVerificationEmail(t *testing.T) {
 		t.Fatalf("profile name not escaped:\n%s", content.HTML)
 	}
 }
+
+func TestChannelWeeklyDigestDue(t *testing.T) {
+	loc := time.UTC
+	// Wednesday 2026-10-28 09:30; digests go out Mondays at 08:00.
+	now := time.Date(2026, 10, 28, 9, 30, 0, 0, loc)
+	monday := time.Date(2026, 10, 26, 8, 0, 0, 0, loc)
+	for _, tc := range []struct {
+		name    string
+		now     time.Time
+		weekday time.Weekday
+		last    *time.Time
+		want    bool
+	}{
+		{"never sent", now, time.Monday, nil, true},
+		{"sent this week", now, time.Monday, new(monday.Add(time.Minute)), false},
+		{"sent last week", now, time.Monday, new(monday.AddDate(0, 0, -7)), true},
+		{"before send time on the day", time.Date(2026, 10, 26, 7, 0, 0, 0, loc), time.Monday, new(monday.AddDate(0, 0, -7).Add(time.Minute)), false},
+		{"send day is today", time.Date(2026, 10, 28, 8, 0, 0, 0, loc), time.Wednesday, new(monday), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := channelWeeklyDigestDue(tc.now, tc.weekday, 8, tc.last); got != tc.want {
+				t.Fatalf("channelWeeklyDigestDue = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEmailArtworkTokens(t *testing.T) {
+	art := NewEmailArtwork(nil, nil, "secret")
+	token := art.Token(EmailArtworkBackdrop, "movie:1")
+	if kind, id, ok := art.parseToken(token + ".jpg"); !ok || kind != EmailArtworkBackdrop || id != "movie:1" {
+		t.Fatalf("parseToken = %q %q %v", kind, id, ok)
+	}
+	other := NewEmailArtwork(nil, nil, "other-secret")
+	forged := []string{
+		other.Token(EmailArtworkBackdrop, "movie:1"),
+		art.Token(EmailArtworkBackdrop, "movie:2")[:len(token)-3] + "abc",
+		strings.Replace(token, ".", "", 1),
+		"",
+	}
+	// A valid signature cannot be moved to another kind of artwork.
+	_, sig, _ := strings.Cut(token, ".")
+	posterSubject, _, _ := strings.Cut(art.Token(EmailArtworkPoster, "movie:1"), ".")
+	forged = append(forged, posterSubject+"."+sig)
+	for _, value := range forged {
+		if _, _, ok := art.parseToken(value); ok {
+			t.Fatalf("forged token %q accepted", value)
+		}
+	}
+}

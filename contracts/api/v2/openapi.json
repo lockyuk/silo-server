@@ -36266,6 +36266,13 @@
             "format": "int64",
             "type": "integer"
           },
+          "digest_weekday": {
+            "description": "Day weekly digests go out, 0 = Sunday.",
+            "format": "int64",
+            "maximum": 6,
+            "minimum": 0,
+            "type": "integer"
+          },
           "modes": {
             "items": {
               "type": "string"
@@ -36276,7 +36283,41 @@
         "required": [
           "available",
           "modes",
-          "digest_hour"
+          "digest_hour",
+          "digest_weekday"
+        ],
+        "type": "object"
+      },
+      "NotificationAction": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "enum": [
+              "play",
+              "mute_series",
+              "mark_read"
+            ],
+            "type": "string"
+          },
+          "series_id": {
+            "description": "Opaque identifier",
+            "examples": [
+              "1"
+            ],
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "format": "uri-reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
         ],
         "type": "object"
       },
@@ -36349,7 +36390,8 @@
               "off",
               "per_episode",
               "daily_digest",
-              "per_episode_and_digest"
+              "per_episode_and_digest",
+              "weekly_digest"
             ],
             "type": "string"
           }
@@ -36463,7 +36505,8 @@
               "off",
               "per_episode",
               "daily_digest",
-              "per_episode_and_digest"
+              "per_episode_and_digest",
+              "weekly_digest"
             ],
             "type": "string"
           }
@@ -36488,7 +36531,8 @@
               "off",
               "per_episode",
               "daily_digest",
-              "per_episode_and_digest"
+              "per_episode_and_digest",
+              "weekly_digest"
             ],
             "type": "string"
           },
@@ -36629,6 +36673,13 @@
       "NotificationItem": {
         "additionalProperties": false,
         "properties": {
+          "actions": {
+            "description": "Buttons a rich notification offers, in display order. Clients skip action IDs they do not implement.",
+            "items": {
+              "$ref": "#/components/schemas/NotificationAction"
+            },
+            "type": "array"
+          },
           "created_at": {
             "description": "RFC 3339 instant in UTC with millisecond precision",
             "format": "date-time",
@@ -36657,6 +36708,11 @@
               "1"
             ],
             "minLength": 1,
+            "type": "string"
+          },
+          "image_url": {
+            "description": "Wide backdrop for a rich notification.",
+            "format": "uri-reference",
             "type": "string"
           },
           "library_id": {
@@ -36766,6 +36822,14 @@
           "notify_favorites": {
             "type": "boolean"
           },
+          "notify_new_episodes": {
+            "description": "Every new episode the profile can open, followed or not.",
+            "type": "boolean"
+          },
+          "notify_new_movies": {
+            "description": "Every new movie the profile can open.",
+            "type": "boolean"
+          },
           "notify_next_up": {
             "type": "boolean"
           },
@@ -36787,7 +36851,9 @@
           "notify_favorites",
           "notify_watchlist",
           "notify_continue_watching",
-          "notify_next_up"
+          "notify_next_up",
+          "notify_new_episodes",
+          "notify_new_movies"
         ],
         "type": "object"
       },
@@ -36801,6 +36867,12 @@
             "type": "boolean"
           },
           "notify_favorites": {
+            "type": "boolean"
+          },
+          "notify_new_episodes": {
+            "type": "boolean"
+          },
+          "notify_new_movies": {
             "type": "boolean"
           },
           "notify_next_up": {
@@ -36841,6 +36913,13 @@
       "NotificationPushDisplay": {
         "additionalProperties": false,
         "properties": {
+          "actions": {
+            "description": "Buttons a rich notification offers, in display order.",
+            "items": {
+              "$ref": "#/components/schemas/NotificationAction"
+            },
+            "type": "array"
+          },
           "body": {
             "type": "string"
           },
@@ -36855,7 +36934,17 @@
             "minLength": 1,
             "type": "string"
           },
+          "image_url": {
+            "description": "Wide backdrop for a rich notification.",
+            "format": "uri-reference",
+            "type": "string"
+          },
           "thread_id": {
+            "type": "string"
+          },
+          "thumbnail_url": {
+            "description": "Poster for a rich notification.",
+            "format": "uri-reference",
             "type": "string"
           },
           "title": {
@@ -37449,6 +37538,9 @@
           "notify_favorites": {
             "type": "boolean"
           },
+          "notify_new_releases": {
+            "type": "boolean"
+          },
           "notify_next_up": {
             "type": "boolean"
           },
@@ -37547,6 +37639,9 @@
           "notify_favorites": {
             "type": "boolean"
           },
+          "notify_new_releases": {
+            "type": "boolean"
+          },
           "notify_next_up": {
             "type": "boolean"
           },
@@ -37578,6 +37673,7 @@
           "notify_watchlist",
           "notify_continue_watching",
           "notify_next_up",
+          "notify_new_releases",
           "notify_requests",
           "consecutive_failures",
           "disabled_reason",
@@ -37613,6 +37709,9 @@
             "type": "boolean"
           },
           "notify_favorites": {
+            "type": "boolean"
+          },
+          "notify_new_releases": {
             "type": "boolean"
           },
           "notify_next_up": {
@@ -177815,6 +177914,50 @@
         ],
         "x-silo-class": "profile_scoped",
         "x-silo-conditional": true,
+        "x-silo-service-backed": true
+      }
+    },
+    "/api/v2/notifications/email/artwork/{token}": {
+      "get": {
+        "operationId": "getNotificationEmailArtwork",
+        "parameters": [
+          {
+            "description": "Signed artwork reference minted into the email.",
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "contentMediaType": "application/octet-stream",
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "JPEG artwork"
+          },
+          "404": {
+            "description": "Unknown or invalid artwork link"
+          },
+          "503": {
+            "description": "Email artwork unavailable"
+          }
+        },
+        "summary": "Read a poster or dimmed backdrop linked from a notification email.",
+        "tags": [
+          "notifications"
+        ],
+        "x-silo-class": "public",
+        "x-silo-raw-protocol": "email-artwork-image",
+        "x-silo-raw-reason": "Image bytes for mail clients bypass JSON encoding.",
         "x-silo-service-backed": true
       }
     },

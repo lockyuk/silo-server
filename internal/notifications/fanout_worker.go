@@ -170,12 +170,14 @@ func (w *FanoutWorker) processBatch(ctx context.Context) (processed int, runErr 
 	ctx, observation := workmetrics.Start(ctx, "notifications", time.Time{})
 	defer workmetrics.Profile(ctx)()
 	defer func() { observation.Finish(telemetry.Outcome(runErr)) }()
-	// Non-episode kinds (movies, audiobooks, ebooks) have no per-profile
-	// interest and never fan out; mark them processed immediately so retention
-	// reclaims them. This must happen before the burst cap: flat item events
-	// have no series_id, and ApplyBurstCap groups by (library_id, series_id). The server-channel
+	// Audiobook and ebook events have no per-profile recipients and never fan
+	// out; mark them processed immediately so retention reclaims them. Movies
+	// fan out to profiles that asked for every new movie. This split must
+	// happen before the burst cap: flat item events have no series_id, and
+	// ApplyBurstCap groups by (library_id, series_id). The server-channel
 	// sweep reads events by cursor regardless of processed state.
 	events, others := PartitionEventsByKind(claimed)
+	movies, others := splitMovieEvents(others)
 	if err := w.releases.MarkProcessed(ctx, tx, eventIDs(others), nil); err != nil {
 		return 0, err
 	}
@@ -192,6 +194,14 @@ func (w *FanoutWorker) processBatch(ctx context.Context) (processed int, runErr 
 			stale = append(stale, event)
 		} else {
 			fresh = append(fresh, event)
+		}
+	}
+	freshMovies := make([]ReleaseEvent, 0, len(movies))
+	for _, event := range movies {
+		if event.CreatedAt.Before(staleCutoff) {
+			stale = append(stale, event)
+		} else {
+			freshMovies = append(freshMovies, event)
 		}
 	}
 	if len(stale) > 0 {
@@ -267,6 +277,15 @@ func (w *FanoutWorker) processBatch(ctx context.Context) (processed int, runErr 
 		}
 		candidatesByEvent[event.ID] = captured
 	}
+	movieRecipients, err := w.captureMovieRecipients(ctx, tx, freshMovies, recipients)
+	if err != nil {
+		return 0, err
+	}
+	for _, captured := range movieRecipients {
+		for key := range captured {
+			profiles[key.profileID] = struct{}{}
+		}
+	}
 	if err := w.deliveries.LockInboxProfiles(ctx, tx, slices.Sorted(maps.Keys(profiles))); err != nil {
 		return 0, err
 	}
@@ -286,6 +305,18 @@ func (w *FanoutWorker) processBatch(ctx context.Context) (processed int, runErr 
 	if err := w.releases.MarkProcessed(ctx, tx, eventIDs(fanout), nil); err != nil {
 		return 0, err
 	}
+	for _, event := range freshMovies {
+		rows, err := w.fanOutMovieEvent(ctx, tx, event, movieRecipients[event.ID])
+		if err != nil {
+			return 0, fmt.Errorf("fan out movie event %s: %w", event.ID, err)
+		}
+		totalRecipients += len(movieRecipients[event.ID])
+		totalInserted += len(rows)
+		dispatchRows = append(dispatchRows, rows...)
+	}
+	if err := w.releases.MarkProcessed(ctx, tx, eventIDs(freshMovies), nil); err != nil {
+		return 0, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return 0, fmt.Errorf("commit fanout tx: %w", err)
 	}
@@ -303,6 +334,7 @@ func (w *FanoutWorker) processBatch(ctx context.Context) (processed int, runErr 
 		"claimed", len(claimed),
 		"non_episode", len(others),
 		"fanned_out", len(fanout),
+		"movies", len(freshMovies),
 		"suppressed", len(suppressed),
 		"stale", len(stale),
 		"recipient_count", totalRecipients,

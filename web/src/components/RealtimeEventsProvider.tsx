@@ -710,6 +710,10 @@ export function RealtimeEventsProvider({ children }: { children: ReactNode }) {
         toast(`New episode of ${notification.series_title}`, {
           description: [episodeCode, notification.episode_title].filter(Boolean).join(" — "),
         });
+      } else if (notification.type === "movie.available" && notification.series_title) {
+        toast(`New movie: ${notification.series_title}`, {
+          description: "Now available in your library.",
+        });
       } else if (notification.type === "request.fulfilled") {
         const follower = notification.reason_flags?.follower === true;
         toast(

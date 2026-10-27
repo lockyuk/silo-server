@@ -4,5 +4,11 @@
   "body": "Your media request was approved.",
   "thread_id": "request:request-1",
   "category": "request_approved",
-  "url": "/notifications"
+  "url": "/notifications",
+  "actions": [
+    {
+      "id": "mark_read",
+      "title": "Mark as read"
+    }
+  ]
 }

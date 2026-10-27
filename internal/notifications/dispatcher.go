@@ -29,22 +29,26 @@ type Dispatcher interface {
 // DeliveryRowPayload is the JSON shape shared by the inbox API, the websocket
 // snapshot, and notification.created events. Keep these in lockstep.
 type DeliveryRowPayload struct {
-	ID              string          `json:"id"`
-	Type            string          `json:"type"`
-	ProfileID       string          `json:"profile_id"`
-	LibraryID       *int            `json:"library_id,omitempty"`
-	SeriesID        *string         `json:"series_id,omitempty"`
-	EpisodeID       *string         `json:"episode_id,omitempty"`
-	SeriesTitle     string          `json:"series_title,omitempty"`
-	EpisodeTitle    string          `json:"episode_title,omitempty"`
-	SeasonNumber    *int            `json:"season_number,omitempty"`
-	EpisodeNumber   *int            `json:"episode_number,omitempty"`
-	PosterPath      string          `json:"poster_path,omitempty"`
-	PosterURL       string          `json:"poster_url,omitempty"`
-	PosterThumbhash string          `json:"poster_thumbhash,omitempty"`
-	ReasonFlags     json.RawMessage `json:"reason_flags"`
-	CreatedAt       time.Time       `json:"created_at"`
-	ReadAt          *time.Time      `json:"read_at"`
+	ID              string  `json:"id"`
+	Type            string  `json:"type"`
+	ProfileID       string  `json:"profile_id"`
+	LibraryID       *int    `json:"library_id,omitempty"`
+	SeriesID        *string `json:"series_id,omitempty"`
+	EpisodeID       *string `json:"episode_id,omitempty"`
+	SeriesTitle     string  `json:"series_title,omitempty"`
+	EpisodeTitle    string  `json:"episode_title,omitempty"`
+	SeasonNumber    *int    `json:"season_number,omitempty"`
+	EpisodeNumber   *int    `json:"episode_number,omitempty"`
+	PosterPath      string  `json:"poster_path,omitempty"`
+	PosterURL       string  `json:"poster_url,omitempty"`
+	PosterThumbhash string  `json:"poster_thumbhash,omitempty"`
+	// ImageURL is the title's backdrop for rich notifications, and Actions
+	// the buttons to offer; see NotificationDisplay.
+	ImageURL    string               `json:"image_url,omitempty"`
+	Actions     []NotificationAction `json:"actions,omitempty"`
+	ReasonFlags json.RawMessage      `json:"reason_flags"`
+	CreatedAt   time.Time            `json:"created_at"`
+	ReadAt      *time.Time           `json:"read_at"`
 }
 
 // PayloadForRow converts a DeliveryRow into its wire shape.

@@ -23,6 +23,9 @@ const (
 	// digest hour, a digest recapping everything since the previous digest —
 	// including items already sent individually.
 	ChannelModePerEpisodeAndDigest = "per_episode_and_digest"
+	// ChannelModeWeeklyDigest sends one digest a week, on the digest weekday
+	// at the digest hour. It behaves like the daily digest in every other way.
+	ChannelModeWeeklyDigest = "weekly_digest"
 )
 
 // transactionalDeliveryTypes are the delivery types that bypass digest
@@ -39,7 +42,7 @@ var transactionalDeliveryTypes = []string{
 func ValidChannelMode(mode string) bool {
 	switch mode {
 	case ChannelModeOff, ChannelModePerEpisode, ChannelModeDailyDigest,
-		ChannelModePerEpisodeAndDigest:
+		ChannelModePerEpisodeAndDigest, ChannelModeWeeklyDigest:
 		return true
 	}
 	return false
@@ -110,6 +113,24 @@ func channelDigestDue(now time.Time, digestHour int, lastDigestAt *time.Time) bo
 	return lastDigestAt == nil || lastDigestAt.Before(todaySend)
 }
 
+// channelWeeklyDigestDue reports whether a weekly digest should go out: this
+// week's send time (digestWeekday at digestHour, local) has passed and no
+// digest was stamped since.
+func channelWeeklyDigestDue(now time.Time, digestWeekday time.Weekday, digestHour int, lastDigestAt *time.Time) bool {
+	daysSince := (int(now.Weekday()) - int(digestWeekday) + 7) % 7
+	day := now.AddDate(0, 0, -daysSince)
+	send := time.Date(day.Year(), day.Month(), day.Day(), digestHour, 0, 0, 0, now.Location())
+	if now.Before(send) {
+		send = send.AddDate(0, 0, -7)
+	}
+	return lastDigestAt == nil || lastDigestAt.Before(send)
+}
+
+// isDigestOnlyMode reports whether the mode sends only scheduled digests.
+func isDigestOnlyMode(mode string) bool {
+	return mode == ChannelModeDailyDigest || mode == ChannelModeWeeklyDigest
+}
+
 // drainSince pages fetch from the given cursor until a short read, returning
 // every row in the window in delivery order.
 func drainSince(fetch func(since Cursor, limit int) ([]DeliveryRow, error), from Cursor) ([]DeliveryRow, error) {
@@ -167,8 +188,10 @@ type accountChannel[K comparable] interface {
 	enabled(ctx context.Context) bool
 	// allowPerEpisode is the admin allowance for per-send mode.
 	allowPerEpisode(ctx context.Context) bool
-	// digestHour is the hour of day (0-23, server-local) for daily digests.
+	// digestHour is the hour of day (0-23, server-local) for digests.
 	digestHour(ctx context.Context) int
+	// digestWeekday is the day weekly digests go out.
+	digestWeekday(ctx context.Context) time.Weekday
 	// listRecipients returns every recipient with the channel switched on and
 	// a usable destination. Disabled or deleted accounts must not appear.
 	listRecipients(ctx context.Context) ([]accountRecipient[K], error)
@@ -278,6 +301,7 @@ func (w *accountChannelWorker[K]) runPass(ctx context.Context) {
 	}
 	allowPerEpisode := w.channel.allowPerEpisode(ctx)
 	digestHour := w.channel.digestHour(ctx)
+	digestWeekday := w.channel.digestWeekday(ctx)
 	now := w.now()
 
 	failures := 0
@@ -290,6 +314,9 @@ func (w *accountChannelWorker[K]) runPass(ctx context.Context) {
 		}
 		mode := effectiveChannelMode(rec.Mode, allowPerEpisode)
 		digestDue := channelDigestDue(now, digestHour, rec.LastDigestAt)
+		if mode == ChannelModeWeeklyDigest {
+			digestDue = channelWeeklyDigestDue(now, digestWeekday, digestHour, rec.LastDigestAt)
+		}
 		switch mode {
 		case ChannelModePerEpisode, ChannelModePerEpisodeAndDigest:
 			if mode == ChannelModePerEpisodeAndDigest && digestDue {
@@ -307,7 +334,7 @@ func (w *accountChannelWorker[K]) runPass(ctx context.Context) {
 			if !pending {
 				continue
 			}
-		case ChannelModeDailyDigest:
+		case ChannelModeDailyDigest, ChannelModeWeeklyDigest:
 			if !digestDue {
 				// Transactional notices bypass the digest schedule: a pending
 				// request-status row makes the recipient eligible for a
@@ -367,6 +394,9 @@ func (w *accountChannelWorker[K]) processRecipient(ctx context.Context, rec acco
 	// predate a user mode flip or another node's digest stamp.
 	mode := effectiveChannelMode(claimed.Mode, w.channel.allowPerEpisode(ctx))
 	digestDue := channelDigestDue(w.now(), w.channel.digestHour(ctx), claimed.LastDigestAt)
+	if mode == ChannelModeWeeklyDigest {
+		digestDue = channelWeeklyDigestDue(w.now(), w.channel.digestWeekday(ctx), w.channel.digestHour(ctx), claimed.LastDigestAt)
+	}
 
 	// sendKind is the rendering the channel applies (per-episode alert vs
 	// digest summary); for the combined mode it differs from the stored mode.
@@ -381,7 +411,7 @@ func (w *accountChannelWorker[K]) processRecipient(ctx context.Context, rec acco
 
 	switch mode {
 	case ChannelModePerEpisode:
-	case ChannelModeDailyDigest:
+	case ChannelModeDailyDigest, ChannelModeWeeklyDigest:
 		if !digestDue {
 			// Off-schedule transactional leg: request-status notices must not
 			// wait for the digest hour. The send flushes the pending window
@@ -461,7 +491,7 @@ func (w *accountChannelWorker[K]) processRecipient(ctx context.Context, rec acco
 	}
 
 	items := rows
-	if mode == ChannelModeDailyDigest {
+	if isDigestOnlyMode(mode) {
 		// The digest-only mode reports what the user hasn't seen; rows
 		// already read in another client are skipped but the watermark still
 		// passes them. The combined mode's digest deliberately recaps

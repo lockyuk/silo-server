@@ -27,6 +27,9 @@ type emailChannel struct {
 	// profileName resolves a display name for the email copy; best-effort
 	// (empty on any failure). Set by NewSystem after construction.
 	profileName func(ctx context.Context, userID int, profileID string) string
+	// artwork links posters and dimmed backdrops into the email; nil sends
+	// text-only cards. Set by System.SetEmailArtwork.
+	artwork *EmailArtwork
 }
 
 // The assertion also keeps staticcheck's unused-analysis aware that the
@@ -45,6 +48,10 @@ func (c *emailChannel) allowPerEpisode(ctx context.Context) bool {
 
 func (c *emailChannel) digestHour(ctx context.Context) int {
 	return c.settings.EmailDigestHour(ctx)
+}
+
+func (c *emailChannel) digestWeekday(ctx context.Context) time.Weekday {
+	return c.settings.EmailDigestWeekday(ctx)
 }
 
 func (c *emailChannel) listRecipients(ctx context.Context) ([]accountRecipient[profileKey], error) {
@@ -105,6 +112,11 @@ func (c *emailChannel) send(ctx context.Context, tx pgx.Tx, key profileKey, mode
 		Brand:          c.brand.Load(ctx),
 		BaseURL:        baseURL,
 		UnsubscribeURL: emailUnsubscribeURL(baseURL, unsubscribeToken),
+	}
+	if c.artwork != nil && baseURL != "" {
+		opts.ArtworkURL = func(kind, contentID string) string {
+			return c.artwork.URL(baseURL, kind, contentID)
+		}
 	}
 	if c.profileName != nil {
 		opts.ProfileName = c.profileName(ctx, key.userID, key.profileID)

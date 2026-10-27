@@ -240,6 +240,7 @@
 ./internal/notifications TestNotifyFulfilledSkipsRecipientWithoutAccess
 ./internal/notifications TestFanoutRetriesWhenRecipientScopeFails
 ./internal/notifications TestFanoutResolvesOnlyEligibleRecipients
+./internal/notifications TestFanoutNewReleasePreferences
 ./internal/notifications TestNotifyFulfilledRetriesWhenRecipientScopeFails
 ./internal/notifications TestNotifyFulfilledRetryResolvesOnlyUntoldRecipients
 ./internal/notifications TestDispatchOperationalResolvesBeforeHoldingConnection

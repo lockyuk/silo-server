@@ -46,13 +46,23 @@ type webPushPayload struct {
 	Body       string `json:"body,omitempty"`
 	URL        string `json:"url"`
 	Icon       string `json:"icon,omitempty"`
+	Image      string `json:"image,omitempty"`
 	Tag        string `json:"tag,omitempty"`
 	DeliveryID string `json:"delivery_id"`
+	// Actions are the buttons the service worker shows. It has no session,
+	// so it offers only actions that navigate (play); the rest need the app.
+	Actions []webPushAction `json:"actions,omitempty"`
 }
 
-// buildWebPushPayload renders a delivery for the service worker.
-func buildWebPushPayload(row DeliveryRow, posterURL string) ([]byte, error) {
-	display := BuildNotificationDisplay(row)
+type webPushAction struct {
+	Action string `json:"action"`
+	Title  string `json:"title"`
+	URL    string `json:"url"`
+}
+
+// buildWebPushPayload renders a delivery's display for the service worker.
+// posterURL is the small icon; the display's image is the wide backdrop.
+func buildWebPushPayload(row DeliveryRow, display NotificationDisplay, posterURL string) ([]byte, error) {
 	payload := webPushPayload{
 		Title:      display.Title,
 		Body:       display.Body,
@@ -60,6 +70,12 @@ func buildWebPushPayload(row DeliveryRow, posterURL string) ([]byte, error) {
 		Tag:        row.ID,
 		DeliveryID: row.ID,
 		Icon:       posterURL,
+		Image:      display.ImageURL,
+	}
+	for _, action := range display.Actions {
+		if action.URL != "" {
+			payload.Actions = append(payload.Actions, webPushAction{Action: action.ID, Title: action.Title, URL: action.URL})
+		}
 	}
 	return json.Marshal(payload)
 }
@@ -73,6 +89,7 @@ type webPushSender struct {
 	settings      *Settings
 	client        *http.Client
 	payload       func(ctx context.Context, row DeliveryRow) DeliveryRowPayload
+	display       func(ctx context.Context, row DeliveryRow) NotificationDisplay
 	logger        *slog.Logger
 }
 
@@ -150,7 +167,11 @@ func (s *webPushSender) processAttempt(ctx context.Context, attempt DeliveryAtte
 	if s.payload != nil {
 		posterURL = s.payload(ctx, *row).PosterURL
 	}
-	message, err := buildWebPushPayload(*row, posterURL)
+	display := BuildNotificationDisplay(*row)
+	if s.display != nil {
+		display = s.display(ctx, *row)
+	}
+	message, err := buildWebPushPayload(*row, display, posterURL)
 	if err != nil {
 		_ = s.subscriptions.FinalizeAttempt(ctx, attempt.ID, WebhookOutcomeFailed,
 			attempt.AttemptNumber+1, nil, "payload build failed", nil)

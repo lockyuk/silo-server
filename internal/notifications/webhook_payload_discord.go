@@ -130,6 +130,8 @@ func discordEmbedAuthorLine(row DeliveryRow) string {
 	switch row.Type {
 	case DeliveryTypeEpisodeAvailable:
 		return "New episode on Silo"
+	case DeliveryTypeMovieAvailable:
+		return "New movie on Silo"
 	case DeliveryTypeRequestFulfilled:
 		if parseRequestFlags(row.ReasonFlags).Follower {
 			return "Now available on Silo"
@@ -240,6 +242,11 @@ func buildDiscordDigestEntry(row DeliveryRow, test bool) discordDigestEntry {
 
 func discordEmbedTitle(row DeliveryRow) string {
 	switch row.Type {
+	case DeliveryTypeMovieAvailable:
+		if row.SeriesTitle != "" {
+			return titleWithYear(row.SeriesTitle, row.Year)
+		}
+		return "New movie"
 	case DeliveryTypeRequestFulfilled:
 		if row.SeriesTitle != "" {
 			return titleWithYear(row.SeriesTitle, row.Year)

@@ -741,6 +741,7 @@ func registerAll(reg *Registry) {
 	registerPolicyCapability(reg)
 	registerArtwork(reg)
 	registerBranding(reg)
+	registerNotificationEmailArtwork(reg)
 	registerAdminInviteCodes(reg)
 	registerInvitations(reg)
 	registerPasswordResets(reg)

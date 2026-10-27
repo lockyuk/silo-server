@@ -68,6 +68,10 @@ func (c *discordChannel) digestHour(ctx context.Context) int {
 	return c.settings.DiscordDigestHour(ctx)
 }
 
+func (c *discordChannel) digestWeekday(ctx context.Context) time.Weekday {
+	return c.settings.DiscordDigestWeekday(ctx)
+}
+
 func (c *discordChannel) listRecipients(ctx context.Context) ([]accountRecipient[int], error) {
 	return c.prefs.ListActiveRecipients(ctx)
 }

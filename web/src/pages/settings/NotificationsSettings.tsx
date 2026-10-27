@@ -100,8 +100,21 @@ const REASON_FIELDS = [
 // episode reason, so the profile preferences section keeps REASON_FIELDS.
 const WEBHOOK_NOTIFY_FIELDS = [
   ...REASON_FIELDS,
+  { key: "notify_new_releases", label: "New releases" },
   { key: "notify_requests", label: "Requests" },
 ] as const;
+
+// "Everything new" preferences: deliveries that need no series relationship.
+const NEW_RELEASE_FIELDS = [
+  {
+    key: "notify_new_episodes",
+    label: "Every new episode",
+    hint: "Any show in your libraries, followed or not",
+  },
+  { key: "notify_new_movies", label: "Every new movie", hint: "Any movie added to your libraries" },
+] as const;
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 type WebhookNotifyKey = (typeof WEBHOOK_NOTIFY_FIELDS)[number]["key"];
 
@@ -112,7 +125,7 @@ function PreferencesSection() {
 
   if (isLoading || !prefs) {
     return (
-      <SettingsGroup title="New Episode Notifications">
+      <SettingsGroup title="New Release Notifications">
         <Skeleton className="h-24 w-full" />
       </SettingsGroup>
     );
@@ -120,10 +133,11 @@ function PreferencesSection() {
 
   return (
     <SettingsGroup
-      title="New Episode Notifications"
+      title="New Release Notifications"
       description={
         <>
-          Choose which series relationships notify this profile when a new episode arrives.
+          Choose which series relationships notify this profile when a new episode arrives, or ask
+          to hear about everything new.
           {capability?.series?.available && (
             <>
               {" "}
@@ -158,6 +172,20 @@ function PreferencesSection() {
           />
         </div>
       ))}
+      <div className="pt-2 text-sm font-medium">Everything new</div>
+      {NEW_RELEASE_FIELDS.map((field) => (
+        <div key={field.key} className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm">{field.label}</div>
+            <div className="text-muted-foreground text-xs">{field.hint}</div>
+          </div>
+          <Switch
+            checked={Boolean(prefs[field.key as keyof NotificationPreferences])}
+            disabled={!prefs.enabled}
+            onCheckedChange={(checked) => updatePrefs.mutate({ [field.key]: checked })}
+          />
+        </div>
+      ))}
     </SettingsGroup>
   );
 }
@@ -170,19 +198,26 @@ function PreferencesSection() {
 function ChannelFrequencyRow({
   mode,
   allowPerEpisode,
+  allowWeekly,
   digestHour,
+  digestWeekday,
   isPending,
   perEpisodeHint,
   onChange,
 }: {
   mode: NotificationChannelMode;
   allowPerEpisode: boolean;
+  allowWeekly: boolean;
   digestHour: string;
+  digestWeekday: number;
   isPending: boolean;
   perEpisodeHint: string;
   onChange: (mode: NotificationChannelMode) => void;
 }) {
-  const digestText = `One summary per day, around ${digestHour}:00 server time`;
+  const digestText =
+    mode === "weekly_digest"
+      ? `One summary a week, ${WEEKDAYS[digestWeekday] ?? "Sunday"} around ${digestHour}:00 server time`
+      : `One summary per day, around ${digestHour}:00 server time`;
   return (
     <div className="flex items-center justify-between gap-3">
       <div>
@@ -213,6 +248,11 @@ function ChannelFrequencyRow({
           {(allowPerEpisode || mode === "per_episode_and_digest") && (
             <SelectItem value="per_episode_and_digest" disabled={!allowPerEpisode}>
               Every episode + daily digest
+            </SelectItem>
+          )}
+          {(allowWeekly || mode === "weekly_digest") && (
+            <SelectItem value="weekly_digest" disabled={!allowWeekly}>
+              Weekly digest
             </SelectItem>
           )}
         </SelectContent>
@@ -335,6 +375,7 @@ function EmailSection() {
   const mode = prefs?.mode ?? "off";
   const enabled = mode !== "off";
   const allowPerEpisode = emailCap?.modes.includes("per_episode") ?? false;
+  const allowWeekly = emailCap?.modes.includes("weekly_digest") ?? false;
   const digestHour = String(emailCap?.digest_hour ?? 8).padStart(2, "0");
 
   if (isLoading || !prefs) {
@@ -372,18 +413,22 @@ function EmailSection() {
         <ChannelFrequencyRow
           mode={mode}
           allowPerEpisode={allowPerEpisode}
+          allowWeekly={allowWeekly}
           digestHour={digestHour}
+          digestWeekday={emailCap?.digest_weekday ?? 0}
           isPending={updatePrefs.isPending}
           perEpisodeHint="An email as soon as each notification arrives"
           onChange={(value) => updatePrefs.mutate({ mode: value })}
         />
       )}
-      {enabled && mode !== "daily_digest" && !allowPerEpisode && (
-        <div className="text-xs text-amber-500">
-          Per-episode email is disabled by the administrator; you'll receive the daily digest
-          instead.
-        </div>
-      )}
+      {enabled &&
+        (mode === "per_episode" || mode === "per_episode_and_digest") &&
+        !allowPerEpisode && (
+          <div className="text-xs text-amber-500">
+            Per-episode email is disabled by the administrator; you'll receive the daily digest
+            instead.
+          </div>
+        )}
     </SettingsGroup>
   );
 }
@@ -446,6 +491,7 @@ function DiscordSection() {
   const mode = prefs?.mode ?? "off";
   const enabled = mode !== "off";
   const allowPerEpisode = discordCap?.modes.includes("per_episode") ?? false;
+  const allowWeekly = discordCap?.modes.includes("weekly_digest") ?? false;
   const digestHour = String(discordCap?.digest_hour ?? 8).padStart(2, "0");
 
   const startLink = () => {
@@ -514,18 +560,22 @@ function DiscordSection() {
             <ChannelFrequencyRow
               mode={mode}
               allowPerEpisode={allowPerEpisode}
+              allowWeekly={allowWeekly}
               digestHour={digestHour}
+              digestWeekday={discordCap?.digest_weekday ?? 0}
               isPending={!canManage || updatePrefs.isPending}
               perEpisodeHint="A DM as soon as each notification arrives"
               onChange={(value) => updatePrefs.mutate({ mode: value })}
             />
           )}
-          {enabled && mode !== "daily_digest" && !allowPerEpisode && (
-            <div className="text-xs text-amber-500">
-              Per-episode DMs are disabled by the administrator; you'll receive the daily digest
-              instead.
-            </div>
-          )}
+          {enabled &&
+            (mode === "per_episode" || mode === "per_episode_and_digest") &&
+            !allowPerEpisode && (
+              <div className="text-xs text-amber-500">
+                Per-episode DMs are disabled by the administrator; you'll receive the daily digest
+                instead.
+              </div>
+            )}
           {enabled && prefs?.link_failure && (
             <div className="flex items-start gap-1.5 text-xs text-amber-500">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -756,6 +806,7 @@ function WebhookFormDialog({
     notify_watchlist: webhook?.notify_watchlist ?? true,
     notify_continue_watching: webhook?.notify_continue_watching ?? true,
     notify_next_up: webhook?.notify_next_up ?? true,
+    notify_new_releases: webhook?.notify_new_releases ?? true,
     notify_requests: webhook?.notify_requests ?? true,
   });
   const pending = create.isPending || update.isPending;

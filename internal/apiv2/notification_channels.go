@@ -46,11 +46,11 @@ type NotificationChannelService interface {
 
 type NotificationChannelModeInput struct {
 	Body struct {
-		Mode string `json:"mode" enum:"off,per_episode,daily_digest,per_episode_and_digest"`
+		Mode string `json:"mode" enum:"off,per_episode,daily_digest,per_episode_and_digest,weekly_digest"`
 	}
 }
 type NotificationEmailPreferences struct {
-	Mode           string `json:"mode" enum:"off,per_episode,daily_digest,per_episode_and_digest"`
+	Mode           string `json:"mode" enum:"off,per_episode,daily_digest,per_episode_and_digest,weekly_digest"`
 	CustomEmail    string `json:"custom_email"`
 	PendingEmail   string `json:"pending_email"`
 	CanEditAddress bool   `json:"can_edit_address"`
@@ -59,7 +59,7 @@ type NotificationEmailPreferencesOutput struct{ Body NotificationEmailPreference
 type NotificationDiscordPreferences struct {
 	Linked          bool   `json:"linked"`
 	DiscordUsername string `json:"discord_username,omitempty"`
-	Mode            string `json:"mode" enum:"off,per_episode,daily_digest,per_episode_and_digest"`
+	Mode            string `json:"mode" enum:"off,per_episode,daily_digest,per_episode_and_digest,weekly_digest"`
 	LinkFailure     string `json:"link_failure,omitempty"`
 }
 type NotificationDiscordPreferencesOutput struct {

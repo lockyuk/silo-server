@@ -134,5 +134,5 @@ func (h *NotificationsHandler) NotificationPushDisplay(ctx context.Context, user
 	if row == nil {
 		return notifications.NotificationDisplay{}, apiError(404, "not_found", "Notification not found")
 	}
-	return notifications.BuildNotificationDisplay(*row), nil
+	return h.system.DisplayForRow(ctx, *row), nil
 }

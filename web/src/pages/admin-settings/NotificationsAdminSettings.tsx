@@ -109,11 +109,25 @@ const PUSH_RELAY_ADVANCED_KEYS = [
   "notifications.push_relay_deployment_id",
 ];
 
-const EMAIL_CHANNEL_ADVANCED_KEYS = ["notifications.email.digest_hour"];
+const EMAIL_CHANNEL_ADVANCED_KEYS = [
+  "notifications.email.digest_hour",
+  "notifications.email.digest_weekday",
+];
+
+const WEEKDAY_OPTIONS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+].map((label, day) => ({ value: String(day), label }));
 
 const DISCORD_ADVANCED_KEYS = [
   "notifications.discord.poster_mode",
   "notifications.discord.digest_hour",
+  "notifications.discord.digest_weekday",
 ];
 
 const SERVER_CHANNELS_ADVANCED_KEYS = [
@@ -1075,6 +1089,15 @@ export default function NotificationsAdminSettings() {
                   onChange={(v) => form.setValue("notifications.email.digest_hour", v)}
                   restartRequired={needsRestart("notifications.email.digest_hour")}
                 />
+                <SettingField
+                  label="Weekly summary day"
+                  description="Weekly digests go out on this day at the summary hour."
+                  type="select"
+                  value={form.getValue("notifications.email.digest_weekday") || "0"}
+                  options={WEEKDAY_OPTIONS}
+                  onChange={(v) => form.setValue("notifications.email.digest_weekday", v)}
+                  restartRequired={needsRestart("notifications.email.digest_weekday")}
+                />
               </AdvancedSection>
             </div>
           </ChannelCard>
@@ -1135,6 +1158,15 @@ export default function NotificationsAdminSettings() {
                   value={numberValue("notifications.discord.digest_hour", "8")}
                   onChange={(v) => form.setValue("notifications.discord.digest_hour", v)}
                   restartRequired={needsRestart("notifications.discord.digest_hour")}
+                />
+                <SettingField
+                  label="Weekly summary day"
+                  description="Weekly digests go out on this day at the summary hour."
+                  type="select"
+                  value={form.getValue("notifications.discord.digest_weekday") || "0"}
+                  options={WEEKDAY_OPTIONS}
+                  onChange={(v) => form.setValue("notifications.discord.digest_weekday", v)}
+                  restartRequired={needsRestart("notifications.discord.digest_weekday")}
                 />
               </AdvancedSection>
             </div>

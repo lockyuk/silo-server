@@ -198,7 +198,11 @@ func (h *NotificationsHandler) HandleApplePushDisplay(w http.ResponseWriter, r *
 		writeError(w, http.StatusNotFound, "not_found", "Notification not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, notifications.BuildNotificationDisplay(*row))
+	// The frozen v1 bridge display keeps its original fields; rich content
+	// (images, actions) is a v2 addition.
+	display := notifications.BuildNotificationDisplay(*row)
+	display.Actions = nil
+	writeJSON(w, http.StatusOK, display)
 }
 
 // HandleUnreadCount handles GET /notifications/unread-count.
@@ -329,6 +333,22 @@ type capabilityAccountChannel struct {
 	// allowance); DigestHour tells the UI when daily digests go out.
 	Modes      []string `json:"modes"`
 	DigestHour int      `json:"digest_hour"`
+	// DigestWeekday is the day weekly digests go out (0 = Sunday). Only the
+	// v2 projection carries it; v1 is frozen.
+	DigestWeekday int `json:"-"`
+}
+
+// withoutWeeklyDigest drops the weekly mode, which the frozen v1 contract
+// does not list.
+func (c capabilityAccountChannel) withoutWeeklyDigest() capabilityAccountChannel {
+	modes := make([]string, 0, len(c.Modes))
+	for _, mode := range c.Modes {
+		if mode != notifications.ChannelModeWeeklyDigest {
+			modes = append(modes, mode)
+		}
+	}
+	c.Modes = modes
+	return c
 }
 
 type capabilityWebPush struct {
@@ -359,7 +379,10 @@ type capabilityWebhooks struct {
 // HandleCapability handles GET /notifications/capability. Clients render
 // setup UI from this response instead of introspecting admin settings.
 func (h *NotificationsHandler) HandleCapability(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, h.NotificationCapabilities(r.Context()))
+	view := h.NotificationCapabilities(r.Context())
+	view.Email = view.Email.withoutWeeklyDigest()
+	view.Discord = view.Discord.withoutWeeklyDigest()
+	writeJSON(w, http.StatusOK, view)
 }
 
 // NotificationCapabilitiesView is shared by both API projections.
@@ -388,10 +411,12 @@ func (h *NotificationsHandler) NotificationCapabilities(ctx context.Context) Not
 				notifications.ChannelModePerEpisode,
 				notifications.ChannelModePerEpisodeAndDigest)
 		}
+		modes = append(modes, notifications.ChannelModeWeeklyDigest)
 		email = capabilityAccountChannel{
-			Available:  true,
-			Modes:      modes,
-			DigestHour: h.system.Settings.EmailDigestHour(ctx),
+			Available:     true,
+			Modes:         modes,
+			DigestHour:    h.system.Settings.EmailDigestHour(ctx),
+			DigestWeekday: int(h.system.Settings.EmailDigestWeekday(ctx)),
 		}
 	}
 	discordCap := capabilityAccountChannel{Modes: []string{}}
@@ -402,10 +427,12 @@ func (h *NotificationsHandler) NotificationCapabilities(ctx context.Context) Not
 				notifications.ChannelModePerEpisode,
 				notifications.ChannelModePerEpisodeAndDigest)
 		}
+		modes = append(modes, notifications.ChannelModeWeeklyDigest)
 		discordCap = capabilityAccountChannel{
-			Available:  true,
-			Modes:      modes,
-			DigestHour: h.system.Settings.DiscordDigestHour(ctx),
+			Available:     true,
+			Modes:         modes,
+			DigestHour:    h.system.Settings.DiscordDigestHour(ctx),
+			DigestWeekday: int(h.system.Settings.DiscordDigestWeekday(ctx)),
 		}
 	}
 	applePush := capabilityPush{Available: false, Provider: "off", SupportedModes: []string{"in_app_only"}}

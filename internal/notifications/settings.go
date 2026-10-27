@@ -47,10 +47,12 @@ const (
 	SettingEmailEnabled         = "notifications.email_enabled"
 	SettingEmailAllowPerEpisode = "notifications.email.allow_per_episode"
 	SettingEmailDigestHour      = "notifications.email.digest_hour"
+	SettingEmailDigestWeekday   = "notifications.email.digest_weekday"
 
 	SettingDiscordEnabled         = "notifications.discord_enabled"
 	SettingDiscordAllowPerEpisode = "notifications.discord.allow_per_episode"
 	SettingDiscordDigestHour      = "notifications.discord.digest_hour"
+	SettingDiscordDigestWeekday   = "notifications.discord.digest_weekday"
 	SettingDiscordPosterMode      = "notifications.discord.poster_mode"
 
 	SettingServerChannelsEnabled          = "notifications.server_channels_enabled"
@@ -361,6 +363,11 @@ func (s *Settings) EmailDigestHour(ctx context.Context) int {
 	return s.intSetting(ctx, SettingEmailDigestHour, defaultDigestHour, 0, 23)
 }
 
+// EmailDigestWeekday is the day weekly email digests go out (0 = Sunday).
+func (s *Settings) EmailDigestWeekday(ctx context.Context) time.Weekday {
+	return time.Weekday(s.intSetting(ctx, SettingEmailDigestWeekday, 0, 0, 6))
+}
+
 // EmailExternalURL is the canonical externally reachable base URL of this
 // server, used for deep links inside notification emails.
 func (s *Settings) EmailExternalURL(ctx context.Context) string {
@@ -414,6 +421,11 @@ func (s *Settings) DiscordAllowPerEpisode(ctx context.Context) bool {
 // daily digest DMs go out.
 func (s *Settings) DiscordDigestHour(ctx context.Context) int {
 	return s.intSetting(ctx, SettingDiscordDigestHour, defaultDigestHour, 0, 23)
+}
+
+// DiscordDigestWeekday is the day weekly Discord digests go out (0 = Sunday).
+func (s *Settings) DiscordDigestWeekday(ctx context.Context) time.Weekday {
+	return time.Weekday(s.intSetting(ctx, SettingDiscordDigestWeekday, 0, 0, 6))
 }
 
 // ServerChannelsEnabled gates the admin server-channel feature (kill switch).

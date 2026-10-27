@@ -3011,6 +3011,7 @@ export interface NotificationReasonFlags {
   watchlist?: boolean;
   continue_watching?: boolean;
   next_up?: boolean;
+  new_release?: boolean;
   // request.* operational payload (title/year/reason ride on
   // request.approved / request.declined, which have no catalog item yet)
   request_id?: string;
@@ -3064,6 +3065,10 @@ export interface NotificationPreferences {
   notify_watchlist: boolean;
   notify_continue_watching: boolean;
   notify_next_up: boolean;
+  /** Every new episode the profile can open, followed or not. */
+  notify_new_episodes: boolean;
+  /** Every new movie the profile can open. */
+  notify_new_movies: boolean;
 }
 
 export interface NotificationReadEventPayload {
@@ -3085,6 +3090,7 @@ export interface NotificationWebhook {
   notify_watchlist: boolean;
   notify_continue_watching: boolean;
   notify_next_up: boolean;
+  notify_new_releases?: boolean;
   notify_requests: boolean;
   consecutive_failures: number;
   disabled_reason: string | null;
@@ -3105,6 +3111,7 @@ export interface NotificationWebhookInput {
   notify_watchlist?: boolean;
   notify_continue_watching?: boolean;
   notify_next_up?: boolean;
+  notify_new_releases?: boolean;
   notify_requests?: boolean;
 }
 
@@ -3161,6 +3168,8 @@ export interface NotificationAccountChannelCapability {
   available: boolean;
   modes: string[];
   digest_hour: number;
+  /** Day weekly digests go out, 0 = Sunday. Absent on older servers. */
+  digest_weekday?: number;
 }
 
 export interface NotificationCapability {
@@ -3177,7 +3186,8 @@ export type NotificationChannelMode =
   | "off"
   | "per_episode"
   | "daily_digest"
-  | "per_episode_and_digest";
+  | "per_episode_and_digest"
+  | "weekly_digest";
 export type NotificationEmailMode = NotificationChannelMode;
 export type NotificationDiscordMode = NotificationChannelMode;
 

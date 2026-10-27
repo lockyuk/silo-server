@@ -206,10 +206,13 @@ func (a *EmailAlerts) RunDue(ctx context.Context, reason string) *EmailAlertsRep
 			continue
 		}
 		mode := rec.Mode
-		if mode == emailalerts.ModeInstant || mode == emailalerts.ModeInstantDaily {
-			if !a.settings.EmailAllowPerEpisode(ctx) {
-				// The admin allowance still applies: instant becomes daily.
+		if !a.settings.EmailAllowPerEpisode(ctx) {
+			// The admin allowance still applies: instant becomes a digest.
+			switch mode {
+			case emailalerts.ModeInstant, emailalerts.ModeInstantDaily:
 				mode = emailalerts.ModeDaily
+			case emailalerts.ModeInstantWeekly:
+				mode = emailalerts.ModeWeekly
 			}
 		}
 		for _, leg := range emailalerts.Legs(mode) {

@@ -179,12 +179,6 @@ const KEYS = [
 
 const DEFAULT_PUSH_RELAY_URL = "https://push.siloserver.org";
 
-function digestHourLabel(raw: string): string {
-  const hour = Number.parseInt(raw, 10);
-  const valid = Number.isInteger(hour) && hour >= 0 && hour <= 23;
-  return `${String(valid ? hour : 8).padStart(2, "0")}:00`;
-}
-
 /** Small status pill shown next to a channel title while the card is collapsed. */
 function Chip({
   tone = "neutral",
@@ -1034,7 +1028,7 @@ export default function NotificationsAdminSettings() {
           <ChannelCard
             icon={Mail}
             title="Email"
-            description="Daily summary or a message per episode, for people who opt in."
+            description="New episodes and movies by email, as they arrive or in digests."
             enabled={emailOn}
             onEnabledChange={setToggle("notifications.email_enabled")}
             chips={
@@ -1043,9 +1037,6 @@ export default function NotificationsAdminSettings() {
                     purpose is not broken, and the Dashboard lists what is. */}
                 <Chip tone={mailReady ? "positive" : "neutral"}>
                   {mailReady ? "Mail server set up" : "Mail server not set up"}
-                </Chip>
-                <Chip>
-                  Summary at {digestHourLabel(form.getValue("notifications.email.digest_hour"))}
                 </Chip>
               </>
             }
@@ -1075,30 +1066,20 @@ export default function NotificationsAdminSettings() {
                 onChange={(v) => form.setValue("notifications.email.allow_per_episode", v)}
                 restartRequired={needsRestart("notifications.email.allow_per_episode")}
               />
-              <AdvancedSection
-                id="notifications.email"
-                count={EMAIL_CHANNEL_ADVANCED_KEYS.length}
-                forceOpen={anyDirty(EMAIL_CHANNEL_ADVANCED_KEYS)}
-              >
-                <SettingField
-                  label="Daily summary hour"
-                  description="In the server's own time zone."
-                  unit="0-23"
-                  type="number"
-                  value={numberValue("notifications.email.digest_hour", "8")}
-                  onChange={(v) => form.setValue("notifications.email.digest_hour", v)}
-                  restartRequired={needsRestart("notifications.email.digest_hour")}
-                />
-                <SettingField
-                  label="Weekly summary day"
-                  description="Weekly digests go out on this day at the summary hour."
-                  type="select"
-                  value={form.getValue("notifications.email.digest_weekday") || "0"}
-                  options={WEEKDAY_OPTIONS}
-                  onChange={(v) => form.setValue("notifications.email.digest_weekday", v)}
-                  restartRequired={needsRestart("notifications.email.digest_weekday")}
-                />
-              </AdvancedSection>
+              <div className="py-3.5">
+                <SettingFieldStatus tone="muted">
+                  <span>
+                    Templates, design, recipients and the digest schedule are on the{" "}
+                    <Link
+                      to="/admin/settings/email-alerts"
+                      className="text-foreground font-medium underline underline-offset-2"
+                    >
+                      Email alerts page
+                    </Link>
+                    .
+                  </span>
+                </SettingFieldStatus>
+              </div>
             </div>
           </ChannelCard>
 

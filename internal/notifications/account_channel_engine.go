@@ -26,7 +26,16 @@ const (
 	// ChannelModeWeeklyDigest sends one digest a week, on the digest weekday
 	// at the digest hour. It behaves like the daily digest in every other way.
 	ChannelModeWeeklyDigest = "weekly_digest"
+	// EmailModePerEpisodeAndWeeklyDigest is email only: per-episode sends
+	// plus a weekly digest.
+	EmailModePerEpisodeAndWeeklyDigest = "per_episode_and_weekly_digest"
 )
+
+// ValidEmailMode reports whether mode is a profile email mode: the shared
+// channel modes plus per-episode with a weekly digest.
+func ValidEmailMode(mode string) bool {
+	return ValidChannelMode(mode) || mode == EmailModePerEpisodeAndWeeklyDigest
+}
 
 // transactionalDeliveryTypes are the delivery types that bypass digest
 // batching: digest-mode recipients receive them in a prompt early send (the
@@ -51,7 +60,8 @@ func ValidChannelMode(mode string) bool {
 // ModeIncludesPerEpisode reports whether the mode performs per-episode sends
 // and is therefore subject to the admin per-episode allowance.
 func ModeIncludesPerEpisode(mode string) bool {
-	return mode == ChannelModePerEpisode || mode == ChannelModePerEpisodeAndDigest
+	return mode == ChannelModePerEpisode || mode == ChannelModePerEpisodeAndDigest ||
+		mode == EmailModePerEpisodeAndWeeklyDigest
 }
 
 const (

@@ -240,7 +240,7 @@ func (s *System) SetEmailMode(ctx context.Context, userID int, profileID, mode s
 	if s == nil || s.EmailPrefs == nil {
 		return ErrEmailModeInvalid
 	}
-	if !ValidChannelMode(mode) {
+	if !ValidEmailMode(mode) {
 		return ErrEmailModeInvalid
 	}
 	if ModeIncludesPerEpisode(mode) && !s.Settings.EmailAllowPerEpisode(ctx) {

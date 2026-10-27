@@ -403,22 +403,7 @@ func (h *NotificationsHandler) NotificationCapabilities(ctx context.Context) Not
 			webPush = capabilityWebPush{Available: true, PublicKey: publicKey}
 		}
 	}
-	email := capabilityAccountChannel{Modes: []string{}}
-	if h.system.EmailAvailable(ctx) {
-		modes := []string{notifications.ChannelModeDailyDigest}
-		if h.system.Settings.EmailAllowPerEpisode(ctx) {
-			modes = append(modes,
-				notifications.ChannelModePerEpisode,
-				notifications.ChannelModePerEpisodeAndDigest)
-		}
-		modes = append(modes, notifications.ChannelModeWeeklyDigest)
-		email = capabilityAccountChannel{
-			Available:     true,
-			Modes:         modes,
-			DigestHour:    h.system.Settings.EmailDigestHour(ctx),
-			DigestWeekday: int(h.system.Settings.EmailDigestWeekday(ctx)),
-		}
-	}
+	email := h.emailCapability(ctx)
 	discordCap := capabilityAccountChannel{Modes: []string{}}
 	if h.system.DiscordAvailable(ctx) {
 		modes := []string{notifications.ChannelModeDailyDigest}
@@ -487,4 +472,31 @@ func (h *NotificationsHandler) HandleMintWSTicket(w http.ResponseWriter, r *http
 		Ticket:    ticket,
 		ExpiresIn: int(ttl.Seconds()),
 	})
+}
+
+// emailCapability reports the profile email channel. The digest schedule and
+// the self-service switch live in the email alert settings.
+func (h *NotificationsHandler) emailCapability(ctx context.Context) capabilityAccountChannel {
+	email := capabilityAccountChannel{Modes: []string{}}
+	if !h.system.EmailAvailable(ctx) {
+		return email
+	}
+	settings, err := h.system.EmailAlerts.Settings(ctx)
+	if err != nil || !settings.SelfService.Enabled {
+		return email
+	}
+	modes := []string{notifications.ChannelModeDailyDigest}
+	if h.system.Settings.EmailAllowPerEpisode(ctx) {
+		modes = append(modes,
+			notifications.ChannelModePerEpisode,
+			notifications.ChannelModePerEpisodeAndDigest,
+			notifications.EmailModePerEpisodeAndWeeklyDigest)
+	}
+	modes = append(modes, notifications.ChannelModeWeeklyDigest)
+	return capabilityAccountChannel{
+		Available:     true,
+		Modes:         modes,
+		DigestHour:    settings.Schedule.DailyHour,
+		DigestWeekday: settings.Schedule.WeeklyDay,
+	}
 }

@@ -3190,7 +3190,7 @@ export type NotificationChannelMode =
   | "daily_digest"
   | "per_episode_and_digest"
   | "weekly_digest";
-export type NotificationEmailMode = NotificationChannelMode;
+export type NotificationEmailMode = NotificationChannelMode | "per_episode_and_weekly_digest";
 export type NotificationDiscordMode = NotificationChannelMode;
 
 /**
@@ -3206,11 +3206,23 @@ export interface NotificationEmailPreferences {
   pending_email: string;
   /** False for child profiles, which cannot set addresses. */
   can_edit_address: boolean;
+  /** What to email: shows the profile follows, or everything new it can open. */
+  content: "followed" | "all";
+  /** Item types to include (movie, episode); empty includes both. */
+  types: string[];
+  /** Libraries to include; empty includes every library the profile can open. */
+  library_ids: number[];
+  /** Hours an item counts as new; 0 uses the server default. */
+  max_age_hours: number;
 }
 
-/** PUT /notifications/email-preferences body: only the mode is writable. */
+/** PUT /notifications/email-preferences body: the mode, plus optional choices. */
 export interface NotificationEmailPreferencesUpdate {
   mode: NotificationEmailMode;
+  content?: "followed" | "all";
+  types?: string[];
+  library_ids?: number[];
+  max_age_hours?: number;
 }
 
 /** Account-level Discord DM channel: link state, mode, and delivery health. */

@@ -19,7 +19,7 @@ CREATE TABLE public.notification_email_recipients (
     name text NOT NULL DEFAULT '',
     email text NOT NULL,
     enabled boolean NOT NULL DEFAULT true,
-    mode text NOT NULL CHECK (mode IN ('instant', 'instant_daily', 'daily', 'weekly')),
+    mode text NOT NULL CHECK (mode IN ('instant', 'instant_daily', 'instant_weekly', 'daily', 'weekly')),
     types text[] NOT NULL DEFAULT '{}',
     library_ids integer[] NOT NULL DEFAULT '{}',
     max_age_hours integer NOT NULL DEFAULT 0,
@@ -29,6 +29,13 @@ CREATE TABLE public.notification_email_recipients (
 );
 CREATE UNIQUE INDEX notification_email_recipients_email_key
     ON public.notification_email_recipients (lower(email));
+
+-- Profiles can pair instant emails with a weekly digest.
+ALTER TABLE public.notification_email_prefs
+    DROP CONSTRAINT notification_email_prefs_mode_check;
+ALTER TABLE public.notification_email_prefs
+    ADD CONSTRAINT notification_email_prefs_mode_check
+    CHECK (mode IN ('off', 'per_episode', 'daily_digest', 'per_episode_and_digest', 'weekly_digest', 'per_episode_and_weekly_digest'));
 
 -- A profile's own email gains the recipient choices: what to send (shows it
 -- follows, or everything new it can open), which types and libraries, and
@@ -76,6 +83,13 @@ CREATE INDEX notification_email_alert_log_sent_idx
 -- +goose StatementBegin
 DROP TABLE public.notification_email_alert_log;
 DROP TABLE public.notification_email_alert_state;
+UPDATE public.notification_email_prefs SET mode = 'per_episode_and_digest'
+    WHERE mode = 'per_episode_and_weekly_digest';
+ALTER TABLE public.notification_email_prefs
+    DROP CONSTRAINT notification_email_prefs_mode_check;
+ALTER TABLE public.notification_email_prefs
+    ADD CONSTRAINT notification_email_prefs_mode_check
+    CHECK (mode IN ('off', 'per_episode', 'daily_digest', 'per_episode_and_digest', 'weekly_digest'));
 ALTER TABLE public.notification_email_prefs
     DROP COLUMN content,
     DROP COLUMN types,

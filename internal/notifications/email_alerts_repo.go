@@ -74,6 +74,8 @@ func profileAlertMode(mode string) string {
 		return emailalerts.ModeDaily
 	case ChannelModeWeeklyDigest:
 		return emailalerts.ModeWeekly
+	case EmailModePerEpisodeAndWeeklyDigest:
+		return emailalerts.ModeInstantWeekly
 	}
 	return ""
 }
@@ -89,6 +91,8 @@ func ProfileEmailMode(mode string) string {
 		return ChannelModeDailyDigest
 	case emailalerts.ModeWeekly:
 		return ChannelModeWeeklyDigest
+	case emailalerts.ModeInstantWeekly:
+		return EmailModePerEpisodeAndWeeklyDigest
 	}
 	return ChannelModeOff
 }

@@ -29,6 +29,7 @@ import StorageSettings from "./StorageSettings";
 import SearchSettings from "./SearchSettings";
 import LoggingSettings from "./LoggingSettings";
 import EmailSettings from "./EmailSettings";
+import EmailAlertsSettings from "./EmailAlertsSettings";
 import "@/styles/admin-settings.css";
 
 interface SettingsNav extends AdminSettingsSearchItem {
@@ -54,6 +55,7 @@ const SETTINGS_COMPONENTS: Record<string, ComponentType> = {
   search: SearchSettings,
   logging: LoggingSettings,
   email: EmailSettings,
+  "email-alerts": EmailAlertsSettings,
 };
 
 function settingsComponent(id: string) {

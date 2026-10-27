@@ -5,6 +5,33 @@ export function mountPushStylePage(root, api) {
   const $$ = (s) => [...root.querySelectorAll(s)];
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+  // Templates may use <b>, <i>, <u>, <s> and <font color>, as the phone
+  // shows them; anything else is shown as text.
+  function formatted(html) {
+    const tpl = document.createElement("template");
+    tpl.innerHTML = html || "";
+    const out = document.createDocumentFragment();
+    const walk = (from, into) => {
+      for (const node of from.childNodes) {
+        if (node.nodeType === Node.TEXT_NODE) { into.appendChild(document.createTextNode(node.textContent)); continue; }
+        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+        const tag = node.tagName.toLowerCase();
+        let el = null;
+        if (["b", "strong", "i", "em", "u", "s", "strike"].includes(tag)) el = document.createElement(tag);
+        if (tag === "font") {
+          el = document.createElement("span");
+          const color = node.getAttribute("color") || "";
+          if (/^#[0-9a-f]{3,8}$|^[a-z]+$/i.test(color)) el.style.color = color;
+        }
+        if (tag === "br") { into.appendChild(document.createTextNode(" ")); continue; }
+        walk(node, el ? into.appendChild(el) : into);
+      }
+    };
+    walk(tpl.content, out);
+    return out;
+  }
+  const show = (sel, html) => { $(sel).replaceChildren(formatted(html)); };
+
   const VARS = {
     episode: [["series", "Show name"], ["code", "S01E02"], ["season", "Season number"], ["episode", "Episode number"], ["episode_title", "Episode title"], ["year", "Show's first year"], ["overview", "Synopsis"]],
     movie: [["title", "Movie title"], ["year", "Release year"], ["overview", "Synopsis"]],
@@ -62,8 +89,10 @@ export function mountPushStylePage(root, api) {
       if (gone || seq !== previewSeq) return;
       $("#p-error").hidden = !p.error;
       $("#p-error").textContent = p.error || "";
-      $("#p-title").textContent = $("#p-title-e").textContent = p.title || "";
-      $("#p-body").textContent = $("#p-body-e").textContent = p.body || "";
+      show("#p-title", p.title);
+      show("#p-title-e", p.title);
+      show("#p-body", p.body);
+      show("#p-body-e", p.body);
       $("#p-syn").textContent = p.synopsis || "";
       $("#p-syn").hidden = !p.synopsis;
       $("#p-thumb-c").hidden = $("#p-thumb-e").hidden = draft.image !== "poster";
@@ -106,6 +135,20 @@ export function mountPushStylePage(root, api) {
     el.selectionStart = el.selectionEnd = at + text.length;
     el.dispatchEvent(new Event("input"));
   });
+
+  $$("[data-wrap]").forEach((b) => b.addEventListener("click", () => {
+    const el = lastField;
+    const tag = b.dataset.wrap;
+    const open = tag === "font" ? `<font color="${$("#fmt-color").value}">` : `<${tag}>`;
+    const close = `</${tag}>`;
+    const from = el.selectionStart ?? el.value.length;
+    const to = el.selectionEnd ?? from;
+    el.value = el.value.slice(0, from) + open + el.value.slice(from, to) + close + el.value.slice(to);
+    el.focus();
+    el.selectionStart = from + open.length;
+    el.selectionEnd = to + open.length;
+    el.dispatchEvent(new Event("input"));
+  }));
 
   $("#reset-kind").addEventListener("click", () => {
     draft[kind + "_title"] = defaults[kind + "_title"];

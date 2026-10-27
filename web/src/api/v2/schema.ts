@@ -27497,6 +27497,7 @@ export interface components {
       supported_modes: string[];
     };
     NotificationPushContent: {
+      /** @description Same HTML subset as title. */
       body: string;
       /**
        * Format: int64
@@ -27512,6 +27513,7 @@ export interface components {
       image_url?: string;
       /** @description Shown when the notification is expanded. */
       synopsis?: string;
+      /** @description HTML subset: <b>, <i>, <u>, <s> and <font color>, with values escaped. Decode it as HTML. */
       title: string;
     };
     NotificationPushDisplay: {
@@ -30280,10 +30282,12 @@ export interface components {
       end_session_url: string;
     };
     PushStylePreview: {
+      /** @description HTML subset; see NotificationPushContent. */
       body: string;
       /** @description Why the templates did not render. */
       error?: string;
       synopsis?: string;
+      /** @description HTML subset; see NotificationPushContent. */
       title: string;
     };
     PushStyleSettings: {
@@ -30294,7 +30298,7 @@ export interface components {
       batch_minutes: number;
       /** @description Mustache template for a new episode's text. */
       episode_body: string;
-      /** @description Mustache template for a new episode's title. */
+      /** @description Mustache template for a new episode's title. May use <b>, <i>, <u>, <s> and <font color>. */
       episode_title: string;
       /** @description Mustache template for that push's text. */
       group_body: string;

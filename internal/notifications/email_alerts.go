@@ -28,6 +28,9 @@ const (
 	// email links to.
 	emailAlertsOpenPath   = "/api/v2/notifications/email/open"
 	emailAlertsManagePath = "/api/v2/notifications/email/manage"
+	// emailAlertsProfileSettingsPath is the web page a profile manages its
+	// alerts on.
+	emailAlertsProfileSettingsPath = "/settings/notifications"
 )
 
 // EmailAlerts sends the new-media emails: every recipient leg (instant,
@@ -670,6 +673,11 @@ func (a *EmailAlerts) env(ctx context.Context, s emailalerts.Settings, base stri
 		if rec.ManageToken != "" {
 			env.ManageURL = base + emailAlertsManagePath + "?token=" + rec.ManageToken
 			env.UnsubscribeURL = emailUnsubscribeURL(base, rec.ManageToken)
+		}
+		// A profile's alerts are managed in its own notification settings,
+		// which the token page cannot change; admin recipients have no login.
+		if rec.Kind == EmailRecipientProfile {
+			env.ManageURL = base + emailAlertsProfileSettingsPath
 		}
 		if s.Theme.BackdropBehindShow && a.artwork != nil {
 			env.BackdropBG = func(id string) string { return a.artwork.URL(base, EmailArtworkBackdrop, id) }

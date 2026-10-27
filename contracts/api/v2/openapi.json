@@ -7738,6 +7738,14 @@
             ],
             "type": "string"
           },
+          "pick": {
+            "description": "Send only the newest episode or movie.",
+            "enum": [
+              "episode",
+              "movie"
+            ],
+            "type": "string"
+          },
           "settings": {
             "$ref": "#/components/schemas/EmailAlertSettings",
             "description": "Unsaved settings to test; omitted uses the saved ones."
@@ -30641,6 +30649,11 @@
             },
             "type": "array"
           },
+          "items": {
+            "description": "Items the sent emails covered.",
+            "format": "int64",
+            "type": "integer"
+          },
           "reason": {
             "type": "string"
           },
@@ -30664,7 +30677,8 @@
           "time",
           "reason",
           "recipients",
-          "sent"
+          "sent",
+          "items"
         ],
         "type": "object"
       },
@@ -30848,6 +30862,9 @@
           "defaults": {
             "$ref": "#/components/schemas/EmailAlertSettings"
           },
+          "from_address": {
+            "type": "string"
+          },
           "libraries": {
             "items": {
               "$ref": "#/components/schemas/EmailAlertLibrary"
@@ -30893,6 +30910,9 @@
           },
           "settings": {
             "$ref": "#/components/schemas/EmailAlertSettings"
+          },
+          "smtp_host": {
+            "type": "string"
           }
         },
         "required": [
@@ -30906,6 +30926,8 @@
           "log",
           "public_url",
           "server_name",
+          "smtp_host",
+          "from_address",
           "now"
         ],
         "type": "object"

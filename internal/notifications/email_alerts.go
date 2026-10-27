@@ -58,6 +58,7 @@ type EmailAlertsReport struct {
 	Reason     string    `json:"reason"`
 	Recipients int       `json:"recipients"`
 	Sent       int       `json:"sent"`
+	Items      int       `json:"items"`
 	Skipped    string    `json:"skipped,omitempty"`
 	Errors     []string  `json:"errors,omitempty"`
 }
@@ -296,6 +297,7 @@ func (a *EmailAlerts) RunDue(ctx context.Context, reason string) *EmailAlertsRep
 			}
 			continue
 		}
+		report.Items += len(entries) + more
 		env := a.env(ctx, s, base, job.rec, emailalerts.RenderMode(job.leg), now)
 		env.MoreCount = more
 		subject, err := a.deliver(ctx, env, job.rec.Email, entries, base)
@@ -785,8 +787,9 @@ func (a *EmailAlerts) Preview(ctx context.Context, s emailalerts.Settings, mode,
 }
 
 // SendTest emails the newest items to one address with s (or the saved
-// settings when s is nil).
-func (a *EmailAlerts) SendTest(ctx context.Context, s *emailalerts.Settings, to, mode string) (string, int, error) {
+// settings when s is nil). pick "episode" or "movie" narrows it to the
+// newest one of that type.
+func (a *EmailAlerts) SendTest(ctx context.Context, s *emailalerts.Settings, to, mode, pick string) (string, int, error) {
 	addr, err := mail.ParseAddress(strings.TrimSpace(to))
 	if err != nil {
 		return "", 0, fmt.Errorf("%q isn't a valid email address", to)
@@ -811,6 +814,14 @@ func (a *EmailAlerts) SendTest(ctx context.Context, s *emailalerts.Settings, to,
 	}
 	if len(entries) == 0 {
 		entries = emailalerts.SampleEntries()
+	}
+	if pick == "episode" || pick == "movie" {
+		for i := len(entries) - 1; i >= 0; i-- {
+			if entries[i].Card.Type == pick {
+				entries = entries[i : i+1]
+				break
+			}
+		}
 	}
 	env := a.env(ctx, settings, base, EmailAlertRecipient{Email: addr.Address}, mode, a.now())
 	subject, err := a.deliver(ctx, env, addr.Address, entries, base)
@@ -852,6 +863,8 @@ type EmailAlertsState struct {
 	Log           []EmailAlertLogEntry       `json:"log"`
 	PublicURL     string                     `json:"public_url"`
 	ServerName    string                     `json:"server_name"`
+	SMTPHost      string                     `json:"smtp_host"`
+	FromAddress   string                     `json:"from_address"`
 	Now           time.Time                  `json:"now"`
 }
 
@@ -925,6 +938,8 @@ func (a *EmailAlerts) State(ctx context.Context) (*EmailAlertsState, error) {
 		Log:           log,
 		PublicURL:     base,
 		ServerName:    a.serverName(ctx),
+		SMTPHost:      a.settings.raw(ctx, "email.smtp_host"),
+		FromAddress:   a.settings.raw(ctx, "email.from_address"),
 		Now:           now,
 	}, nil
 }

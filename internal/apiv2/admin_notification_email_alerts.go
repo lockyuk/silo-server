@@ -17,7 +17,7 @@ type AdminEmailAlertsService interface {
 	State(context.Context) (*notifications.EmailAlertsState, error)
 	SaveSettings(context.Context, emailalerts.Settings) (emailalerts.Settings, error)
 	Preview(context.Context, emailalerts.Settings, string, string) (*emailalerts.Rendered, string, error)
-	SendTest(context.Context, *emailalerts.Settings, string, string) (string, int, error)
+	SendTest(context.Context, *emailalerts.Settings, string, string, string) (string, int, error)
 	RunDue(context.Context, string) *notifications.EmailAlertsReport
 	SaveAdminRecipient(context.Context, notifications.EmailAlertRecipient) (notifications.EmailAlertRecipient, error)
 	UpdateRecipient(context.Context, string, notifications.EmailAlertRecipient) (notifications.EmailAlertRecipient, error)
@@ -131,6 +131,7 @@ type EmailAlertRunReport struct {
 	Reason     string    `json:"reason"`
 	Recipients int       `json:"recipients"`
 	Sent       int       `json:"sent"`
+	Items      int       `json:"items" doc:"Items the sent emails covered."`
 	Skipped    string    `json:"skipped,omitempty"`
 	Errors     []string  `json:"errors,omitempty"`
 }
@@ -156,6 +157,8 @@ type EmailAlertsOverview struct {
 	Log           []EmailAlertLogEntry        `json:"log"`
 	PublicURL     string                      `json:"public_url"`
 	ServerName    string                      `json:"server_name"`
+	SMTPHost      string                      `json:"smtp_host"`
+	FromAddress   string                      `json:"from_address"`
 	Now           time.Time                   `json:"now"`
 }
 
@@ -201,6 +204,7 @@ type AdminEmailAlertsTestInput struct {
 		Settings *EmailAlertSettings `json:"settings,omitempty" doc:"Unsaved settings to test; omitted uses the saved ones."`
 		Email    string              `json:"email" minLength:"3"`
 		Mode     string              `json:"mode,omitempty" enum:"instant,daily,weekly"`
+		Pick     string              `json:"pick,omitempty" enum:"episode,movie" doc:"Send only the newest episode or movie."`
 	}
 }
 
@@ -366,7 +370,7 @@ func registerAdminEmailAlerts(reg *Registry) {
 			}
 			settings = &s
 		}
-		subject, items, err := svc.SendTest(ctx, settings, in.Body.Email, in.Body.Mode)
+		subject, items, err := svc.SendTest(ctx, settings, in.Body.Email, in.Body.Mode, in.Body.Pick)
 		if err != nil {
 			return nil, NewProblem(TypeValidationFailed, err.Error())
 		}

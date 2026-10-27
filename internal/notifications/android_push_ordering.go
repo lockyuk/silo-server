@@ -28,7 +28,9 @@ type AndroidPushCommand struct {
 	Generation      int64
 	Token           string
 	PushMode        string
-	Remove          bool
+	// Provider is PushProviderSiloRelay when empty, or PushProviderFCMDirect.
+	Provider string
+	Remove   bool
 }
 type AndroidPushReceipt struct {
 	Generation     int64
@@ -49,6 +51,9 @@ func (s *PushDeviceService) ApplyAndroidPush(ctx context.Context, cmd AndroidPus
 	if !ok {
 		return AndroidPushReceipt{}, ErrPushDeviceUnavailable
 	}
+	if cmd.Provider == PushProviderFCMDirect && !s.FCMDirectAvailable() {
+		return AndroidPushReceipt{}, ErrPushDeviceUnsupported
+	}
 	return store.ApplyAndroidPush(ctx, cmd, s.cipher)
 }
 
@@ -58,6 +63,11 @@ func validateAndroidPushCommand(cmd AndroidPushCommand) (AndroidPushCommand, err
 	}
 	if !validInstallationKey(cmd.InstallationKey) {
 		return cmd, ErrPushInstallationProof
+	}
+	switch cmd.Provider {
+	case "", PushProviderSiloRelay, PushProviderFCMDirect:
+	default:
+		return cmd, ErrPushDeviceInvalid
 	}
 	if cmd.Remove {
 		if cmd.Token != "" || cmd.PushMode != "" {
@@ -77,6 +87,16 @@ func pushDigest(value []byte) string { sum := sha256.Sum256(value); return hex.E
 // androidPushIntent digests what an ordered command asks for, so only an exact
 // replay of the newest command matches the stored intent.
 func androidPushIntent(cmd AndroidPushCommand) string {
+	if cmd.Provider != "" && cmd.Provider != PushProviderSiloRelay {
+		payload, _ := json.Marshal(struct {
+			User                               int
+			Profile, TokenHash, Mode, Provider string
+			Remove                             bool
+		}{cmd.UserID, cmd.ProfileID, fcmTokenHash(cmd.Token), cmd.PushMode, cmd.Provider, cmd.Remove})
+		return pushDigest(payload)
+	}
+	// The relay intent keeps its original shape, so a replay stored before
+	// providers existed still matches.
 	payload, _ := json.Marshal(struct {
 		User                     int
 		Profile, TokenHash, Mode string
@@ -162,7 +182,7 @@ func (r *PushDeviceRepository) ApplyAndroidPush(ctx context.Context, cmd Android
 	}
 	result = AndroidPushReceipt{Generation: cmd.Generation, Removed: cmd.Remove}
 	if !cmd.Remove {
-		device, err := r.insertFCM(ctx, tx, FCMPushDeviceRegistration{UserID: cmd.UserID, ProfileID: cmd.ProfileID, DeviceID: cmd.DeviceID, FCMToken: cmd.Token, PushMode: cmd.PushMode}, cipher)
+		device, err := r.insertFCM(ctx, tx, FCMPushDeviceRegistration{UserID: cmd.UserID, ProfileID: cmd.ProfileID, DeviceID: cmd.DeviceID, FCMToken: cmd.Token, PushMode: cmd.PushMode, Provider: cmd.Provider}, cipher)
 		if err != nil {
 			return result, err
 		}

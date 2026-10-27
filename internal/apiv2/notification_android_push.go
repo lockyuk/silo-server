@@ -22,6 +22,7 @@ type AndroidPushRegistrationBody struct {
 	Platform string `json:"platform" enum:"android"`
 	Token    string `json:"token" minLength:"64" maxLength:"512" writeOnly:"true"`
 	PushMode string `json:"push_mode,omitempty" enum:"off,in_app_only,private_push"`
+	Provider string `json:"provider,omitempty" enum:"silo_relay,fcm_direct" doc:"Who sends this installation's pushes. silo_relay (the default) uses the Silo push relay; fcm_direct is for app builds in the operator's own Firebase project and needs the server to list it in providers."`
 }
 type AndroidPushRegistrationInput struct {
 	AndroidPushAuthority
@@ -57,6 +58,7 @@ type AndroidPushRegistrationCapability struct {
 	Capability
 	RegistrationAvailable bool     `json:"registration_available" doc:"Local ordered registration storage is configured; does not assert provider delivery availability."`
 	Platforms             []string `json:"platforms"`
+	Providers             []string `json:"providers" doc:"Push providers an Android registration may name. silo_relay is always listed; fcm_direct only when this server sends straight to its own Firebase project."`
 }
 type AndroidPushRegistrationCapabilityOutput struct {
 	Status       int
@@ -93,11 +95,25 @@ func (reg *Registry) androidPushCommand(ctx context.Context, authority AndroidPu
 	}
 	return notifications.AndroidPushCommand{UserID: user, ProfileID: profile, DeviceID: device, InstallationKey: authority.InstallationKey, Generation: generation}, nil
 }
+
+// FCMDirectProvider reports whether the fcm_direct provider is configured.
+type FCMDirectProvider interface {
+	FCMDirectAvailable() bool
+}
+
+func (reg *Registry) androidPushProviders() []string {
+	providers := []string{notifications.PushProviderSiloRelay}
+	if direct, ok := reg.deps.OrderedAndroidPush.(FCMDirectProvider); ok && direct.FCMDirectAvailable() {
+		providers = append(providers, notifications.PushProviderFCMDirect)
+	}
+	return providers
+}
+
 func registerOrderedAndroidPush(reg *Registry) {
 	capOp := notificationOperation(http.MethodGet, "/push/devices/capabilities", "getPushRegistrationCapabilities")
 	capOp.Summary = "Describe ordered registration support separately from push delivery availability."
 	Register(reg, capOp, func(context.Context, *CapabilityInput) (*AndroidPushRegistrationCapabilityOutput, error) {
-		return &AndroidPushRegistrationCapabilityOutput{Body: AndroidPushRegistrationCapability{RegistrationAvailable: reg.deps.OrderedAndroidPush != nil && reg.deps.OrderedAndroidPush.OrderedAndroidPushAvailable(), Platforms: []string{notifications.PushPlatformAndroid}}}, nil
+		return &AndroidPushRegistrationCapabilityOutput{Body: AndroidPushRegistrationCapability{RegistrationAvailable: reg.deps.OrderedAndroidPush != nil && reg.deps.OrderedAndroidPush.OrderedAndroidPushAvailable(), Platforms: []string{notifications.PushPlatformAndroid}, Providers: reg.androidPushProviders()}}, nil
 	})
 	op := notificationOperation(http.MethodPost, "/push/devices", "registerPushDevice")
 	op.Summary = "Apply one ordered Android installation registration intent. Replay only the exact persisted generation, credential and payload; never advance a generation to retry uncertainty."
@@ -109,7 +125,7 @@ func registerOrderedAndroidPush(reg *Registry) {
 		if err != nil {
 			return nil, err
 		}
-		cmd.Token, cmd.PushMode = in.Body.Token, in.Body.PushMode
+		cmd.Token, cmd.PushMode, cmd.Provider = in.Body.Token, in.Body.PushMode, in.Body.Provider
 		result, err := reg.deps.OrderedAndroidPush.ApplyAndroidPush(ctx, cmd)
 		if err != nil {
 			return nil, orderedPushProblem(err)

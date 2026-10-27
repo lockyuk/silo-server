@@ -20425,6 +20425,11 @@ export interface components {
       device_id: string;
       /** @enum {string} */
       platform: "android";
+      /**
+       * @description Who sends this installation's pushes. silo_relay (the default) uses the Silo push relay; fcm_direct is for app builds in the operator's own Firebase project and needs the server to list it in providers.
+       * @enum {string}
+       */
+      provider?: "silo_relay" | "fcm_direct";
       /** @enum {string} */
       push_mode?: "off" | "in_app_only" | "private_push";
       token: string;
@@ -20433,6 +20438,8 @@ export interface components {
       /** @description Whether the current principal may use the capability */
       allowed: boolean;
       platforms: string[];
+      /** @description Push providers an Android registration may name. silo_relay is always listed; fcm_direct only when this server sends straight to its own Firebase project. */
+      providers: string[];
       /** @description Local ordered registration storage is configured; does not assert provider delivery availability. */
       registration_available: boolean;
       /** @description Opaque revision of this document */

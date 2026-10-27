@@ -321,6 +321,20 @@ func (s *System) ServeEmailArtwork(ctx context.Context, token string) ([]byte, e
 	return s.EmailArtwork.Serve(ctx, token)
 }
 
+// SetFCMDirect enables the fcm_direct Android push provider. nil leaves it
+// off.
+func (s *System) SetFCMDirect(direct *FCMDirect) {
+	if s == nil || direct == nil {
+		return
+	}
+	if s.PushDevices != nil {
+		s.PushDevices.fcmDirect = direct
+	}
+	if s.pushSender != nil {
+		s.pushSender.fcmDirect = direct
+	}
+}
+
 // SetImageResolver wires presigned poster URLs into notification payloads.
 // Optional; without it clients fall back to thumbhash placeholders.
 func (s *System) SetImageResolver(resolver ImageURLResolver) {

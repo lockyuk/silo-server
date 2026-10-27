@@ -31,7 +31,7 @@ import {
 } from "./playbackSettings.utils";
 import { SettingField, SettingFieldStatus } from "./SettingField";
 import { FilmographySettings } from "./FilmographySettings";
-import { ThemeSongsSettings } from "./ThemeSongsSettings";
+import ThemeSongsPanel from "./ThemeSongsPanel";
 import { WORKER_SETTING_DEFAULTS, hasWorkerOverrides } from "./settingsWorkerDefaults";
 
 // Skip markers are on Playback, search on its own Search page, and saving
@@ -400,7 +400,9 @@ export default function LibraryMetadataSettings() {
           </AdvancedSection>
         </FieldGroup>
 
-        <ThemeSongsSettings />
+        <section aria-label="Theme songs" className="scroll-mt-4">
+          <ThemeSongsPanel />
+        </section>
 
         <FilmographySettings />
       </div>

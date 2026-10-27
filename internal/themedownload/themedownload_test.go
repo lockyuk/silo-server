@@ -194,7 +194,7 @@ func TestRunStoresServesAndRemovesThemesPostgres(t *testing.T) {
 		return themesongs.File{Song: themesongs.Song{DurationSeconds: 31}, AudioCodec: "mp3", AudioChannels: 2, BitrateKbps: 128, SampleRate: 44100}, nil
 	}
 
-	report, err := s.Run(ctx, false, nil)
+	report, err := s.Run(ctx, false, "test", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestRunStoresServesAndRemovesThemesPostgres(t *testing.T) {
 
 	// A recent miss and a stored theme are not asked for again; force asks
 	// for the miss only.
-	if _, err := s.Run(ctx, false, nil); err != nil {
+	if _, err := s.Run(ctx, false, "test", nil); err != nil {
 		t.Fatal(err)
 	}
 	for id, want := range map[string]int{"111": 1, "222": 1} {
@@ -229,7 +229,7 @@ func TestRunStoresServesAndRemovesThemesPostgres(t *testing.T) {
 			t.Fatalf("%s requested %d times after the second run", id, *n.(*int))
 		}
 	}
-	if _, err := s.Run(ctx, true, nil); err != nil {
+	if _, err := s.Run(ctx, true, "test", nil); err != nil {
 		t.Fatal(err)
 	}
 	if n, _ := requests.Load("222"); *n.(*int) != 2 {

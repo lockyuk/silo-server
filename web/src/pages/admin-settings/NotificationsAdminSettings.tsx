@@ -2,17 +2,11 @@ import { useId, useMemo, useRef, useState } from "react";
 import { MobilePushPrivacyDisclosure } from "@/components/notifications/MobilePushPrivacyDisclosure";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  Bot,
-  Check,
   ChevronDown,
-  Copy,
-  ExternalLink,
   Inbox,
   KeyRound,
   Loader2,
   Mail,
-  Megaphone,
-  MonitorSmartphone,
   RadioTower,
   TriangleAlert,
   Webhook,
@@ -25,7 +19,6 @@ import {
   isCapturedProfileAuthorityActive,
   StaleApiRequestContextError,
 } from "@/api/client";
-import { testNotificationDiscord } from "@/api/v2/notificationDiscord";
 import { notificationScope } from "@/api/v2/notifications";
 import {
   registerNotificationRelay,
@@ -46,22 +39,18 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { AdvancedSection } from "@/components/settings/AdvancedSection";
-import { SecretField } from "@/components/settings/SecretField";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
+import { Checkbox } from "@/components/ui/checkbox";
 import { SettingsSubheading } from "@/components/settings/SettingsSubheading";
 import { adminKeys } from "@/hooks/queries/keys";
-import { useServerNotificationChannels } from "@/hooks/queries/admin/serverNotificationChannels";
-import { useUpdateServerSettings } from "@/hooks/queries/admin/settings";
 import { useRestartKeys } from "@/hooks/useRestartKeys";
 import { useSettingsForm } from "@/hooks/useSettingsForm";
 import { useReportUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { emailReady } from "@/lib/emailReadiness";
-import { copyTextToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 import { FieldGroup } from "./FieldGroup";
 import { SaveBar } from "@/components/SaveBar";
 import { SettingField, SettingFieldStatus } from "./SettingField";
-import ServerNotificationChannels from "./ServerNotificationChannels";
 import EmailAlertsPanel from "./EmailAlertsPanel";
 
 /**
@@ -115,27 +104,6 @@ const EMAIL_CHANNEL_ADVANCED_KEYS = [
   "notifications.email.digest_weekday",
 ];
 
-const WEEKDAY_OPTIONS = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-].map((label, day) => ({ value: String(day), label }));
-
-const DISCORD_ADVANCED_KEYS = [
-  "notifications.discord.poster_mode",
-  "notifications.discord.digest_hour",
-  "notifications.discord.digest_weekday",
-];
-
-const SERVER_CHANNELS_ADVANCED_KEYS = [
-  "notifications.server_channels.batch_seconds",
-  "notifications.server_channels.mention_requesters",
-];
-
 /**
  * Read for the Email channel's status line only. The mail server itself is
  * edited on the Email page, since invitations and password resets send
@@ -168,11 +136,6 @@ const KEYS = [
   "notifications.email_enabled",
   "notifications.email.allow_per_episode",
   ...EMAIL_CHANNEL_ADVANCED_KEYS,
-  "notifications.discord_enabled",
-  "notifications.discord.allow_per_episode",
-  ...DISCORD_ADVANCED_KEYS,
-  "notifications.server_channels_enabled",
-  ...SERVER_CHANNELS_ADVANCED_KEYS,
   ...RETENTION_KEYS,
   ...MAIL_STATUS_KEYS,
   ...DISCORD_APP_KEYS,
@@ -488,309 +451,9 @@ function RegisterRelayRow({
 // Discord application credentials
 // ---------------------------------------------------------------------------
 
-/**
- * Invite link for adding the bot to a Discord server. Membership alone is
- * enough to DM, so no permissions are requested.
- */
-function discordInviteUrl(clientId: string): string {
-  return `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&scope=bot&permissions=0`;
-}
-
-function DiscordSetupGuide() {
-  return (
-    <AdvancedSection id="notifications.discord.setup-guide" title="Setup guide">
-      <div className="text-muted-foreground space-y-1.5 py-3 text-xs leading-relaxed">
-        <p>Set up at discord.com/developers/applications:</p>
-        <ol className="list-decimal space-y-1.5 pl-4">
-          <li>Create an application (or open an existing one).</li>
-          <li>
-            OAuth2 page: copy the <strong>Client ID</strong>, reset and copy the{" "}
-            <strong>Client Secret</strong>, and under Redirects add
-            <code className="bg-muted mx-1 rounded px-1">
-              {"<public URL>"}/api/v2/notifications/discord/link/callback
-            </code>
-            using this server&apos;s public URL — it must match exactly.
-          </li>
-          <li>
-            Bot page: reset and copy the <strong>Token</strong>. Leave all Privileged Gateway
-            Intents (Presence, Server Members, Message Content) <strong>off</strong> — Silo never
-            connects to the gateway; it only sends DMs.
-          </li>
-          <li>
-            Keep <strong>Requires OAuth2 Code Grant</strong> off, or the invite link below
-            won&apos;t work. Enable <strong>Public Bot</strong> only if someone other than the
-            application owner will be inviting it.
-          </li>
-          <li>
-            Paste the three credentials below, save, then use the invite button to add the bot to
-            your Discord server. It needs <strong>no role permissions</strong> — membership alone
-            lets it DM members, and users must share that server with the bot to receive DMs.
-          </li>
-        </ol>
-      </div>
-    </AdvancedSection>
-  );
-}
-
-function InviteBotRow({ clientId }: { clientId: string }) {
-  const [copied, setCopied] = useState(false);
-  const trimmed = clientId.trim();
-
-  // The copy can genuinely fail — a denied permission, or a browser that only
-  // exposes the async clipboard on a secure origin, which a LAN server reached
-  // over plain HTTP is not. Claiming success there sends the admin off to paste
-  // an invite link they do not have.
-  async function copyInviteLink() {
-    try {
-      await copyTextToClipboard(discordInviteUrl(trimmed));
-      setCopied(true);
-      toast.success("Invite link copied");
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error("Couldn't copy the invite link — select it and copy it manually");
-    }
-  }
-
-  return (
-    <div className="space-y-2 py-2">
-      <div className="flex flex-wrap gap-1.5">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={!trimmed}
-          onClick={() => window.open(discordInviteUrl(trimmed), "_blank", "noopener,noreferrer")}
-        >
-          <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-          Invite bot to server
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={!trimmed}
-          onClick={() => void copyInviteLink()}
-        >
-          {copied ? (
-            <Check className="mr-1.5 h-3.5 w-3.5" />
-          ) : (
-            <Copy className="mr-1.5 h-3.5 w-3.5" />
-          )}
-          Copy link
-        </Button>
-      </div>
-      <div className="text-muted-foreground text-xs">
-        {trimmed
-          ? "Users must be in that server to receive DMs."
-          : "Enter the Client ID to generate the invite link."}
-      </div>
-    </div>
-  );
-}
-
-/**
- * The Discord application itself — client id, secret, bot token. It lives in
- * the Discord channel card because "why didn't my DM arrive" is always a
- * question about these three values, and it saves on its own so the bot token
- * can be tested before the page's other edits are committed.
- */
-function DiscordAppCredentials({
-  savedClientId,
-  sensitiveConfigured,
-  restartKeys,
-}: {
-  savedClientId: string;
-  sensitiveConfigured: string[];
-  restartKeys: ReturnType<typeof useRestartKeys>;
-}) {
-  const authority = captureProfileRequestContext();
-  const testInFlight = useRef(false);
-  const updateSettings = useUpdateServerSettings();
-  // `null` follows the saved value; a draft is only pinned while the admin is
-  // editing, so a refetch cannot overwrite typing in progress.
-  const [clientIdDraft, setClientIdDraft] = useState<string | null>(null);
-  const [clientSecret, setClientSecret] = useState("");
-  const [botToken, setBotToken] = useState("");
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [testing, setTesting] = useState(false);
-  const [confirmClear, setConfirmClear] = useState(false);
-
-  const clientId = clientIdDraft ?? savedClientId;
-  const configuredKeys = new Set(sensitiveConfigured);
-  const secretConfigured = configuredKeys.has("discord.client_secret");
-  const tokenConfigured = configuredKeys.has("discord.bot_token");
-  const ready = savedClientId.trim() !== "" && secretConfigured && tokenConfigured;
-  const unsaved =
-    clientId !== savedClientId || clientSecret.trim() !== "" || botToken.trim() !== "";
-  // The card's drafts live outside useSettingsForm, so the navigation guard
-  // and the reload prompt only see them through this report.
-  useReportUnsavedChanges(unsaved);
-  const anyStored = savedClientId.trim() !== "" || secretConfigured || tokenConfigured;
-
-  async function save() {
-    const updates: Record<string, string> = { "discord.client_id": clientId };
-    if (clientSecret.trim() !== "") updates["discord.client_secret"] = clientSecret;
-    if (botToken.trim() !== "") updates["discord.bot_token"] = botToken;
-    try {
-      await updateSettings.mutateAsync(updates);
-      setClientIdDraft(null);
-      setClientSecret("");
-      setBotToken("");
-      setTestResult(null);
-      toast.success("Discord credentials saved");
-    } catch {
-      // The mutation surfaces the API error.
-    }
-  }
-
-  async function clearAll() {
-    try {
-      await updateSettings.mutateAsync({
-        "discord.client_id": "",
-        "discord.client_secret": "",
-        "discord.bot_token": "",
-      });
-      setClientIdDraft(null);
-      setClientSecret("");
-      setBotToken("");
-      setTestResult(null);
-      toast.success("Discord credentials cleared");
-    } catch {
-      // The mutation surfaces the API error.
-    }
-  }
-
-  async function runTest() {
-    if (testInFlight.current) return;
-    testInFlight.current = true;
-    setTesting(true);
-    setTestResult(null);
-    try {
-      if (!authority) throw new StaleApiRequestContextError();
-      const response = await testNotificationDiscord(authority);
-      setTestResult({
-        success: response.ok,
-        message: `${response.ok ? "Success" : "Failed"} (${response.duration_ms}ms)${
-          response.message ? `: ${response.message}` : ""
-        }`,
-      });
-    } catch (error) {
-      if (!authority || !isCapturedProfileAuthorityActive(authority)) return;
-      setTestResult({
-        success: false,
-        message: error instanceof Error ? error.message : "Test request failed.",
-      });
-    } finally {
-      testInFlight.current = false;
-      setTesting(false);
-    }
-  }
-
-  return (
-    <>
-      <SettingsSubheading>Application</SettingsSubheading>
-      <DiscordSetupGuide />
-      <div className="settings-field-list">
-        <SettingField
-          label="Client ID"
-          value={clientId}
-          onChange={setClientIdDraft}
-          description="From the application's OAuth2 page."
-          restartRequired={restartKeys.has("discord.client_id")}
-        />
-      </div>
-      <InviteBotRow clientId={clientId} />
-      <div className="settings-field-list">
-        <SecretField
-          label="Client secret"
-          value={clientSecret}
-          configured={secretConfigured}
-          onChange={setClientSecret}
-          hint="From the application's OAuth2 page."
-          restartRequired={restartKeys.has("discord.client_secret")}
-        />
-        <SecretField
-          label="Bot token"
-          value={botToken}
-          configured={tokenConfigured}
-          onChange={setBotToken}
-          hint="From the application's Bot page."
-          restartRequired={restartKeys.has("discord.bot_token")}
-        />
-      </div>
-      <div className="flex flex-wrap items-center gap-2 py-3">
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => void save()}
-          disabled={updateSettings.isPending}
-        >
-          {updateSettings.isPending ? "Saving..." : "Save"}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => void runTest()}
-          disabled={testing || unsaved || !ready}
-        >
-          {testing ? "Testing..." : "Test bot token"}
-        </Button>
-        {anyStored && (
-          <Button type="button" size="sm" variant="ghost" onClick={() => setConfirmClear(true)}>
-            Clear credentials
-          </Button>
-        )}
-      </div>
-      {testResult && (
-        <p
-          role="status"
-          aria-live="polite"
-          className={cn(
-            "pb-2 text-xs",
-            testResult.success
-              ? "text-green-600 dark:text-green-400"
-              : "text-red-600 dark:text-red-400",
-          )}
-        >
-          {testResult.message}
-        </p>
-      )}
-      {unsaved && (
-        <p className="text-muted-foreground pb-2 text-xs">
-          Save first; the test uses the stored credentials.
-        </p>
-      )}
-      <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Clear Discord app credentials?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Account linking and Discord direct messages stop working immediately.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                void clearAll();
-                setConfirmClear(false);
-              }}
-            >
-              Clear
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  );
-}
-
 export default function NotificationsAdminSettings() {
   const form = useSettingsForm({ keys: useMemo(() => KEYS, []) });
   const restartKeys = useRestartKeys();
-  const { data: serverChannels } = useServerNotificationChannels();
   // Local draft for the relay URL; null means "show the saved value".
   const [pushRelayURLDraft, setPushRelayURLDraft] = useState<string | null>(null);
   // The relay URL draft lives outside useSettingsForm (only registration
@@ -853,15 +516,12 @@ export default function NotificationsAdminSettings() {
   const releaseEventsOn = isOn("notifications.release_events_enabled");
   const fanoutOn = isOn("notifications.fanout_enabled");
   const uiOn = isOn("notifications.ui_enabled");
-  const webPushOn = isOn("notifications.web_push_enabled");
   const emailOn = isOn("notifications.email_enabled");
-  const serverChannelsOn = isOn("notifications.server_channels_enabled");
   // Mobile push defaults on (the effective snapshot carries the default);
   // Discord and personal webhooks are opt-in.
   const applePushOn = form.getValue("notifications.apple_push_delivery_enabled") === "true";
   const androidPushOn = form.getValue("notifications.android_push_delivery_enabled") === "true";
   const mobilePushOn = applePushOn || androidPushOn;
-  const discordOn = form.getValue("notifications.discord_enabled") === "true";
   const webhooksOn = form.getValue("notifications.webhooks_enabled") === "true";
 
   // The relay URL is not part of the settings form: the server only persists
@@ -893,16 +553,6 @@ export default function NotificationsAdminSettings() {
   // next to the delivery settings it gates. "Configured" mirrors the server's
   // own rule (DiscordConfigured): client id, client secret, AND bot token —
   // a partial save (say, only the bot token) must not read as connected.
-  const discordAppConfigured =
-    form.getValue("discord.client_id").trim() !== "" &&
-    form.sensitiveConfigured.includes("discord.client_secret") &&
-    form.sensitiveConfigured.includes("discord.bot_token");
-
-  const failingServerChannels = (serverChannels ?? []).filter(
-    (channel) =>
-      channel.last_failure_at != null &&
-      (channel.last_success_at == null || channel.last_failure_at > channel.last_success_at),
-  ).length;
 
   // The kill switches live under Advanced, so a pipeline someone switched off
   // has to say so up here: every channel below is idle while it is.
@@ -927,6 +577,34 @@ export default function NotificationsAdminSettings() {
           </div>
         )}
 
+        {/* ── Master switch: which notification systems run at all ── */}
+        <FieldGroup
+          label="Notification systems"
+          description="Tick the systems that are active. An unticked system sends nothing and its settings are hidden from people's notification pages."
+        >
+          <div className="flex flex-wrap gap-6 py-3">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <Checkbox
+                checked={emailOn}
+                onCheckedChange={(v) =>
+                  form.setValue("notifications.email_enabled", String(v === true))
+                }
+              />
+              Email
+            </label>
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <Checkbox
+                checked={mobilePushOn}
+                onCheckedChange={(v) => {
+                  form.setValue("notifications.apple_push_delivery_enabled", String(v === true));
+                  form.setValue("notifications.android_push_delivery_enabled", String(v === true));
+                }}
+              />
+              Push
+            </label>
+          </div>
+        </FieldGroup>
+
         {/* ── Delivery channels ── */}
         <FieldGroup
           label="Delivery channels"
@@ -938,14 +616,6 @@ export default function NotificationsAdminSettings() {
             description="Notification inbox in the web, mobile, and TV apps."
             enabled={uiOn}
             onEnabledChange={setToggle("notifications.ui_enabled")}
-          />
-
-          <ChannelCard
-            icon={MonitorSmartphone}
-            title="Web Push"
-            description="Browser push to subscribed devices."
-            enabled={webPushOn}
-            onEnabledChange={setToggle("notifications.web_push_enabled")}
           />
 
           <ChannelCard
@@ -1085,76 +755,6 @@ export default function NotificationsAdminSettings() {
           </ChannelCard>
 
           <ChannelCard
-            icon={Bot}
-            title="Discord"
-            description="Direct messages from your Discord bot to linked accounts."
-            enabled={discordOn}
-            onEnabledChange={setToggle("notifications.discord_enabled")}
-            chips={
-              discordAppConfigured ? (
-                <Chip tone="positive">Discord app connected</Chip>
-              ) : (
-                <Chip tone={discordOn ? "warning" : "neutral"}>Discord app not connected</Chip>
-              )
-            }
-          >
-            <DiscordAppCredentials
-              key={notificationScope(captureProfileRequestContext())}
-              savedClientId={form.getValue("discord.client_id")}
-              sensitiveConfigured={form.sensitiveConfigured}
-              restartKeys={restartKeys}
-            />
-            <SettingsSubheading>Delivery</SettingsSubheading>
-            <div className="settings-field-list">
-              <SettingField
-                label="Let people pick a DM per episode"
-                description="Off sends them the daily summary instead."
-                type="toggle"
-                value={toggleValue("notifications.discord.allow_per_episode")}
-                onChange={(v) => form.setValue("notifications.discord.allow_per_episode", v)}
-                restartRequired={needsRestart("notifications.discord.allow_per_episode")}
-              />
-              <AdvancedSection
-                id="notifications.discord"
-                count={DISCORD_ADVANCED_KEYS.length}
-                forceOpen={anyDirty(DISCORD_ADVANCED_KEYS)}
-              >
-                <SettingField
-                  label="Artwork"
-                  description="Server images reveal your server URL to anyone who sees the message."
-                  type="select"
-                  value={form.getValue("notifications.discord.poster_mode") || "provider"}
-                  options={[
-                    { value: "provider", label: "Provider images only" },
-                    { value: "server", label: "Provider and server images" },
-                    { value: "off", label: "No artwork" },
-                  ]}
-                  onChange={(v) => form.setValue("notifications.discord.poster_mode", v)}
-                  restartRequired={needsRestart("notifications.discord.poster_mode")}
-                />
-                <SettingField
-                  label="Daily summary hour"
-                  description="In the server's own time zone."
-                  unit="0-23"
-                  type="number"
-                  value={numberValue("notifications.discord.digest_hour", "8")}
-                  onChange={(v) => form.setValue("notifications.discord.digest_hour", v)}
-                  restartRequired={needsRestart("notifications.discord.digest_hour")}
-                />
-                <SettingField
-                  label="Weekly summary day"
-                  description="Weekly digests go out on this day at the summary hour."
-                  type="select"
-                  value={form.getValue("notifications.discord.digest_weekday") || "0"}
-                  options={WEEKDAY_OPTIONS}
-                  onChange={(v) => form.setValue("notifications.discord.digest_weekday", v)}
-                  restartRequired={needsRestart("notifications.discord.digest_weekday")}
-                />
-              </AdvancedSection>
-            </div>
-          </ChannelCard>
-
-          <ChannelCard
             icon={Webhook}
             title="Personal Webhooks"
             description="Webhooks people create for themselves, Discord or generic."
@@ -1215,57 +815,6 @@ export default function NotificationsAdminSettings() {
                 </div>
               )}
             </AdvancedSection>
-          </ChannelCard>
-
-          <ChannelCard
-            icon={Megaphone}
-            title="Server Channels"
-            description="Server-wide announcements posted to a shared destination."
-            enabled={serverChannelsOn}
-            onEnabledChange={setToggle("notifications.server_channels_enabled")}
-            chips={
-              <>
-                {serverChannels != null && (
-                  <Chip>
-                    {serverChannels.length} destination{serverChannels.length === 1 ? "" : "s"}
-                  </Chip>
-                )}
-                {failingServerChannels > 0 && (
-                  <Chip tone="warning">{failingServerChannels} failing</Chip>
-                )}
-              </>
-            }
-          >
-            <div className="settings-field-list">
-              <div className="py-3">
-                <ServerNotificationChannels />
-              </div>
-              <AdvancedSection
-                id="notifications.server-channels"
-                count={SERVER_CHANNELS_ADVANCED_KEYS.length}
-                forceOpen={anyDirty(SERVER_CHANNELS_ADVANCED_KEYS)}
-              >
-                <SettingField
-                  label="Batch window"
-                  description="New content waits this long so a season posts as one message."
-                  unit="seconds"
-                  type="number"
-                  value={numberValue("notifications.server_channels.batch_seconds", "300")}
-                  onChange={(v) => form.setValue("notifications.server_channels.batch_seconds", v)}
-                  restartRequired={needsRestart("notifications.server_channels.batch_seconds")}
-                />
-                <SettingField
-                  label="Mention the requester on Discord"
-                  description="Unlinked accounts show their Silo username instead."
-                  type="toggle"
-                  value={form.getValue("notifications.server_channels.mention_requesters")}
-                  onChange={(v) =>
-                    form.setValue("notifications.server_channels.mention_requesters", v)
-                  }
-                  restartRequired={needsRestart("notifications.server_channels.mention_requesters")}
-                />
-              </AdvancedSection>
-            </div>
           </ChannelCard>
         </FieldGroup>
 

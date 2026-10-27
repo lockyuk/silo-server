@@ -18,6 +18,9 @@ export async function updateNotificationEmailPreferences(
   const result = await v2("PUT /api/v2/notifications/email-preferences", {
     body: {
       mode: body.mode,
+      instant: body.instant,
+      daily: body.daily,
+      weekly: body.weekly,
       content: body.content,
       types: body.types,
       library_ids: body.library_ids,

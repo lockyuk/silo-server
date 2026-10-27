@@ -31,6 +31,11 @@ func (f *fakeNotificationChannels) SetEmailChoices(_ context.Context, user int, 
 	f.user, f.profile, f.choices = user, profile, c
 	return f.err
 }
+func (f *fakeNotificationChannels) SetEmailSends(_ context.Context, user int, profile string, instant, daily, weekly bool) error {
+	f.user, f.profile = user, profile
+	f.writes++
+	return f.err
+}
 func (f *fakeNotificationChannels) DiscordPrefsFor(_ context.Context, user int) (notifications.DiscordPrefs, error) {
 	f.user = user
 	return notifications.DiscordPrefs{UserID: user, DiscordUserID: "opaque-secret-id", DiscordUsername: "Example", Mode: "off"}, nil

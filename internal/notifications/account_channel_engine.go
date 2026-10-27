@@ -31,6 +31,42 @@ const (
 	EmailModePerEpisodeAndWeeklyDigest = "per_episode_and_weekly_digest"
 )
 
+// emailSendsOfMode splits a single email mode into its sends.
+func emailSendsOfMode(mode string) (instant, daily, weekly bool) {
+	switch mode {
+	case ChannelModePerEpisode:
+		return true, false, false
+	case ChannelModePerEpisodeAndDigest:
+		return true, true, false
+	case EmailModePerEpisodeAndWeeklyDigest:
+		return true, false, true
+	case ChannelModeDailyDigest:
+		return false, true, false
+	case ChannelModeWeeklyDigest:
+		return false, false, true
+	}
+	return false, false, false
+}
+
+// emailModeOfSends is the single mode closest to a combination of sends,
+// for clients that read one mode. Every send combination maps to a mode
+// that is off exactly when no send is on.
+func emailModeOfSends(instant, daily, weekly bool) string {
+	switch {
+	case instant && daily:
+		return ChannelModePerEpisodeAndDigest
+	case instant && weekly:
+		return EmailModePerEpisodeAndWeeklyDigest
+	case instant:
+		return ChannelModePerEpisode
+	case daily:
+		return ChannelModeDailyDigest
+	case weekly:
+		return ChannelModeWeeklyDigest
+	}
+	return ChannelModeOff
+}
+
 // ValidEmailMode reports whether mode is a profile email mode: the shared
 // channel modes plus per-episode with a weekly digest.
 func ValidEmailMode(mode string) bool {

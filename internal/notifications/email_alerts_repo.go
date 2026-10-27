@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -38,20 +39,46 @@ var ErrEmailRecipientExists = errors.New("another recipient already uses that ad
 
 // EmailAlertRecipient is one address the email alerts go to.
 type EmailAlertRecipient struct {
-	Kind        string    `json:"kind"`
-	ID          string    `json:"id"` // admin recipient id; empty for a profile
-	UserID      int       `json:"user_id,omitempty"`
-	ProfileID   string    `json:"profile_id,omitempty"`
-	Name        string    `json:"name"`
-	Email       string    `json:"email"`
-	Enabled     bool      `json:"enabled"`
-	Mode        string    `json:"mode"`
+	Kind      string `json:"kind"`
+	ID        string `json:"id"` // admin recipient id; empty for a profile
+	UserID    int    `json:"user_id,omitempty"`
+	ProfileID string `json:"profile_id,omitempty"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	Enabled   bool   `json:"enabled"`
+	Mode      string `json:"mode"`
+	// Legs are a profile's sends (instant, daily, weekly) in any
+	// combination; an added address's come from its mode.
+	Legs        []string  `json:"legs"`
 	Content     string    `json:"content"`
 	Types       []string  `json:"types"`
 	LibraryIDs  []int     `json:"library_ids"`
 	MaxAgeHours int       `json:"max_age_hours"`
 	ManageToken string    `json:"-"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+// legs returns the recipient's sends.
+func (r EmailAlertRecipient) legs() []string {
+	if len(r.Legs) > 0 {
+		return r.Legs
+	}
+	return emailalerts.Legs(r.Mode)
+}
+
+// profileLegs lists a profile's sends.
+func profileLegs(instant, daily, weekly bool) []string {
+	var legs []string
+	if instant {
+		legs = append(legs, emailalerts.LegInstant)
+	}
+	if daily {
+		legs = append(legs, emailalerts.LegDaily)
+	}
+	if weekly {
+		legs = append(legs, emailalerts.LegWeekly)
+	}
+	return legs
 }
 
 // Key identifies the recipient in the send state and log.
@@ -200,10 +227,11 @@ func (r *EmailAlertsRepository) Recipients(ctx context.Context) ([]EmailAlertRec
 
 	rows, err = r.pool.Query(ctx, `
 		SELECT p.user_id, p.profile_id, p.custom_email, p.mode, p.content, p.types,
-		       p.library_ids, p.max_age_hours, p.unsubscribe_token, p.updated_at
+		       p.library_ids, p.max_age_hours, p.unsubscribe_token, p.updated_at,
+		       p.send_instant, p.send_daily, p.send_weekly
 		FROM notification_email_prefs p
 		JOIN users u ON u.id = p.user_id AND u.enabled
-		WHERE p.mode <> 'off' AND p.custom_email <> ''
+		WHERE (p.send_instant OR p.send_daily OR p.send_weekly) AND p.custom_email <> ''
 		ORDER BY p.user_id, p.profile_id`)
 	if err != nil {
 		return nil, fmt.Errorf("list profile email recipients: %w", err)
@@ -212,14 +240,14 @@ func (r *EmailAlertsRepository) Recipients(ctx context.Context) ([]EmailAlertRec
 	for rows.Next() {
 		rec := EmailAlertRecipient{Kind: EmailRecipientProfile, Enabled: true}
 		var mode string
+		var instant, daily, weekly bool
 		if err := rows.Scan(&rec.UserID, &rec.ProfileID, &rec.Email, &mode, &rec.Content, &rec.Types,
-			&rec.LibraryIDs, &rec.MaxAgeHours, &rec.ManageToken, &rec.CreatedAt); err != nil {
+			&rec.LibraryIDs, &rec.MaxAgeHours, &rec.ManageToken, &rec.CreatedAt,
+			&instant, &daily, &weekly); err != nil {
 			return nil, fmt.Errorf("scan profile email recipient: %w", err)
 		}
 		rec.Mode = profileAlertMode(mode)
-		if rec.Mode == "" {
-			continue
-		}
+		rec.Legs = profileLegs(instant, daily, weekly)
 		out = append(out, rec)
 	}
 	if err := rows.Err(); err != nil {
@@ -274,12 +302,13 @@ func (r *EmailAlertsRepository) RecipientByToken(ctx context.Context, token stri
 	}
 	rec = EmailAlertRecipient{Kind: EmailRecipientProfile, Enabled: true}
 	var mode string
+	var instant, daily, weekly bool
 	err = r.pool.QueryRow(ctx, `
 		SELECT user_id, profile_id, custom_email, mode, content, types, library_ids,
-		       max_age_hours, unsubscribe_token, updated_at
+		       max_age_hours, unsubscribe_token, updated_at, send_instant, send_daily, send_weekly
 		FROM notification_email_prefs WHERE unsubscribe_token = $1`, token,
 	).Scan(&rec.UserID, &rec.ProfileID, &rec.Email, &mode, &rec.Content, &rec.Types,
-		&rec.LibraryIDs, &rec.MaxAgeHours, &rec.ManageToken, &rec.CreatedAt)
+		&rec.LibraryIDs, &rec.MaxAgeHours, &rec.ManageToken, &rec.CreatedAt, &instant, &daily, &weekly)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return rec, ErrEmailRecipientNotFound
 	}
@@ -287,7 +316,8 @@ func (r *EmailAlertsRepository) RecipientByToken(ctx context.Context, token stri
 		return rec, err
 	}
 	rec.Mode = profileAlertMode(mode)
-	rec.Enabled = rec.Mode != ""
+	rec.Legs = profileLegs(instant, daily, weekly)
+	rec.Enabled = len(rec.Legs) > 0
 	return rec, nil
 }
 
@@ -348,6 +378,10 @@ func (r *EmailAlertsRepository) DeleteAdminRecipient(ctx context.Context, id str
 // UpdateProfileRecipient changes a profile recipient's choices. mode is a
 // recipient mode, or "" to switch the profile's email off.
 func (r *EmailAlertsRepository) UpdateProfileRecipient(ctx context.Context, userID int, profileID, mode, content string, types []string, libraryIDs []int, maxAgeHours int) error {
+	var legs []string
+	if mode != "" {
+		legs = emailalerts.Legs(mode)
+	}
 	if types == nil {
 		types = []string{}
 	}
@@ -356,9 +390,12 @@ func (r *EmailAlertsRepository) UpdateProfileRecipient(ctx context.Context, user
 	}
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE notification_email_prefs SET
-			mode = $3, content = $4, types = $5, library_ids = $6, max_age_hours = $7, updated_at = now()
+			mode = $3, content = $4, types = $5, library_ids = $6, max_age_hours = $7,
+			send_instant = $8, send_daily = $9, send_weekly = $10, updated_at = now()
 		WHERE user_id = $1 AND profile_id = $2`,
-		userID, profileID, ProfileEmailMode(mode), content, types, libraryIDs, maxAgeHours)
+		userID, profileID, ProfileEmailMode(mode), content, types, libraryIDs, maxAgeHours,
+		slices.Contains(legs, emailalerts.LegInstant), slices.Contains(legs, emailalerts.LegDaily),
+		slices.Contains(legs, emailalerts.LegWeekly))
 	if err != nil {
 		return fmt.Errorf("update profile email recipient: %w", err)
 	}

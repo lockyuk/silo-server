@@ -150,7 +150,7 @@ func (r *DeliveryRepository) BulkInsert(ctx context.Context, tx pgx.Tx, deliveri
 				delivery.Type, delivery.ReasonFlags, status, time.Now().UTC(),
 			)
 		}
-		sb.WriteString(" ON CONFLICT DO NOTHING RETURNING id, user_id, profile_id, created_at")
+		sb.WriteString(" ON CONFLICT DO NOTHING RETURNING id, user_id, profile_id, library_id, created_at")
 
 		rows, err := tx.Query(ctx, sb.String(), args...)
 		if err != nil {
@@ -158,7 +158,7 @@ func (r *DeliveryRepository) BulkInsert(ctx context.Context, tx pgx.Tx, deliveri
 		}
 		for rows.Next() {
 			var row InsertedDelivery
-			if err := rows.Scan(&row.ID, &row.UserID, &row.ProfileID, &row.CreatedAt); err != nil {
+			if err := rows.Scan(&row.ID, &row.UserID, &row.ProfileID, &row.LibraryID, &row.CreatedAt); err != nil {
 				rows.Close()
 				return nil, fmt.Errorf("scan inserted delivery: %w", err)
 			}

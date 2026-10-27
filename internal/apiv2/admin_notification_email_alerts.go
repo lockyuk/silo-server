@@ -96,7 +96,7 @@ type EmailAlertRecipient struct {
 	Name        string    `json:"name"`
 	Email       string    `json:"email"`
 	Enabled     bool      `json:"enabled"`
-	Mode        string    `json:"mode" enum:"instant,instant_daily,daily,weekly"`
+	Mode        string    `json:"mode" enum:"instant,instant_daily,instant_weekly,daily,weekly"`
 	Content     string    `json:"content" enum:"followed,all"`
 	Types       []string  `json:"types"`
 	LibraryIDs  []int     `json:"library_ids"`
@@ -217,7 +217,7 @@ type AdminEmailAlertRecipientBody struct {
 	Name        string   `json:"name,omitempty"`
 	Email       string   `json:"email,omitempty"`
 	Enabled     bool     `json:"enabled"`
-	Mode        string   `json:"mode" enum:"instant,instant_daily,daily,weekly"`
+	Mode        string   `json:"mode" enum:"instant,instant_daily,instant_weekly,daily,weekly"`
 	Content     string   `json:"content,omitempty" enum:"followed,all" doc:"Profile recipients only: shows the profile follows, or everything new."`
 	Types       []string `json:"types,omitempty"`
 	LibraryIDs  []int    `json:"library_ids,omitempty"`

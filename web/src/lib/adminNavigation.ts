@@ -419,6 +419,7 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
           settingsPage("providers"),
           settingsPage("email"),
           settingsPage("notifications"),
+          settingsPage("email-alerts"),
           settingsPage("ai"),
           PAGES.recommendations,
           settingsPage("compatibility"),

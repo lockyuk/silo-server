@@ -171,6 +171,7 @@ func emailAlertManageForm(token string, r notifications.EmailAlertRecipient, s e
 	b.WriteString(`<fieldset><legend>How often</legend>`)
 	b.WriteString(`<label class="row"><input type="radio" name="mode" value="instant"` + checked(r.Mode == emailalerts.ModeInstant || r.Mode == "") + `> As soon as something is added</label>`)
 	b.WriteString(fmt.Sprintf(`<label class="row"><input type="radio" name="mode" value="instant_daily"%s> As soon as something is added, plus a daily digest at %02d:00</label>`, checked(r.Mode == emailalerts.ModeInstantDaily), s.Schedule.DailyHour))
+	b.WriteString(fmt.Sprintf(`<label class="row"><input type="radio" name="mode" value="instant_weekly"%s> As soon as something is added, plus a weekly digest on %s at %02d:00</label>`, checked(r.Mode == emailalerts.ModeInstantWeekly), days[s.Schedule.WeeklyDay], s.Schedule.WeeklyHour))
 	b.WriteString(fmt.Sprintf(`<label class="row"><input type="radio" name="mode" value="daily"%s> Daily digest at %02d:00</label>`, checked(r.Mode == emailalerts.ModeDaily), s.Schedule.DailyHour))
 	b.WriteString(fmt.Sprintf(`<label class="row"><input type="radio" name="mode" value="weekly"%s> Weekly digest on %s at %02d:00</label>`, checked(r.Mode == emailalerts.ModeWeekly), days[s.Schedule.WeeklyDay], s.Schedule.WeeklyHour))
 	b.WriteString(`</fieldset><fieldset><legend>Count as new if added within</legend><select name="max_age">`)

@@ -96,7 +96,7 @@ func (r *EmailPrefsRepository) Get(ctx context.Context, profileID string) (Email
 // The unsubscribe token is not minted here: the send path backfills it under
 // the claim lock right before the first email that embeds it.
 func (r *EmailPrefsRepository) SetMode(ctx context.Context, userID int, profileID, mode string) error {
-	if !ValidChannelMode(mode) {
+	if !ValidEmailMode(mode) {
 		return fmt.Errorf("invalid email mode %q", mode)
 	}
 	_, err := r.pool.Exec(ctx, `

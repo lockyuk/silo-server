@@ -7621,6 +7621,7 @@
             "enum": [
               "instant",
               "instant_daily",
+              "instant_weekly",
               "daily",
               "weekly"
             ],
@@ -30483,6 +30484,7 @@
             "enum": [
               "instant",
               "instant_daily",
+              "instant_weekly",
               "daily",
               "weekly"
             ],
@@ -30583,6 +30585,7 @@
             "enum": [
               "instant",
               "instant_daily",
+              "instant_weekly",
               "daily",
               "weekly"
             ],
@@ -37359,7 +37362,8 @@
               "per_episode",
               "daily_digest",
               "per_episode_and_digest",
-              "weekly_digest"
+              "weekly_digest",
+              "per_episode_and_weekly_digest"
             ],
             "type": "string"
           },
@@ -37416,7 +37420,8 @@
               "per_episode",
               "daily_digest",
               "per_episode_and_digest",
-              "weekly_digest"
+              "weekly_digest",
+              "per_episode_and_weekly_digest"
             ],
             "type": "string"
           },

@@ -15,8 +15,10 @@ import (
 const (
 	ModeInstant      = "instant"
 	ModeInstantDaily = "instant_daily"
-	ModeDaily        = "daily"
-	ModeWeekly       = "weekly"
+	// ModeInstantWeekly sends instant alerts and a weekly digest.
+	ModeInstantWeekly = "instant_weekly"
+	ModeDaily         = "daily"
+	ModeWeekly        = "weekly"
 )
 
 // Legs are the separate sends a mode makes, each with its own state.
@@ -29,7 +31,7 @@ const (
 // ValidMode reports whether mode is a recipient mode.
 func ValidMode(mode string) bool {
 	switch mode {
-	case ModeInstant, ModeInstantDaily, ModeDaily, ModeWeekly:
+	case ModeInstant, ModeInstantDaily, ModeInstantWeekly, ModeDaily, ModeWeekly:
 		return true
 	}
 	return false
@@ -40,6 +42,8 @@ func Legs(mode string) []string {
 	switch mode {
 	case ModeInstantDaily:
 		return []string{LegInstant, LegDaily}
+	case ModeInstantWeekly:
+		return []string{LegInstant, LegWeekly}
 	case ModeDaily:
 		return []string{LegDaily}
 	case ModeWeekly:
@@ -349,7 +353,7 @@ func (s Settings) NextDue(mode string, now time.Time) time.Time {
 	switch mode {
 	case ModeDaily, ModeInstantDaily:
 		return nextBoundary(now, s.Location(), -1, s.Schedule.DailyHour)
-	case ModeWeekly:
+	case ModeWeekly, ModeInstantWeekly:
 		return nextBoundary(now, s.Location(), s.Schedule.WeeklyDay, s.Schedule.WeeklyHour)
 	}
 	return time.Time{}
@@ -394,6 +398,8 @@ func ModeLabel(mode string) string {
 	switch mode {
 	case ModeInstantDaily:
 		return "Instant + daily digest"
+	case ModeInstantWeekly:
+		return "Instant + weekly digest"
 	case ModeDaily:
 		return "Daily digest"
 	case ModeWeekly:

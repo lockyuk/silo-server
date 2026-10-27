@@ -52,7 +52,7 @@ type NotificationChannelModeInput struct {
 }
 type NotificationEmailPreferencesInput struct {
 	Body struct {
-		Mode        string    `json:"mode" enum:"off,per_episode,daily_digest,per_episode_and_digest,weekly_digest"`
+		Mode        string    `json:"mode" enum:"off,per_episode,daily_digest,per_episode_and_digest,weekly_digest,per_episode_and_weekly_digest"`
 		Content     *string   `json:"content,omitempty" enum:"followed,all" doc:"What to email: shows the profile follows, or everything new it can open."`
 		Types       *[]string `json:"types,omitempty" doc:"Item types to include (movie, episode); empty includes both."`
 		LibraryIDs  *[]int    `json:"library_ids,omitempty" doc:"Libraries to include; empty includes every library the profile can open."`
@@ -60,7 +60,7 @@ type NotificationEmailPreferencesInput struct {
 	}
 }
 type NotificationEmailPreferences struct {
-	Mode           string   `json:"mode" enum:"off,per_episode,daily_digest,per_episode_and_digest,weekly_digest"`
+	Mode           string   `json:"mode" enum:"off,per_episode,daily_digest,per_episode_and_digest,weekly_digest,per_episode_and_weekly_digest"`
 	CustomEmail    string   `json:"custom_email"`
 	PendingEmail   string   `json:"pending_email"`
 	CanEditAddress bool     `json:"can_edit_address"`

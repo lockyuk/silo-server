@@ -30,6 +30,8 @@ import type {
   NotificationWebhookInput,
   NotificationWebhookTestResult,
   WebPushSubscriptionView,
+  NotificationEmailMode,
+  NotificationEmailPreferencesUpdate,
 } from "@/api/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { SigningSecretDialog } from "@/components/SigningSecretDialog";
@@ -375,6 +377,44 @@ function EmailDestinationRow({ prefs }: { prefs: NotificationEmailPreferences })
   );
 }
 
+type EmailSummary = "none" | "daily" | "weekly";
+
+// The profile's email mode as two choices: instant emails on or off, and a
+// summary (none, daily or weekly). Both off is "email off".
+function emailModeParts(mode: NotificationEmailMode): { instant: boolean; summary: EmailSummary } {
+  switch (mode) {
+    case "per_episode":
+      return { instant: true, summary: "none" };
+    case "per_episode_and_digest":
+      return { instant: true, summary: "daily" };
+    case "per_episode_and_weekly_digest":
+      return { instant: true, summary: "weekly" };
+    case "weekly_digest":
+      return { instant: false, summary: "weekly" };
+    default:
+      return { instant: false, summary: "daily" };
+  }
+}
+
+function emailModeOf(instant: boolean, summary: EmailSummary): NotificationEmailMode {
+  if (instant) {
+    if (summary === "daily") return "per_episode_and_digest";
+    if (summary === "weekly") return "per_episode_and_weekly_digest";
+    return "per_episode";
+  }
+  return summary === "weekly" ? "weekly_digest" : "daily_digest";
+}
+
+const EMAIL_MAX_AGE_OPTIONS: [number, string][] = [
+  [0, "Server default"],
+  [24, "24 hours"],
+  [48, "48 hours"],
+  [72, "3 days"],
+  [168, "1 week"],
+  [336, "2 weeks"],
+  [720, "30 days"],
+];
+
 function EmailSection() {
   const capability = useNotificationCapability();
   const emailCap = capability.data?.email;
@@ -386,11 +426,11 @@ function EmailSection() {
     return null;
   }
 
-  const mode = prefs?.mode ?? "off";
+  const mode = (prefs?.mode ?? "off") as NotificationEmailMode;
   const enabled = mode !== "off";
-  const allowPerEpisode = emailCap?.modes.includes("per_episode") ?? false;
-  const allowWeekly = emailCap?.modes.includes("weekly_digest") ?? false;
+  const allowInstant = emailCap?.modes.includes("per_episode") ?? false;
   const digestHour = String(emailCap?.digest_hour ?? 8).padStart(2, "0");
+  const weekday = WEEKDAYS[emailCap?.digest_weekday ?? 0] ?? "Sunday";
 
   if (isLoading || !prefs) {
     return (
@@ -401,48 +441,147 @@ function EmailSection() {
   }
 
   const hasAddress = prefs.custom_email !== "";
+  const { instant, summary } = emailModeParts(mode);
+  const types = prefs.types?.length ? prefs.types : ["episode", "movie"];
+  const save = (update: Partial<NotificationEmailPreferencesUpdate>) =>
+    updatePrefs.mutate({ mode, ...update });
+  const setParts = (nextInstant: boolean, nextSummary: EmailSummary) =>
+    // With instant off a summary is the only email left, so it can't be none.
+    save({
+      mode: emailModeOf(
+        nextInstant,
+        !nextInstant && nextSummary === "none" ? "daily" : nextSummary,
+      ),
+    });
+  const toggleType = (type: string, on: boolean) => {
+    const next = on ? [...new Set([...types, type])] : types.filter((t) => t !== type);
+    if (next.length === 0) return;
+    save({ types: next.length === 2 ? [] : next });
+  };
 
   return (
     <SettingsGroup
       title="Email Notifications"
-      description="Per profile: each profile verifies its own address and picks its own frequency."
+      description="Per profile: each profile verifies its own address and picks what it gets."
     >
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-sm font-medium">Email this profile's notifications</div>
+          <div className="text-sm font-medium">Email this profile</div>
           <div className="text-muted-foreground text-xs">
-            Notifications you'd see in the inbox, delivered by email
+            New episodes and movies, with posters and synopses
           </div>
         </div>
         <Switch
           checked={enabled}
           disabled={updatePrefs.isPending || (!enabled && !hasAddress)}
           onCheckedChange={(checked) =>
-            updatePrefs.mutate({ mode: checked ? "daily_digest" : "off" })
+            save({ mode: checked ? (allowInstant ? "per_episode" : "daily_digest") : "off" })
           }
         />
       </div>
       <EmailDestinationRow prefs={prefs} />
       {enabled && (
-        <ChannelFrequencyRow
-          mode={mode}
-          allowPerEpisode={allowPerEpisode}
-          allowWeekly={allowWeekly}
-          digestHour={digestHour}
-          digestWeekday={emailCap?.digest_weekday ?? 0}
-          isPending={updatePrefs.isPending}
-          perEpisodeHint="An email as soon as each notification arrives"
-          onChange={(value) => updatePrefs.mutate({ mode: value })}
-        />
-      )}
-      {enabled &&
-        (mode === "per_episode" || mode === "per_episode_and_digest") &&
-        !allowPerEpisode && (
-          <div className="text-xs text-amber-500">
-            Per-episode email is disabled by the administrator; you'll receive the daily digest
-            instead.
+        <>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm">What to send</div>
+              <div className="text-muted-foreground text-xs">
+                {prefs.content === "all"
+                  ? "Everything new in the libraries you can watch"
+                  : "Shows you follow, plus anything your Everything new switches ask for"}
+              </div>
+            </div>
+            <select
+              aria-label="What to send"
+              className="border-input bg-background h-9 rounded-md border px-2 text-sm"
+              value={prefs.content ?? "followed"}
+              disabled={updatePrefs.isPending}
+              onChange={(e) => save({ content: e.target.value as "followed" | "all" })}
+            >
+              <option value="followed">Shows I follow</option>
+              <option value="all">Everything new</option>
+            </select>
           </div>
-        )}
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm">Instant emails</div>
+              <div className="text-muted-foreground text-xs">
+                {allowInstant
+                  ? "An email shortly after something new arrives"
+                  : "Turned off by the administrator"}
+              </div>
+            </div>
+            <Switch
+              checked={instant && allowInstant}
+              disabled={updatePrefs.isPending || !allowInstant}
+              onCheckedChange={(checked) => setParts(checked, summary)}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm">Summary</div>
+              <div className="text-muted-foreground text-xs">
+                {summary === "weekly"
+                  ? `One email a week, ${weekday} around ${digestHour}:00`
+                  : summary === "daily"
+                    ? `One email a day, around ${digestHour}:00`
+                    : "No summary"}
+              </div>
+            </div>
+            <select
+              aria-label="Summary"
+              className="border-input bg-background h-9 rounded-md border px-2 text-sm"
+              value={summary}
+              disabled={updatePrefs.isPending}
+              onChange={(e) => setParts(instant, e.target.value as EmailSummary)}
+            >
+              {instant && <option value="none">None</option>}
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm">Include</div>
+            <div className="flex gap-4 text-sm">
+              {(
+                [
+                  ["episode", "Episodes"],
+                  ["movie", "Movies"],
+                ] as const
+              ).map(([type, label]) => (
+                <label key={type} className="flex items-center gap-2">
+                  <Switch
+                    checked={types.includes(type)}
+                    disabled={updatePrefs.isPending}
+                    onCheckedChange={(on) => toggleType(type, on)}
+                    aria-label={label}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm">Count as new if added within</div>
+              <div className="text-muted-foreground text-xs">Older items are never emailed</div>
+            </div>
+            <select
+              aria-label="Count as new if added within"
+              className="border-input bg-background h-9 rounded-md border px-2 text-sm"
+              value={prefs.max_age_hours ?? 0}
+              disabled={updatePrefs.isPending}
+              onChange={(e) => save({ max_age_hours: Number(e.target.value) })}
+            >
+              {EMAIL_MAX_AGE_OPTIONS.map(([hours, label]) => (
+                <option key={hours} value={hours}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </>
+      )}
     </SettingsGroup>
   );
 }

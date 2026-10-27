@@ -3069,8 +3069,10 @@ export interface NotificationPreferences {
   notify_new_episodes: boolean;
   /** Every new movie the profile can open. */
   notify_new_movies: boolean;
-  /** Instant phone and browser push. Off keeps notifications in the inbox only. */
+  /** Instant phone push. Off keeps notifications in the inbox only. */
   push_enabled: boolean;
+  /** Libraries push covers; empty covers every library. */
+  push_library_ids: number[];
 }
 
 export interface NotificationReadEventPayload {
@@ -3206,6 +3208,10 @@ export interface NotificationEmailPreferences {
   pending_email: string;
   /** False for child profiles, which cannot set addresses. */
   can_edit_address: boolean;
+  /** The sends, in any combination. */
+  instant: boolean;
+  daily: boolean;
+  weekly: boolean;
   /** What to email: shows the profile follows, or everything new it can open. */
   content: "followed" | "all";
   /** Item types to include (movie, episode); empty includes both. */
@@ -3218,7 +3224,11 @@ export interface NotificationEmailPreferences {
 
 /** PUT /notifications/email-preferences body: the mode, plus optional choices. */
 export interface NotificationEmailPreferencesUpdate {
-  mode: NotificationEmailMode;
+  /** One mode for older servers; instant, daily and weekly win when sent. */
+  mode?: NotificationEmailMode;
+  instant?: boolean;
+  daily?: boolean;
+  weekly?: boolean;
   content?: "followed" | "all";
   types?: string[];
   library_ids?: number[];

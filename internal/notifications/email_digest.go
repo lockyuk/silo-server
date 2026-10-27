@@ -175,6 +175,8 @@ type EmailPreferencesState struct {
 	CustomEmail  string
 	PendingEmail string
 	IsChild      bool
+	// Instant, Daily and Weekly are the sends, in any combination.
+	Instant, Daily, Weekly bool
 	// The recipient choices: what to send (followed or all), which types
 	// and libraries (empty = every), and how recent counts as new (0 = the
 	// server default).
@@ -198,11 +200,34 @@ func (s *System) EmailPreferences(ctx context.Context, userID int, profileID str
 	state.CustomEmail = prefs.CustomEmail
 	state.PendingEmail = prefs.PendingEmail
 	state.IsChild = s.profileIsChild(ctx, userID, profileID)
+	state.Instant, state.Daily, state.Weekly = prefs.SendInstant, prefs.SendDaily, prefs.SendWeekly
 	state.Content = prefs.Content
 	state.Types = prefs.Types
 	state.LibraryIDs = prefs.LibraryIDs
 	state.MaxAgeHours = prefs.MaxAgeHours
 	return state, nil
+}
+
+// SetEmailSends stores which emails the profile gets, in any combination of
+// instant, daily and weekly. Turning any on needs the profile's verified
+// address, and instant the admin allowance.
+func (s *System) SetEmailSends(ctx context.Context, userID int, profileID string, instant, daily, weekly bool) error {
+	if s == nil || s.EmailPrefs == nil {
+		return ErrEmailModeInvalid
+	}
+	if instant && !s.Settings.EmailAllowPerEpisode(ctx) {
+		return ErrEmailModeNotAllowed
+	}
+	if instant || daily || weekly {
+		prefs, err := s.EmailPrefs.Get(ctx, profileID)
+		if err != nil {
+			return err
+		}
+		if prefs.CustomEmail == "" {
+			return ErrEmailNoAddress
+		}
+	}
+	return s.EmailPrefs.SetSends(ctx, userID, profileID, instant, daily, weekly)
 }
 
 // EmailChoices are a profile's optional email recipient choices; nil

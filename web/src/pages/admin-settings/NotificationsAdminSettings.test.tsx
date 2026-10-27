@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -79,13 +79,6 @@ function renderPage() {
   );
 }
 
-/** Opens one channel card by the description in its header button. */
-async function openChannel(pattern: RegExp) {
-  await userEvent.click(screen.getByRole("button", { name: pattern }));
-}
-
-const DISCORD_CHANNEL = /Direct messages from your Discord bot/;
-
 describe("NotificationsAdminSettings", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -123,51 +116,4 @@ describe("NotificationsAdminSettings", () => {
     expect(screen.getByRole("switch", { name: "Work out who wants it" })).not.toBeChecked();
   });
 
-  it("says so when the invite link could not be copied", async () => {
-    // Denied permission, or a browser that only exposes the clipboard on a
-    // secure origin — which a LAN server reached over plain HTTP is not.
-    mocks.copyTextToClipboard.mockRejectedValue(new Error("clipboard blocked"));
-    useSettingsFormMock.mockReturnValue(makeForm({ "discord.client_id": "1234567890" }));
-
-    render(renderPage());
-    await openChannel(DISCORD_CHANNEL);
-    await userEvent.click(screen.getByRole("button", { name: /Copy link/ }));
-
-    await waitFor(() =>
-      expect(mocks.toastError).toHaveBeenCalledWith(
-        "Couldn't copy the invite link — select it and copy it manually",
-      ),
-    );
-    expect(mocks.toastSuccess).not.toHaveBeenCalled();
-  });
-
-  it("saves the Discord application on its own, not through the page save bar", async () => {
-    const form = makeForm({ "discord.client_id": "1234567890" });
-    useSettingsFormMock.mockReturnValue(form);
-
-    render(renderPage());
-    await openChannel(DISCORD_CHANNEL);
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
-
-    expect(updateSettingsMock).toHaveBeenCalledWith({ "discord.client_id": "1234567890" });
-    expect(form.save).not.toHaveBeenCalled();
-  });
-
-  it("clears the Discord application behind a confirmation", async () => {
-    const form = makeForm({ "discord.client_id": "1234567890" });
-    useSettingsFormMock.mockReturnValue(form);
-
-    render(renderPage());
-    await openChannel(DISCORD_CHANNEL);
-    await userEvent.click(screen.getByRole("button", { name: "Clear credentials" }));
-
-    expect(screen.getByText("Clear Discord app credentials?")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /^Clear$/ }));
-
-    expect(updateSettingsMock).toHaveBeenCalledWith({
-      "discord.client_id": "",
-      "discord.client_secret": "",
-      "discord.bot_token": "",
-    });
-  });
 });

@@ -37365,6 +37365,14 @@
           "custom_email": {
             "type": "string"
           },
+          "daily": {
+            "description": "A daily digest.",
+            "type": "boolean"
+          },
+          "instant": {
+            "description": "An email shortly after something new arrives.",
+            "type": "boolean"
+          },
           "library_ids": {
             "description": "Libraries to include; empty includes every library the profile can open.",
             "items": {
@@ -37398,6 +37406,10 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "weekly": {
+            "description": "A weekly digest.",
+            "type": "boolean"
           }
         },
         "required": [
@@ -37405,6 +37417,9 @@
           "custom_email",
           "pending_email",
           "can_edit_address",
+          "instant",
+          "daily",
+          "weekly",
           "content",
           "types",
           "library_ids",
@@ -37423,6 +37438,14 @@
             ],
             "type": "string"
           },
+          "daily": {
+            "description": "A daily digest.",
+            "type": "boolean"
+          },
+          "instant": {
+            "description": "An email shortly after something new arrives.",
+            "type": "boolean"
+          },
           "library_ids": {
             "description": "Libraries to include; empty includes every library the profile can open.",
             "items": {
@@ -37437,6 +37460,7 @@
             "type": "integer"
           },
           "mode": {
+            "description": "One mode for older clients; instant, daily and weekly take precedence when any is sent.",
             "enum": [
               "off",
               "per_episode",
@@ -37453,11 +37477,12 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "weekly": {
+            "description": "A weekly digest.",
+            "type": "boolean"
           }
         },
-        "required": [
-          "mode"
-        ],
         "type": "object"
       },
       "NotificationEmailVerificationCapability": {
@@ -37766,8 +37791,16 @@
             "type": "string"
           },
           "push_enabled": {
-            "description": "Instant phone and browser push. Off keeps notifications in the inbox only; email follows its own setting.",
+            "description": "Instant phone push. Off keeps notifications in the inbox only; email follows its own setting.",
             "type": "boolean"
+          },
+          "push_library_ids": {
+            "description": "Libraries push covers; empty covers every library.",
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -37779,7 +37812,8 @@
           "notify_next_up",
           "notify_new_episodes",
           "notify_new_movies",
-          "push_enabled"
+          "push_enabled",
+          "push_library_ids"
         ],
         "type": "object"
       },
@@ -37809,6 +37843,13 @@
           },
           "push_enabled": {
             "type": "boolean"
+          },
+          "push_library_ids": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
           }
         },
         "type": "object"

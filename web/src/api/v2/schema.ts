@@ -27163,6 +27163,10 @@ export interface components {
        */
       content: "followed" | "all";
       custom_email: string;
+      /** @description A daily digest. */
+      daily: boolean;
+      /** @description An email shortly after something new arrives. */
+      instant: boolean;
       /** @description Libraries to include; empty includes every library the profile can open. */
       library_ids: number[];
       /**
@@ -27181,6 +27185,8 @@ export interface components {
       pending_email: string;
       /** @description Item types to include; empty includes both. */
       types: string[];
+      /** @description A weekly digest. */
+      weekly: boolean;
     };
     NotificationEmailPreferencesInputBody: {
       /**
@@ -27188,6 +27194,10 @@ export interface components {
        * @enum {string}
        */
       content?: "followed" | "all";
+      /** @description A daily digest. */
+      daily?: boolean;
+      /** @description An email shortly after something new arrives. */
+      instant?: boolean;
       /** @description Libraries to include; empty includes every library the profile can open. */
       library_ids?: number[];
       /**
@@ -27195,8 +27205,11 @@ export interface components {
        * @description How recently an item must have been added to count as new, in hours; 0 uses the server default.
        */
       max_age_hours?: number;
-      /** @enum {string} */
-      mode:
+      /**
+       * @description One mode for older clients; instant, daily and weekly take precedence when any is sent.
+       * @enum {string}
+       */
+      mode?:
         | "off"
         | "per_episode"
         | "daily_digest"
@@ -27205,6 +27218,8 @@ export interface components {
         | "per_episode_and_weekly_digest";
       /** @description Item types to include (movie, episode); empty includes both. */
       types?: string[];
+      /** @description A weekly digest. */
+      weekly?: boolean;
     };
     NotificationEmailVerificationCapability: {
       /** @description Whether the current principal may use the capability */
@@ -27343,8 +27358,10 @@ export interface components {
        * @example 1
        */
       profile_id: string;
-      /** @description Instant phone and browser push. Off keeps notifications in the inbox only; email follows its own setting. */
+      /** @description Instant phone push. Off keeps notifications in the inbox only; email follows its own setting. */
       push_enabled: boolean;
+      /** @description Libraries push covers; empty covers every library. */
+      push_library_ids: number[];
     };
     NotificationPreferencesPatch: {
       enabled?: boolean;
@@ -27355,6 +27372,7 @@ export interface components {
       notify_next_up?: boolean;
       notify_watchlist?: boolean;
       push_enabled?: boolean;
+      push_library_ids?: number[];
     };
     NotificationPushCapability: {
       available: boolean;

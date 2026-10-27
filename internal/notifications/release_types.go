@@ -155,8 +155,10 @@ type Preferences struct {
 	// PushEnabled queues phone and browser push for the profile's
 	// notifications; off leaves them in the inbox only. Not part of the
 	// frozen v1 shape.
-	PushEnabled bool      `json:"-"`
-	UpdatedAt   time.Time `json:"-"`
+	PushEnabled bool `json:"-"`
+	// PushLibraryIDs limits push to these libraries; empty means all.
+	PushLibraryIDs []int     `json:"-"`
+	UpdatedAt      time.Time `json:"-"`
 }
 
 // DefaultPreferences returns the defaults for the profile on userID's
@@ -243,6 +245,7 @@ type InsertedDelivery struct {
 	ID        string
 	UserID    int
 	ProfileID string
+	LibraryID *int
 	CreatedAt time.Time
 }
 

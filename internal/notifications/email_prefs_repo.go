@@ -45,7 +45,11 @@ type EmailPrefs struct {
 	LastDigestAt        *time.Time
 	LastAttemptAt       *time.Time
 	ConsecutiveFailures int
-	// Email alert recipient choices.
+	// Email alert recipient choices: which sends (any combination), what
+	// to send, types, libraries and the "new" window.
+	SendInstant bool
+	SendDaily   bool
+	SendWeekly  bool
 	Content     string
 	Types       []string
 	LibraryIDs  []int
@@ -69,13 +73,14 @@ func (r *EmailPrefsRepository) Get(ctx context.Context, profileID string) (Email
 		SELECT user_id, mode, custom_email, pending_email, pending_expires_at,
 		       watermark_created_at, watermark_id, last_digest_at,
 		       last_attempt_at, consecutive_failures,
-		       content, types, library_ids, max_age_hours
+		       content, types, library_ids, max_age_hours, send_instant, send_daily, send_weekly
 		FROM notification_email_prefs WHERE profile_id = $1`,
 		profileID,
 	).Scan(&prefs.UserID, &prefs.Mode, &prefs.CustomEmail, &prefs.PendingEmail,
 		&prefs.PendingExpiresAt, &prefs.WatermarkCreatedAt, &prefs.WatermarkID,
 		&prefs.LastDigestAt, &prefs.LastAttemptAt, &prefs.ConsecutiveFailures,
-		&prefs.Content, &prefs.Types, &prefs.LibraryIDs, &prefs.MaxAgeHours)
+		&prefs.Content, &prefs.Types, &prefs.LibraryIDs, &prefs.MaxAgeHours,
+		&prefs.SendInstant, &prefs.SendDaily, &prefs.SendWeekly)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return prefs, nil
 	}
@@ -99,11 +104,15 @@ func (r *EmailPrefsRepository) SetMode(ctx context.Context, userID int, profileI
 	if !ValidEmailMode(mode) {
 		return fmt.Errorf("invalid email mode %q", mode)
 	}
+	instant, daily, weekly := emailSendsOfMode(mode)
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO notification_email_prefs (profile_id, user_id, mode)
-		VALUES ($1, $2, $3)
+		INSERT INTO notification_email_prefs (profile_id, user_id, mode, send_instant, send_daily, send_weekly)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (profile_id) DO UPDATE SET
 			mode = EXCLUDED.mode,
+			send_instant = EXCLUDED.send_instant,
+			send_daily = EXCLUDED.send_daily,
+			send_weekly = EXCLUDED.send_weekly,
 			user_id = EXCLUDED.user_id,
 			watermark_created_at = CASE
 				WHEN notification_email_prefs.mode = 'off' THEN now()
@@ -116,9 +125,29 @@ func (r *EmailPrefsRepository) SetMode(ctx context.Context, userID int, profileI
 			last_attempt_at = NULL,
 			consecutive_failures = 0,
 			updated_at = now()`,
-		profileID, userID, mode)
+		profileID, userID, mode, instant, daily, weekly)
 	if err != nil {
 		return fmt.Errorf("set email mode: %w", err)
+	}
+	return nil
+}
+
+// SetSends stores which emails the profile gets, in any combination, and
+// the closest single mode for older clients.
+func (r *EmailPrefsRepository) SetSends(ctx context.Context, userID int, profileID string, instant, daily, weekly bool) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO notification_email_prefs (profile_id, user_id, mode, send_instant, send_daily, send_weekly)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (profile_id) DO UPDATE SET
+			mode = EXCLUDED.mode,
+			send_instant = EXCLUDED.send_instant,
+			send_daily = EXCLUDED.send_daily,
+			send_weekly = EXCLUDED.send_weekly,
+			user_id = EXCLUDED.user_id,
+			updated_at = now()`,
+		profileID, userID, emailModeOfSends(instant, daily, weekly), instant, daily, weekly)
+	if err != nil {
+		return fmt.Errorf("set email sends: %w", err)
 	}
 	return nil
 }
@@ -389,6 +418,7 @@ func (r *EmailPrefsRepository) ClearCustomAddress(ctx context.Context, profileID
 			pending_token_hash = '',
 			pending_expires_at = NULL,
 			mode = 'off',
+			send_instant = false, send_daily = false, send_weekly = false,
 			updated_at = now()
 		WHERE profile_id = $1`,
 		profileID)
@@ -404,6 +434,7 @@ func (r *EmailPrefsRepository) UnsubscribeByToken(ctx context.Context, token str
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE notification_email_prefs SET
 			mode = 'off',
+			send_instant = false, send_daily = false, send_weekly = false,
 			updated_at = now()
 		WHERE unsubscribe_token = $1 AND unsubscribe_token <> ''`,
 		token)

@@ -163,31 +163,33 @@ type NotificationCapabilitiesOutput struct {
 	Body         NotificationCapabilities
 }
 type NotificationPreferences struct {
-	ProfileID              ID   `json:"profile_id"`
-	Enabled                bool `json:"enabled"`
-	NotifyFavorites        bool `json:"notify_favorites"`
-	NotifyWatchlist        bool `json:"notify_watchlist"`
-	NotifyContinueWatching bool `json:"notify_continue_watching"`
-	NotifyNextUp           bool `json:"notify_next_up"`
-	NotifyNewEpisodes      bool `json:"notify_new_episodes" doc:"Every new episode the profile can open, followed or not."`
-	NotifyNewMovies        bool `json:"notify_new_movies" doc:"Every new movie the profile can open."`
-	PushEnabled            bool `json:"push_enabled" doc:"Instant phone and browser push. Off keeps notifications in the inbox only; email follows its own setting."`
+	ProfileID              ID    `json:"profile_id"`
+	Enabled                bool  `json:"enabled"`
+	NotifyFavorites        bool  `json:"notify_favorites"`
+	NotifyWatchlist        bool  `json:"notify_watchlist"`
+	NotifyContinueWatching bool  `json:"notify_continue_watching"`
+	NotifyNextUp           bool  `json:"notify_next_up"`
+	NotifyNewEpisodes      bool  `json:"notify_new_episodes" doc:"Every new episode the profile can open, followed or not."`
+	NotifyNewMovies        bool  `json:"notify_new_movies" doc:"Every new movie the profile can open."`
+	PushEnabled            bool  `json:"push_enabled" doc:"Instant phone push. Off keeps notifications in the inbox only; email follows its own setting."`
+	PushLibraryIDs         []int `json:"push_library_ids" doc:"Libraries push covers; empty covers every library."`
 }
 
 func notificationPreferencesOf(p notifications.Preferences) NotificationPreferences {
-	return NotificationPreferences{ProfileID: ID(p.ProfileID), Enabled: p.Enabled, NotifyFavorites: p.NotifyFavorites, NotifyWatchlist: p.NotifyWatchlist, NotifyContinueWatching: p.NotifyContinueWatching, NotifyNextUp: p.NotifyNextUp, NotifyNewEpisodes: p.NotifyNewEpisodes, NotifyNewMovies: p.NotifyNewMovies, PushEnabled: p.PushEnabled}
+	return NotificationPreferences{ProfileID: ID(p.ProfileID), Enabled: p.Enabled, NotifyFavorites: p.NotifyFavorites, NotifyWatchlist: p.NotifyWatchlist, NotifyContinueWatching: p.NotifyContinueWatching, NotifyNextUp: p.NotifyNextUp, NotifyNewEpisodes: p.NotifyNewEpisodes, NotifyNewMovies: p.NotifyNewMovies, PushEnabled: p.PushEnabled, PushLibraryIDs: NonNil(p.PushLibraryIDs)}
 }
 
 type NotificationPreferencesOutput struct{ Body NotificationPreferences }
 type NotificationPreferencesPatch struct {
-	Enabled                *bool `json:"enabled,omitempty"`
-	NotifyFavorites        *bool `json:"notify_favorites,omitempty"`
-	NotifyWatchlist        *bool `json:"notify_watchlist,omitempty"`
-	NotifyContinueWatching *bool `json:"notify_continue_watching,omitempty"`
-	NotifyNextUp           *bool `json:"notify_next_up,omitempty"`
-	NotifyNewEpisodes      *bool `json:"notify_new_episodes,omitempty"`
-	NotifyNewMovies        *bool `json:"notify_new_movies,omitempty"`
-	PushEnabled            *bool `json:"push_enabled,omitempty"`
+	Enabled                *bool  `json:"enabled,omitempty"`
+	NotifyFavorites        *bool  `json:"notify_favorites,omitempty"`
+	NotifyWatchlist        *bool  `json:"notify_watchlist,omitempty"`
+	NotifyContinueWatching *bool  `json:"notify_continue_watching,omitempty"`
+	NotifyNextUp           *bool  `json:"notify_next_up,omitempty"`
+	NotifyNewEpisodes      *bool  `json:"notify_new_episodes,omitempty"`
+	NotifyNewMovies        *bool  `json:"notify_new_movies,omitempty"`
+	PushEnabled            *bool  `json:"push_enabled,omitempty"`
+	PushLibraryIDs         *[]int `json:"push_library_ids,omitempty"`
 }
 type NotificationPreferencesInput struct {
 	RawBody []byte
@@ -428,7 +430,7 @@ func registerNotificationInbox(reg *Registry) {
 			}
 		}
 		b := in.Body
-		prefs, err := svc.PatchNotificationPreferences(ctx, claimsFrom(ctx).UserID, profileFrom(ctx), notifications.PreferencePatch{Enabled: b.Enabled, NotifyFavorites: b.NotifyFavorites, NotifyWatchlist: b.NotifyWatchlist, NotifyContinueWatching: b.NotifyContinueWatching, NotifyNextUp: b.NotifyNextUp, NotifyNewEpisodes: b.NotifyNewEpisodes, NotifyNewMovies: b.NotifyNewMovies, PushEnabled: b.PushEnabled})
+		prefs, err := svc.PatchNotificationPreferences(ctx, claimsFrom(ctx).UserID, profileFrom(ctx), notifications.PreferencePatch{Enabled: b.Enabled, NotifyFavorites: b.NotifyFavorites, NotifyWatchlist: b.NotifyWatchlist, NotifyContinueWatching: b.NotifyContinueWatching, NotifyNextUp: b.NotifyNextUp, NotifyNewEpisodes: b.NotifyNewEpisodes, NotifyNewMovies: b.NotifyNewMovies, PushEnabled: b.PushEnabled, PushLibraryIDs: b.PushLibraryIDs})
 		if err != nil {
 			return nil, serviceProblem(err)
 		}

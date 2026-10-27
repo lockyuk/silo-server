@@ -4,15 +4,12 @@ import {
   requireNotificationAuthority,
   captureNotificationAuthority,
 } from "@/api/v2/notifications";
-import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { Link } from "react-router";
 import {
   AlertTriangle,
-  BellRing,
   KeyRound,
   Loader2,
-  MonitorSmartphone,
   Pencil,
   Plus,
   Send,
@@ -23,14 +20,11 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/page/PageHeader";
 import { INVALID_EMAIL_MESSAGE, isValidEmail } from "@/lib/email";
 import type {
-  NotificationChannelMode,
   NotificationEmailPreferences,
   NotificationPreferences,
   NotificationWebhook,
   NotificationWebhookInput,
   NotificationWebhookTestResult,
-  WebPushSubscriptionView,
-  NotificationEmailMode,
   NotificationEmailPreferencesUpdate,
 } from "@/api/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -48,48 +42,28 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
   useClearEmailNotificationAddress,
-  useDiscordLinkInit,
-  useDiscordNotificationPreferences,
   useEmailNotificationPreferences,
   useNotificationPreferences,
   useRequestEmailNotificationAddress,
-  useUnlinkDiscord,
-  useUpdateDiscordNotificationPreferences,
   useUpdateEmailNotificationPreferences,
   useUpdateNotificationPreferences,
 } from "@/hooks/queries/notifications";
 import {
   useCreateNotificationWebhook,
   useDeleteNotificationWebhook,
-  useDeleteWebPushSubscription,
   useNotificationCapability,
   useNotificationWebhooks,
   useRotateNotificationWebhookSecret,
   useTestNotificationWebhook,
   useUpdateNotificationWebhook,
-  useWebPushSubscriptions,
 } from "@/hooks/queries/notificationWebhooks";
-import { notificationKeys } from "@/hooks/queries/keys";
+import { useAvailableUserLibraries } from "@/hooks/queries/libraries";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { formatRelativeTime } from "@/lib/date";
-import {
-  currentWebPushSubscription,
-  disableWebPush,
-  enableWebPush,
-  webPushSupport,
-} from "@/lib/webPush";
 
 const REASON_FIELDS = [
   { key: "notify_favorites", label: "Favorites" },
@@ -164,20 +138,6 @@ function PreferencesSection() {
           onCheckedChange={(checked) => updatePrefs.mutate({ enabled: checked })}
         />
       </div>
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-sm">Phone and browser push</div>
-          <div className="text-muted-foreground text-xs">
-            Instant alerts on your devices. Off keeps them in your inbox; email follows its own
-            setting.
-          </div>
-        </div>
-        <Switch
-          checked={prefs.push_enabled ?? true}
-          disabled={!prefs.enabled}
-          onCheckedChange={(checked) => updatePrefs.mutate({ push_enabled: checked })}
-        />
-      </div>
       {REASON_FIELDS.map((field) => (
         <div key={field.key} className="flex items-center justify-between gap-3">
           <div className="text-sm">{field.label}</div>
@@ -203,77 +163,6 @@ function PreferencesSection() {
         </div>
       ))}
     </SettingsGroup>
-  );
-}
-
-/**
- * Frequency picker shared by the account-level digest channels (email,
- * Discord). Per-episode stays listed-but-disabled when the admin allowance is
- * off and the account is still set to it, so the coercion is visible.
- */
-function ChannelFrequencyRow({
-  mode,
-  allowPerEpisode,
-  allowWeekly,
-  digestHour,
-  digestWeekday,
-  isPending,
-  perEpisodeHint,
-  onChange,
-}: {
-  mode: NotificationChannelMode;
-  allowPerEpisode: boolean;
-  allowWeekly: boolean;
-  digestHour: string;
-  digestWeekday: number;
-  isPending: boolean;
-  perEpisodeHint: string;
-  onChange: (mode: NotificationChannelMode) => void;
-}) {
-  const digestText =
-    mode === "weekly_digest"
-      ? `One summary a week, ${WEEKDAYS[digestWeekday] ?? "Sunday"} around ${digestHour}:00 server time`
-      : `One summary per day, around ${digestHour}:00 server time`;
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <div>
-        <div className="text-sm">Frequency</div>
-        <div className="text-muted-foreground text-xs">
-          {mode === "per_episode"
-            ? perEpisodeHint
-            : mode === "per_episode_and_digest"
-              ? `${perEpisodeHint}, plus a daily summary around ${digestHour}:00 server time`
-              : digestText}
-        </div>
-      </div>
-      <Select
-        value={mode}
-        disabled={isPending}
-        onValueChange={(value) => onChange(value as NotificationChannelMode)}
-      >
-        <SelectTrigger className="w-[220px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="daily_digest">Daily digest</SelectItem>
-          {(allowPerEpisode || mode === "per_episode") && (
-            <SelectItem value="per_episode" disabled={!allowPerEpisode}>
-              Every episode
-            </SelectItem>
-          )}
-          {(allowPerEpisode || mode === "per_episode_and_digest") && (
-            <SelectItem value="per_episode_and_digest" disabled={!allowPerEpisode}>
-              Every episode + daily digest
-            </SelectItem>
-          )}
-          {(allowWeekly || mode === "weekly_digest") && (
-            <SelectItem value="weekly_digest" disabled={!allowWeekly}>
-              Weekly digest
-            </SelectItem>
-          )}
-        </SelectContent>
-      </Select>
-    </div>
   );
 }
 
@@ -377,43 +266,123 @@ function EmailDestinationRow({ prefs }: { prefs: NotificationEmailPreferences })
   );
 }
 
-type EmailSummary = "none" | "daily" | "weekly";
-
-// The profile's email mode as two choices: instant emails on or off, and a
-// summary (none, daily or weekly). Both off is "email off".
-function emailModeParts(mode: NotificationEmailMode): { instant: boolean; summary: EmailSummary } {
-  switch (mode) {
-    case "per_episode":
-      return { instant: true, summary: "none" };
-    case "per_episode_and_digest":
-      return { instant: true, summary: "daily" };
-    case "per_episode_and_weekly_digest":
-      return { instant: true, summary: "weekly" };
-    case "weekly_digest":
-      return { instant: false, summary: "weekly" };
-    default:
-      return { instant: false, summary: "daily" };
-  }
+function Pill({
+  on,
+  label,
+  disabled,
+  onClick,
+}: {
+  on: boolean;
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      disabled={disabled}
+      onClick={onClick}
+      className={`rounded-full border px-3 py-1 text-sm transition-colors disabled:opacity-50 ${
+        on
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-border text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {label}
+    </button>
+  );
 }
 
-function emailModeOf(instant: boolean, summary: EmailSummary): NotificationEmailMode {
-  if (instant) {
-    if (summary === "daily") return "per_episode_and_digest";
-    if (summary === "weekly") return "per_episode_and_weekly_digest";
-    return "per_episode";
-  }
-  return summary === "weekly" ? "weekly_digest" : "daily_digest";
+/** Movie and TV libraries this profile can open, for the library pills. */
+function useNotificationLibraries() {
+  const { data } = useAvailableUserLibraries({ includeHidden: true });
+  return (data ?? []).filter((l) => l.type === "movies" || l.type === "series");
 }
 
-const EMAIL_MAX_AGE_OPTIONS: [number, string][] = [
-  [0, "Server default"],
-  [24, "24 hours"],
-  [48, "48 hours"],
-  [72, "3 days"],
-  [168, "1 week"],
-  [336, "2 weeks"],
-  [720, "30 days"],
-];
+/**
+ * Library pills: none picked means every library. Picking narrows it;
+ * "All libraries" clears the choice.
+ */
+function LibraryPills({
+  selected,
+  disabled,
+  onChange,
+}: {
+  selected: number[];
+  disabled?: boolean;
+  onChange: (ids: number[]) => void;
+}) {
+  const libraries = useNotificationLibraries();
+  if (libraries.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      <div>
+        <div className="text-sm">Libraries</div>
+        <div className="text-muted-foreground text-xs">Only new items from these libraries</div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Pill
+          on={selected.length === 0}
+          label="All libraries"
+          disabled={disabled}
+          onClick={() => onChange([])}
+        />
+        {libraries.map((library) => {
+          const on = selected.includes(library.id);
+          return (
+            <Pill
+              key={library.id}
+              on={on}
+              label={library.name}
+              disabled={disabled}
+              onClick={() =>
+                onChange(
+                  on ? selected.filter((id) => id !== library.id) : [...selected, library.id],
+                )
+              }
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Which delivery systems the administrator has switched on. */
+function NotificationStatus() {
+  const capability = useNotificationCapability();
+  const caps = capability.data;
+  if (!caps) return null;
+  const email = caps.email?.available ?? false;
+  const push = (caps.android_push?.available ?? false) || (caps.apple_push?.available ?? false);
+  const item = (label: string, on: boolean) => (
+    <div className="flex items-center gap-2">
+      <span
+        className={`h-2.5 w-2.5 rounded-full ${on ? "bg-emerald-500" : "bg-muted-foreground/40"}`}
+        aria-hidden
+      />
+      <span className="text-sm font-medium">{label}</span>
+      <span className={`text-sm ${on ? "text-emerald-500" : "text-muted-foreground"}`}>
+        {on ? "Active" : "Inactive"}
+      </span>
+    </div>
+  );
+  return (
+    <div className="border-border bg-card rounded-xl border p-4">
+      <div className="flex flex-wrap gap-x-8 gap-y-2">
+        {item("Email", email)}
+        {item("Push", push)}
+      </div>
+      {(!email || !push) && (
+        <p className="text-muted-foreground mt-2 text-xs">
+          Inactive systems are switched off by the server administrator, so their settings below are
+          hidden.
+        </p>
+      )}
+    </div>
+  );
+}
 
 function EmailSection() {
   const capability = useNotificationCapability();
@@ -425,13 +394,6 @@ function EmailSection() {
   if (!available) {
     return null;
   }
-
-  const mode = (prefs?.mode ?? "off") as NotificationEmailMode;
-  const enabled = mode !== "off";
-  const allowInstant = emailCap?.modes.includes("per_episode") ?? false;
-  const digestHour = String(emailCap?.digest_hour ?? 8).padStart(2, "0");
-  const weekday = WEEKDAYS[emailCap?.digest_weekday ?? 0] ?? "Sunday";
-
   if (isLoading || !prefs) {
     return (
       <SettingsGroup title="Email Notifications">
@@ -440,498 +402,139 @@ function EmailSection() {
     );
   }
 
+  const allowInstant = emailCap?.modes.includes("per_episode") ?? false;
+  const digestHour = String(emailCap?.digest_hour ?? 8).padStart(2, "0");
+  const weekday = WEEKDAYS[emailCap?.digest_weekday ?? 0] ?? "Sunday";
   const hasAddress = prefs.custom_email !== "";
-  const { instant, summary } = emailModeParts(mode);
-  const types = prefs.types?.length ? prefs.types : ["episode", "movie"];
+  const pending = updatePrefs.isPending || !hasAddress;
   const save = (update: Partial<NotificationEmailPreferencesUpdate>) =>
-    updatePrefs.mutate({ mode, ...update });
-  const setParts = (nextInstant: boolean, nextSummary: EmailSummary) =>
-    // With instant off a summary is the only email left, so it can't be none.
-    save({
-      mode: emailModeOf(
-        nextInstant,
-        !nextInstant && nextSummary === "none" ? "daily" : nextSummary,
-      ),
-    });
-  const toggleType = (type: string, on: boolean) => {
-    const next = on ? [...new Set([...types, type])] : types.filter((t) => t !== type);
-    if (next.length === 0) return;
-    save({ types: next.length === 2 ? [] : next });
-  };
+    updatePrefs.mutate(update as NotificationEmailPreferencesUpdate);
+  const anyOn = prefs.instant || prefs.daily || prefs.weekly;
 
   return (
     <SettingsGroup
       title="Email Notifications"
-      description="Per profile: each profile verifies its own address and picks what it gets."
+      description="Each profile verifies its own address and picks any mix of instant emails and digests."
     >
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-sm font-medium">Email this profile</div>
-          <div className="text-muted-foreground text-xs">
-            New episodes and movies, with posters and synopses
-          </div>
-        </div>
-        <Switch
-          checked={enabled}
-          disabled={updatePrefs.isPending || (!enabled && !hasAddress)}
-          onCheckedChange={(checked) =>
-            save({ mode: checked ? (allowInstant ? "per_episode" : "daily_digest") : "off" })
-          }
-        />
-      </div>
       <EmailDestinationRow prefs={prefs} />
-      {enabled && (
-        <>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm">What to send</div>
-              <div className="text-muted-foreground text-xs">
-                {prefs.content === "all"
-                  ? "Everything new in the libraries you can watch"
-                  : "Shows you follow, plus anything your Everything new switches ask for"}
-              </div>
-            </div>
-            <select
-              aria-label="What to send"
-              className="border-input bg-background h-9 rounded-md border px-2 text-sm"
-              value={prefs.content ?? "followed"}
-              disabled={updatePrefs.isPending}
-              onChange={(e) => save({ content: e.target.value as "followed" | "all" })}
-            >
-              <option value="followed">Shows I follow</option>
-              <option value="all">Everything new</option>
-            </select>
+      <div className="space-y-2">
+        <div>
+          <div className="text-sm">Send</div>
+          <div className="text-muted-foreground text-xs">
+            {!hasAddress
+              ? "Add and verify an address to choose what to receive"
+              : anyOn
+                ? [
+                    prefs.instant && "an email shortly after something new arrives",
+                    prefs.daily && `a daily digest around ${digestHour}:00`,
+                    prefs.weekly && `a weekly digest on ${weekday} around ${digestHour}:00`,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")
+                    .replace(/^./, (c) => c.toUpperCase())
+                : "Nothing: email is off for this profile"}
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm">Instant emails</div>
-              <div className="text-muted-foreground text-xs">
-                {allowInstant
-                  ? "An email shortly after something new arrives"
-                  : "Turned off by the administrator"}
-              </div>
-            </div>
-            <Switch
-              checked={instant && allowInstant}
-              disabled={updatePrefs.isPending || !allowInstant}
-              onCheckedChange={(checked) => setParts(checked, summary)}
-            />
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm">Summary</div>
-              <div className="text-muted-foreground text-xs">
-                {summary === "weekly"
-                  ? `One email a week, ${weekday} around ${digestHour}:00`
-                  : summary === "daily"
-                    ? `One email a day, around ${digestHour}:00`
-                    : "No summary"}
-              </div>
-            </div>
-            <select
-              aria-label="Summary"
-              className="border-input bg-background h-9 rounded-md border px-2 text-sm"
-              value={summary}
-              disabled={updatePrefs.isPending}
-              onChange={(e) => setParts(instant, e.target.value as EmailSummary)}
-            >
-              {instant && <option value="none">None</option>}
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-            </select>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-sm">Include</div>
-            <div className="flex gap-4 text-sm">
-              {(
-                [
-                  ["episode", "Episodes"],
-                  ["movie", "Movies"],
-                ] as const
-              ).map(([type, label]) => (
-                <label key={type} className="flex items-center gap-2">
-                  <Switch
-                    checked={types.includes(type)}
-                    disabled={updatePrefs.isPending}
-                    onCheckedChange={(on) => toggleType(type, on)}
-                    aria-label={label}
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm">Count as new if added within</div>
-              <div className="text-muted-foreground text-xs">Older items are never emailed</div>
-            </div>
-            <select
-              aria-label="Count as new if added within"
-              className="border-input bg-background h-9 rounded-md border px-2 text-sm"
-              value={prefs.max_age_hours ?? 0}
-              disabled={updatePrefs.isPending}
-              onChange={(e) => save({ max_age_hours: Number(e.target.value) })}
-            >
-              {EMAIL_MAX_AGE_OPTIONS.map(([hours, label]) => (
-                <option key={hours} value={hours}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </>
-      )}
-    </SettingsGroup>
-  );
-}
-
-const DISCORD_LINK_ERRORS: Record<string, string> = {
-  denied: "Discord linking was cancelled",
-  disabled: "Discord notifications were disabled by the administrator",
-  invalid_callback: "Discord linking failed: invalid callback",
-  state_invalid: "Discord linking expired — try again",
-  exchange_failed: "Discord linking failed — try again",
-};
-
-function DiscordSection() {
-  const { profile } = useCurrentProfile();
-  const canManage = profile?.is_primary === true;
-  const authority = captureProfileRequestContext();
-  const queryClient = useQueryClient();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const capability = useNotificationCapability();
-  const discordCap = capability.data?.discord;
-  const available = discordCap?.available ?? false;
-  const { data: prefs, isLoading } = useDiscordNotificationPreferences(available);
-  const updatePrefs = useUpdateDiscordNotificationPreferences();
-  const linkInit = useDiscordLinkInit();
-  const unlink = useUnlinkDiscord();
-
-  // Surface the OAuth callback result (the link flow round-trips through
-  // Discord and lands back here with a query param), then clean the URL.
-  useEffect(() => {
-    const linked = searchParams.get("discord_linked");
-    const error = searchParams.get("discord_error");
-    if (!linked && !error) {
-      return;
-    }
-    if (linked) {
-      toast.success("Discord account linked");
-      void queryClient.invalidateQueries({ queryKey: notificationKeys.discordPreferences() });
-    } else if (error) {
-      toast.error(DISCORD_LINK_ERRORS[error] ?? "Discord linking failed");
-    }
-    const next = new URLSearchParams(searchParams);
-    next.delete("discord_linked");
-    next.delete("discord_error");
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams, queryClient]);
-
-  if (!available) {
-    return null;
-  }
-
-  if (isLoading) {
-    return (
-      <SettingsGroup title="Discord Notifications">
-        <Skeleton className="h-16 w-full" />
-      </SettingsGroup>
-    );
-  }
-
-  const linked = prefs?.linked ?? false;
-  const mode = prefs?.mode ?? "off";
-  const enabled = mode !== "off";
-  const allowPerEpisode = discordCap?.modes.includes("per_episode") ?? false;
-  const allowWeekly = discordCap?.modes.includes("weekly_digest") ?? false;
-  const digestHour = String(discordCap?.digest_hour ?? 8).padStart(2, "0");
-
-  const startLink = () => {
-    linkInit.mutate(undefined, {
-      onSuccess: (init) => {
-        if (authority && isCapturedProfileAuthorityActive(authority))
-          window.location.assign(init.url);
-      },
-    });
-  };
-
-  return (
-    <SettingsGroup
-      title="Discord Notifications"
-      description="Account-wide: the Silo bot sends direct messages covering every profile on this account. You must share a Discord server with the bot."
-    >
-      {!canManage && (
-        <p className="text-muted-foreground text-sm">
-          Switch to the primary profile to manage Discord notifications for this account.
-        </p>
-      )}
-      {!linked ? (
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-medium">Link your Discord account</div>
-            <div className="text-muted-foreground text-xs">
-              Authorize on Discord so the bot knows who to message
-            </div>
-          </div>
-          <Button size="sm" disabled={!canManage || linkInit.isPending} onClick={startLink}>
-            {linkInit.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-            Link Discord
-          </Button>
         </div>
-      ) : (
+        <div className="flex flex-wrap gap-2">
+          <Pill
+            on={prefs.instant}
+            label="Instant"
+            disabled={pending || (!allowInstant && !prefs.instant)}
+            onClick={() => save({ instant: !prefs.instant })}
+          />
+          <Pill
+            on={prefs.daily}
+            label="Daily digest"
+            disabled={pending}
+            onClick={() => save({ daily: !prefs.daily })}
+          />
+          <Pill
+            on={prefs.weekly}
+            label="Weekly digest"
+            disabled={pending}
+            onClick={() => save({ weekly: !prefs.weekly })}
+          />
+        </div>
+        {!allowInstant && (
+          <div className="text-muted-foreground text-xs">
+            Instant emails are turned off by the administrator.
+          </div>
+        )}
+      </div>
+      {anyOn && (
         <>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-medium">
-                Linked as {prefs?.discord_username || "Discord user"}
-              </div>
-              <div className="text-muted-foreground text-xs">
-                Notifications you'd see in the inbox, delivered as a DM
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={enabled}
-                disabled={!canManage || updatePrefs.isPending}
-                onCheckedChange={(checked) =>
-                  updatePrefs.mutate({ mode: checked ? "daily_digest" : "off" })
-                }
+          <LibraryPills
+            selected={prefs.library_ids ?? []}
+            disabled={updatePrefs.isPending}
+            onChange={(ids) => save({ library_ids: ids })}
+          />
+          <div className="space-y-2">
+            <div className="text-sm">What to send</div>
+            <div className="flex flex-wrap gap-2">
+              <Pill
+                on={prefs.content !== "all"}
+                label="Shows I follow"
+                disabled={updatePrefs.isPending}
+                onClick={() => save({ content: "followed" })}
               />
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-destructive"
-                disabled={!canManage || unlink.isPending}
-                onClick={() => unlink.mutate()}
-              >
-                Unlink
-              </Button>
+              <Pill
+                on={prefs.content === "all"}
+                label="Everything new"
+                disabled={updatePrefs.isPending}
+                onClick={() => save({ content: "all" })}
+              />
             </div>
           </div>
-          {enabled && (
-            <ChannelFrequencyRow
-              mode={mode}
-              allowPerEpisode={allowPerEpisode}
-              allowWeekly={allowWeekly}
-              digestHour={digestHour}
-              digestWeekday={discordCap?.digest_weekday ?? 0}
-              isPending={!canManage || updatePrefs.isPending}
-              perEpisodeHint="A DM as soon as each notification arrives"
-              onChange={(value) => updatePrefs.mutate({ mode: value })}
-            />
-          )}
-          {enabled &&
-            (mode === "per_episode" || mode === "per_episode_and_digest") &&
-            !allowPerEpisode && (
-              <div className="text-xs text-amber-500">
-                Per-episode DMs are disabled by the administrator; you'll receive the daily digest
-                instead.
-              </div>
-            )}
-          {enabled && prefs?.link_failure && (
-            <div className="flex items-start gap-1.5 text-xs text-amber-500">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>{prefs.link_failure}</span>
-            </div>
-          )}
         </>
       )}
     </SettingsGroup>
   );
 }
 
-/**
- * Delivery health for one push subscription, derived the same way as webhook
- * health: a failure newer than the last success means the device is failing.
- */
-function webPushHealth(sub: WebPushSubscriptionView): { text: string; failing: boolean } {
-  if (!sub.enabled) {
-    return { text: "Disabled after repeated delivery failures", failing: true };
-  }
-  const failing =
-    sub.last_failure_at != null &&
-    (sub.last_success_at == null || sub.last_failure_at > sub.last_success_at);
-  if (failing) {
-    const when = formatRelativeTime(sub.last_failure_at);
-    return { text: when ? `Last delivery failed ${when}` : "Last delivery failed", failing: true };
-  }
-  if (sub.last_success_at) {
-    const when = formatRelativeTime(sub.last_success_at);
-    return { text: when ? `Last delivered ${when}` : "Delivering", failing: false };
-  }
-  return { text: "No deliveries yet", failing: false };
-}
-
-function webPushSubtitle(sub: WebPushSubscriptionView): { text: string; failing: boolean } {
-  const health = webPushHealth(sub);
-  const added = formatRelativeTime(sub.created_at);
-  return {
-    text: added ? `Added ${added} · ${health.text}` : health.text,
-    failing: health.failing,
-  };
-}
-
-function WebPushSection() {
-  const queryClient = useQueryClient();
+function PushSection() {
   const capability = useNotificationCapability();
-  const webPushCap = capability.data?.web_push;
-  const available = webPushCap?.available ?? false;
-  const { data: subscriptions } = useWebPushSubscriptions(available);
-  const removeSubscription = useDeleteWebPushSubscription();
-  const support = webPushSupport();
-  const [thisEndpoint, setThisEndpoint] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    void currentWebPushSubscription().then((sub) => setThisEndpoint(sub?.endpoint ?? null));
-  }, []);
-
-  const thisSub =
-    thisEndpoint != null
-      ? (subscriptions ?? []).find((sub) => sub.endpoint === thisEndpoint)
-      : undefined;
-  const subscribedHere = thisSub != null;
-  const thisHealth = thisSub ? webPushHealth(thisSub) : null;
-
-  const enable = async () => {
-    if (!webPushCap?.public_key) {
-      toast.error("Web push is not available on this server");
-      return;
-    }
-    const authority = captureNotificationAuthority();
-    setBusy(true);
-    try {
-      await enableWebPush(webPushCap.public_key, authority);
-      requireNotificationAuthority(authority);
-      const sub = await currentWebPushSubscription();
-      requireNotificationAuthority(authority);
-      setThisEndpoint(sub?.endpoint ?? null);
-      toast.success("Browser notifications enabled");
-    } catch (error) {
-      if (isCapturedProfileAuthorityActive(authority))
-        toast.error(error instanceof Error ? error.message : "Failed to enable notifications");
-    } finally {
-      setBusy(false);
-      if (isCapturedProfileAuthorityActive(authority))
-        void queryClient.invalidateQueries({
-          queryKey: [...notificationKeys.webPushSubscriptions(), notificationScope(authority)],
-          exact: true,
-        });
-    }
-  };
-
-  const disable = async () => {
-    const authority = captureNotificationAuthority();
-    setBusy(true);
-    try {
-      await disableWebPush(authority);
-      requireNotificationAuthority(authority);
-      setThisEndpoint(null);
-    } catch (error) {
-      if (isCapturedProfileAuthorityActive(authority))
-        toast.error(error instanceof Error ? error.message : "Failed to disable notifications");
-    } finally {
-      setBusy(false);
-      if (isCapturedProfileAuthorityActive(authority))
-        void queryClient.invalidateQueries({
-          queryKey: [...notificationKeys.webPushSubscriptions(), notificationScope(authority)],
-          exact: true,
-        });
-    }
-  };
-
-  if (!available) {
-    return null;
-  }
-
-  const otherSubscriptions = (subscriptions ?? []).filter((sub) => sub.endpoint !== thisEndpoint);
-
+  const caps = capability.data;
+  const available =
+    (caps?.android_push?.available ?? false) || (caps?.apple_push?.available ?? false);
+  const { data: prefs } = useNotificationPreferences();
+  const updatePrefs = useUpdateNotificationPreferences();
+  if (!available || !prefs) return null;
+  const on = prefs.push_enabled ?? true;
   return (
     <SettingsGroup
-      title="Browser Notifications"
-      description="Get notified even when Silo is closed. Notifications are encrypted end-to-end — the browser vendor's push service never sees their content."
+      title="Push Notifications"
+      description="Instant alerts on the phones where you've signed in to the Silo app."
     >
-      {support === "unsupported" ? (
-        <div className="text-muted-foreground text-sm">
-          This browser does not support push notifications.
-        </div>
-      ) : support === "denied" && !subscribedHere ? (
-        <div className="text-muted-foreground text-sm">
-          Notifications are blocked for this site. Allow them in your browser's site settings, then
-          return here.
-        </div>
-      ) : (
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <BellRing className="text-muted-foreground h-4 w-4" />
-            <div>
-              <div className="text-sm font-medium">This browser</div>
-              <div
-                className={
-                  thisHealth?.failing ? "text-xs text-amber-500" : "text-muted-foreground text-xs"
-                }
-              >
-                {!subscribedHere
-                  ? "Not receiving notifications"
-                  : thisHealth?.failing
-                    ? thisHealth.text
-                    : thisHealth && thisHealth.text !== "No deliveries yet"
-                      ? `Receiving notifications · ${thisHealth.text}`
-                      : "Receiving notifications"}
-              </div>
-            </div>
+      <div className="space-y-2">
+        <div>
+          <div className="text-sm">Instant notifications</div>
+          <div className="text-muted-foreground text-xs">
+            {on
+              ? "A push shortly after something new arrives"
+              : "Off: notifications stay in your inbox"}
           </div>
-          <Button
-            variant={subscribedHere ? "outline" : "default"}
-            size="sm"
-            disabled={busy}
-            onClick={() => void (subscribedHere ? disable() : enable())}
-          >
-            {busy && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-            {subscribedHere ? "Disable" : "Enable"}
-          </Button>
         </div>
-      )}
-
-      {otherSubscriptions.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-muted-foreground text-xs font-medium">
-            Other devices ({otherSubscriptions.length})
-          </div>
-          {otherSubscriptions.map((sub) => {
-            const subtitle = webPushSubtitle(sub);
-            return (
-              <div key={sub.id} className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <MonitorSmartphone className="text-muted-foreground h-4 w-4 shrink-0" />
-                  <div className="min-w-0">
-                    <div className="truncate text-sm">{sub.device_name || "Unknown device"}</div>
-                    <div
-                      className={
-                        subtitle.failing
-                          ? "truncate text-xs text-amber-500"
-                          : "text-muted-foreground truncate text-xs"
-                      }
-                    >
-                      {subtitle.text}
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive"
-                  disabled={removeSubscription.isPending}
-                  onClick={() => removeSubscription.mutate(sub.id)}
-                >
-                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                  Remove
-                </Button>
-              </div>
-            );
-          })}
+        <div className="flex flex-wrap gap-2">
+          <Pill
+            on={on}
+            label="On"
+            disabled={updatePrefs.isPending || !prefs.enabled}
+            onClick={() => updatePrefs.mutate({ push_enabled: true })}
+          />
+          <Pill
+            on={!on}
+            label="Off"
+            disabled={updatePrefs.isPending || !prefs.enabled}
+            onClick={() => updatePrefs.mutate({ push_enabled: false })}
+          />
         </div>
+      </div>
+      {on && (
+        <LibraryPills
+          selected={prefs.push_library_ids ?? []}
+          disabled={updatePrefs.isPending || !prefs.enabled}
+          onChange={(ids) => updatePrefs.mutate({ push_library_ids: ids })}
+        />
       )}
     </SettingsGroup>
   );
@@ -1335,16 +938,16 @@ export default function NotificationsSettings() {
     <div className="space-y-6">
       <PageHeader
         title="Notifications"
-        subtitle="New-episode alerts by email, Discord, push, or webhook."
+        subtitle="New episodes and movies by email, push, or webhook."
       />
+
+      <NotificationStatus />
 
       <PreferencesSection />
 
-      <WebPushSection />
-
       <EmailSection />
 
-      <DiscordSection key={notificationScope()} />
+      <PushSection />
 
       <WebhooksSection />
     </div>

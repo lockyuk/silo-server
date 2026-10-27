@@ -206,17 +206,15 @@ func (a *EmailAlerts) RunDue(ctx context.Context, reason string) *EmailAlertsRep
 		if !recipientActive(rec, s) {
 			continue
 		}
-		mode := rec.Mode
-		if !a.settings.EmailAllowPerEpisode(ctx) {
+		legs := rec.legs()
+		if !a.settings.EmailAllowPerEpisode(ctx) && slices.Contains(legs, emailalerts.LegInstant) {
 			// The admin allowance still applies: instant becomes a digest.
-			switch mode {
-			case emailalerts.ModeInstant, emailalerts.ModeInstantDaily:
-				mode = emailalerts.ModeDaily
-			case emailalerts.ModeInstantWeekly:
-				mode = emailalerts.ModeWeekly
+			legs = slices.DeleteFunc(slices.Clone(legs), func(l string) bool { return l == emailalerts.LegInstant })
+			if len(legs) == 0 {
+				legs = []string{emailalerts.LegDaily}
 			}
 		}
-		for _, leg := range emailalerts.Legs(mode) {
+		for _, leg := range legs {
 			st, found, err := a.repo.State(ctx, rec.Key(), leg)
 			if err != nil {
 				report.Errors = append(report.Errors, err.Error())
@@ -885,7 +883,7 @@ func (a *EmailAlerts) State(ctx context.Context) (*EmailAlertsState, error) {
 			rec.Name = a.profileName(ctx, rec.UserID, rec.ProfileID)
 		}
 		v := EmailAlertRecipientView{EmailAlertRecipient: rec, Key: rec.Key(), Active: recipientActive(rec, s)}
-		for _, leg := range emailalerts.Legs(rec.Mode) {
+		for _, leg := range rec.legs() {
 			st, found, err := a.repo.State(ctx, rec.Key(), leg)
 			if err != nil || !found {
 				continue
@@ -903,8 +901,11 @@ func (a *EmailAlerts) State(ctx context.Context) (*EmailAlertsState, error) {
 				}
 			}
 		}
-		if next := s.NextDue(rec.Mode, now); !next.IsZero() {
-			v.NextDue = &next
+		for _, leg := range rec.legs() {
+			next := s.NextDue(map[string]string{emailalerts.LegDaily: emailalerts.ModeDaily, emailalerts.LegWeekly: emailalerts.ModeWeekly}[leg], now)
+			if !next.IsZero() && (v.NextDue == nil || next.Before(*v.NextDue)) {
+				v.NextDue = &next
+			}
 		}
 		views = append(views, v)
 	}

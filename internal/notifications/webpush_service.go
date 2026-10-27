@@ -30,8 +30,10 @@ type vapidKeypair struct {
 }
 
 // WebPushEnabled gates the web push channel (kill switch).
+// WebPushEnabled is always false on this server: browser push is switched
+// off and has no controls.
 func (s *Settings) WebPushEnabled(ctx context.Context) bool {
-	return s.boolSetting(ctx, SettingWebPushEnabled, true)
+	return false
 }
 
 // SettingWriter persists server settings. Satisfied by

@@ -492,11 +492,25 @@ func (w *FanoutWorker) enqueuePushOutbox(ctx context.Context, tx pgx.Tx, inserte
 	if err != nil {
 		return err
 	}
+	prefs, err := w.preferences.GetMany(ctx, tx, insertedProfileKeys(inserted))
+	if err != nil {
+		return err
+	}
 	attempts := make([]PushDeliveryAttempt, 0, len(inserted))
 	for _, row := range inserted {
+		if !pushLibraryAllowed(prefs[row.key()].PushLibraryIDs, row.LibraryID) {
+			continue
+		}
 		attempts = append(attempts, newPushDeliveryAttempts(row.ID, devicesByProfile[row.key()])...)
 	}
 	return w.pushDevices.EnqueuePushAttempts(ctx, tx, attempts)
+}
+
+// pushLibraryAllowed reports whether a delivery from library may be pushed
+// to a profile limited to libraries (empty means every library; a delivery
+// without a library is never held back).
+func pushLibraryAllowed(libraries []int, library *int) bool {
+	return len(libraries) == 0 || library == nil || slices.Contains(libraries, *library)
 }
 
 // enqueueWebPushOutbox inserts `pending` web push attempt rows for each newly

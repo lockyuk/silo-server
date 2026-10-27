@@ -379,8 +379,10 @@ func (s *Settings) EmailExternalURL(ctx context.Context) string {
 // refused, and clients are told the channel is unavailable (which hides the
 // Discord section in user settings). Actual availability additionally
 // requires the configured bot credentials.
+// DiscordEnabled is always false on this server: Discord delivery is
+// switched off and has no controls.
 func (s *Settings) DiscordEnabled(ctx context.Context) bool {
-	return s.boolSetting(ctx, SettingDiscordEnabled, false)
+	return false
 }
 
 // Discord embed poster modes (SettingDiscordPosterMode values).
@@ -431,8 +433,10 @@ func (s *Settings) DiscordDigestWeekday(ctx context.Context) time.Weekday {
 // ServerChannelsEnabled gates the admin server-channel feature (kill switch).
 // Defaults to on: unlike profile webhooks, every destination is created by an
 // admin, so creating a channel is itself the opt-in act.
+// ServerChannelsEnabled is always false on this server: server channels are
+// switched off and have no controls.
 func (s *Settings) ServerChannelsEnabled(ctx context.Context) bool {
-	return s.boolSetting(ctx, SettingServerChannelsEnabled, true)
+	return false
 }
 
 // ServerChannelMentionRequesters controls whether server-channel request

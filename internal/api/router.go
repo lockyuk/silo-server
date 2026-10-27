@@ -2829,6 +2829,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 		v2deps.NotificationEmailArtwork = deps.Notifications
 		if deps.Notifications.EmailAlerts != nil {
 			v2deps.AdminEmailAlerts = deps.Notifications.EmailAlerts
+			v2deps.NotificationEmailAlertLinks = handlers.NewEmailAlertLinksHandler(deps.Notifications.EmailAlerts)
 		}
 		v2deps.NotificationDiscordManagement = newDiscordNotificationsHandler(deps, profileTokenService)
 		v2deps.NotificationEmailVerification = deps.Notifications.EmailVerification

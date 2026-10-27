@@ -185,6 +185,7 @@ type Dependencies struct {
 	SubtitleAIReads               SubtitleAIReadService
 	NotificationDiscordLinks      NotificationDiscordLinkService
 	NotificationEmailLinks        NotificationEmailLinkService
+	NotificationEmailAlertLinks   NotificationEmailAlertLinkService
 	NotificationDestinationTests  NotificationDestinationTestService
 	AdminDevices                  AdminDeviceService
 	UserLibraries                 UserLibraryService

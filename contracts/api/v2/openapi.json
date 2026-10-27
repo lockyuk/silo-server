@@ -38123,10 +38123,22 @@
             "description": "Same HTML subset as title.",
             "type": "string"
           },
+          "collapsed_image": {
+            "description": "Show the image in the collapsed notification.",
+            "type": "boolean"
+          },
           "count": {
             "description": "Episodes the push stands for, when it groups several.",
             "format": "int64",
             "type": "integer"
+          },
+          "expanded": {
+            "description": "Offer an expanded view; false keeps the notification collapsed.",
+            "type": "boolean"
+          },
+          "expanded_image": {
+            "description": "Show the image in the expanded view.",
+            "type": "boolean"
           },
           "image": {
             "description": "Which image the admin chose.",
@@ -38153,7 +38165,10 @@
         "required": [
           "title",
           "body",
-          "image"
+          "image",
+          "collapsed_image",
+          "expanded_image",
+          "expanded"
         ],
         "type": "object"
       },
@@ -44718,6 +44733,10 @@
             "minimum": 0,
             "type": "integer"
           },
+          "collapsed_image": {
+            "description": "Show the image in the collapsed notification.",
+            "type": "boolean"
+          },
           "episode_body": {
             "description": "Mustache template for a new episode's text.",
             "type": "string"
@@ -44725,6 +44744,14 @@
           "episode_title": {
             "description": "Mustache template for a new episode's title. May use \u003cb\u003e, \u003ci\u003e, \u003cu\u003e, \u003cs\u003e and \u003cfont color\u003e.",
             "type": "string"
+          },
+          "expanded": {
+            "description": "Offer an expanded view. Android shows the newest notification expanded when it has one.",
+            "type": "boolean"
+          },
+          "expanded_image": {
+            "description": "Show the image in the expanded view.",
+            "type": "boolean"
           },
           "group_body": {
             "description": "Mustache template for that push's text.",
@@ -44785,6 +44812,9 @@
           "group_title",
           "group_body",
           "image",
+          "collapsed_image",
+          "expanded_image",
+          "expanded",
           "synopsis",
           "synopsis_max",
           "batch_minutes",

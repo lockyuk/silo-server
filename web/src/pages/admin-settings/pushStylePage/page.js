@@ -66,6 +66,10 @@ export function mountPushStylePage(root, api) {
     $$("[data-kind]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.kind === kind)));
     $$("[data-image]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.image === draft.image)));
     $("#synopsis").checked = draft.synopsis;
+    $("#collapsed-image").checked = draft.collapsed_image;
+    $("#expanded-image").checked = draft.expanded_image;
+    $("#expanded").checked = draft.expanded;
+    $("#expanded-image").disabled = !draft.expanded;
     $("#synopsis-max").value = draft.synopsis_max;
     $("#batch").value = draft.batch_minutes;
     $("#quiet").checked = draft.quiet_enabled;
@@ -95,8 +99,11 @@ export function mountPushStylePage(root, api) {
       show("#p-body-e", p.body);
       $("#p-syn").textContent = p.synopsis || "";
       $("#p-syn").hidden = !p.synopsis;
-      $("#p-thumb-c").hidden = $("#p-thumb-e").hidden = draft.image !== "poster";
-      $("#p-hero").hidden = draft.image !== "backdrop";
+      // A backdrop shows as a thumbnail when collapsed, as Android does.
+      $("#p-thumb-c").hidden = draft.image === "none" || !draft.collapsed_image;
+      $("#p-thumb-e").hidden = draft.image !== "poster" || !draft.expanded_image;
+      $("#p-hero").hidden = draft.image !== "backdrop" || !draft.expanded_image;
+      $("#note-expanded").hidden = $("#label-expanded").hidden = !draft.expanded;
     } catch (e) {
       if (!gone) { $("#p-error").hidden = false; $("#p-error").textContent = e.message; }
     }
@@ -113,13 +120,17 @@ export function mountPushStylePage(root, api) {
   bind("#t-title", () => kind + "_title", (el) => el.value);
   bind("#t-body", () => kind + "_body", (el) => el.value);
   bind("#synopsis", "synopsis", (el) => el.checked);
+  bind("#collapsed-image", "collapsed_image", (el) => el.checked);
+  bind("#expanded-image", "expanded_image", (el) => el.checked);
+  bind("#expanded", "expanded", (el) => el.checked);
+  $("#expanded").addEventListener("input", () => { $("#expanded-image").disabled = !draft.expanded; });
   bind("#synopsis-max", "synopsis_max", (el) => Number(el.value) || 0);
   bind("#batch", "batch_minutes", (el) => Math.max(0, Number(el.value) || 0));
   bind("#quiet", "quiet_enabled", (el) => el.checked);
   bind("#quiet-start", "quiet_start", (el) => el.value);
   bind("#quiet-end", "quiet_end", (el) => el.value);
   bind("#tz", "timezone", (el) => el.value.trim());
-  ["#synopsis", "#quiet"].forEach((s) => $(s).addEventListener("change", () => $(s).dispatchEvent(new Event("input"))));
+  ["#synopsis", "#quiet", "#collapsed-image", "#expanded-image", "#expanded"].forEach((s) => $(s).addEventListener("change", () => $(s).dispatchEvent(new Event("input"))));
 
   let lastField = $("#t-body");
   ["#t-title", "#t-body"].forEach((s) => $(s).addEventListener("focus", () => { lastField = $(s); }));

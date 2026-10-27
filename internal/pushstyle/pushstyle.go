@@ -39,6 +39,13 @@ type Settings struct {
 	GroupBody    string `json:"group_body"`
 	// Image is poster, backdrop or none.
 	Image string `json:"image"`
+	// CollapsedImage and ExpandedImage show the image in the collapsed
+	// notification and in its expanded view.
+	CollapsedImage bool `json:"collapsed_image"`
+	ExpandedImage  bool `json:"expanded_image"`
+	// Expanded offers an expanded view at all. Android opens the newest
+	// notification expanded when it has one; off keeps every push collapsed.
+	Expanded bool `json:"expanded"`
 	// Synopsis shows the episode's or movie's synopsis when expanded, cut to
 	// SynopsisMax characters.
 	Synopsis    bool `json:"synopsis"`
@@ -57,18 +64,21 @@ type Settings struct {
 // DefaultSettings reproduce the built-in notification text.
 func DefaultSettings() Settings {
 	return Settings{
-		EpisodeTitle: "{{series}}",
-		EpisodeBody:  "New episode · {{code}}{{#episode_title}} · {{episode_title}}{{/episode_title}}",
-		MovieTitle:   "{{title}}{{#year}} ({{year}}){{/year}}",
-		MovieBody:    "New movie",
-		GroupTitle:   "{{series}}",
-		GroupBody:    "{{count}} new episodes · {{codes}}",
-		Image:        ImagePoster,
-		Synopsis:     true,
-		SynopsisMax:  300,
-		BatchMinutes: 5,
-		QuietStart:   "23:00",
-		QuietEnd:     "07:00",
+		EpisodeTitle:   "{{series}}",
+		EpisodeBody:    "New episode · {{code}}{{#episode_title}} · {{episode_title}}{{/episode_title}}",
+		MovieTitle:     "{{title}}{{#year}} ({{year}}){{/year}}",
+		MovieBody:      "New movie",
+		GroupTitle:     "{{series}}",
+		GroupBody:      "{{count}} new episodes · {{codes}}",
+		Image:          ImagePoster,
+		CollapsedImage: true,
+		ExpandedImage:  true,
+		Expanded:       true,
+		Synopsis:       true,
+		SynopsisMax:    300,
+		BatchMinutes:   5,
+		QuietStart:     "23:00",
+		QuietEnd:       "07:00",
 	}
 }
 

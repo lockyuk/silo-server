@@ -27693,11 +27693,17 @@ export interface components {
     NotificationPushContent: {
       /** @description Same HTML subset as title. */
       body: string;
+      /** @description Show the image in the collapsed notification. */
+      collapsed_image: boolean;
       /**
        * Format: int64
        * @description Episodes the push stands for, when it groups several.
        */
       count?: number;
+      /** @description Offer an expanded view; false keeps the notification collapsed. */
+      expanded: boolean;
+      /** @description Show the image in the expanded view. */
+      expanded_image: boolean;
       /**
        * @description Which image the admin chose.
        * @enum {string}
@@ -30506,10 +30512,16 @@ export interface components {
        * @description How long a new episode's push waits for more episodes of the same show; 0 sends at once.
        */
       batch_minutes: number;
+      /** @description Show the image in the collapsed notification. */
+      collapsed_image: boolean;
       /** @description Mustache template for a new episode's text. */
       episode_body: string;
       /** @description Mustache template for a new episode's title. May use <b>, <i>, <u>, <s> and <font color>. */
       episode_title: string;
+      /** @description Offer an expanded view. Android shows the newest notification expanded when it has one. */
+      expanded: boolean;
+      /** @description Show the image in the expanded view. */
+      expanded_image: boolean;
       /** @description Mustache template for that push's text. */
       group_body: string;
       /** @description Mustache template for the title of a push that stands for several episodes of one show. */

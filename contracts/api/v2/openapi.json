@@ -30826,6 +30826,7 @@
             "type": "string"
           },
           "logo_url": {
+            "description": "Logo image URL as entered; may be empty, so not validated as a URI",
             "type": "string"
           },
           "muted_color": {
@@ -30894,6 +30895,7 @@
             "type": "array"
           },
           "public_url": {
+            "description": "Server public URL emails link to; empty when unset, so not validated as a URI",
             "type": "string"
           },
           "recipients": {
@@ -180471,6 +180473,210 @@
         "x-silo-class": "public",
         "x-silo-raw-protocol": "email-artwork-image",
         "x-silo-raw-reason": "Image bytes for mail clients bypass JSON encoding.",
+        "x-silo-service-backed": true
+      }
+    },
+    "/api/v2/notifications/email/manage": {
+      "get": {
+        "operationId": "getNotificationEmailManagePage",
+        "parameters": [
+          {
+            "description": "Email capability token. An unknown token returns an HTML error page.",
+            "in": "query",
+            "name": "token",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Standalone email-link page"
+          },
+          "400": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Standalone email-link page"
+          },
+          "404": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Standalone email-link page"
+          },
+          "500": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Standalone email-link page"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Render the email alert choices a manage link belongs to.",
+        "tags": [
+          "notifications"
+        ],
+        "x-silo-class": "public",
+        "x-silo-raw-protocol": "html-callback",
+        "x-silo-raw-reason": "Mail clients follow alert-email links without a Silo session; the manage form posts HTML form data.",
+        "x-silo-service-backed": true
+      },
+      "post": {
+        "operationId": "saveNotificationEmailManagePage",
+        "parameters": [
+          {
+            "description": "Email capability token. An unknown token returns an HTML error page.",
+            "in": "query",
+            "name": "token",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Standalone email-link page"
+          },
+          "400": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Standalone email-link page"
+          },
+          "404": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Standalone email-link page"
+          },
+          "500": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Standalone email-link page"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Save the email alert choices submitted from a manage page.",
+        "tags": [
+          "notifications"
+        ],
+        "x-silo-class": "public",
+        "x-silo-raw-protocol": "html-callback",
+        "x-silo-raw-reason": "Mail clients follow alert-email links without a Silo session; the manage form posts HTML form data.",
+        "x-silo-retry-safety": "non_retryable",
+        "x-silo-service-backed": true
+      }
+    },
+    "/api/v2/notifications/email/open": {
+      "get": {
+        "operationId": "openNotificationEmailItem",
+        "parameters": [
+          {
+            "description": "Item id to open.",
+            "in": "query",
+            "name": "id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Standalone email-link page"
+          },
+          "400": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Standalone email-link page"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Open an item linked from an alert email in the Silo app or the browser.",
+        "tags": [
+          "notifications"
+        ],
+        "x-silo-class": "public",
+        "x-silo-raw-protocol": "html-callback",
+        "x-silo-raw-reason": "Mail clients follow alert-email links without a Silo session; the manage form posts HTML form data.",
         "x-silo-service-backed": true
       }
     },

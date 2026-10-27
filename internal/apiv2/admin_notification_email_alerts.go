@@ -40,7 +40,7 @@ type EmailAlertTheme struct {
 	CardColor          string `json:"card_color"`
 	TextColor          string `json:"text_color"`
 	MutedColor         string `json:"muted_color"`
-	LogoURL            string `json:"logo_url"`
+	LogoURL            string `json:"logo_url" doc:"Logo image URL as entered; may be empty, so not validated as a URI"`
 	HeaderTitle        string `json:"header_title"`
 	Intro              string `json:"intro"`
 	FooterText         string `json:"footer_text"`
@@ -155,7 +155,7 @@ type EmailAlertsOverview struct {
 	Problems      []string                    `json:"problems"`
 	Report        *EmailAlertRunReport        `json:"report"`
 	Log           []EmailAlertLogEntry        `json:"log"`
-	PublicURL     string                      `json:"public_url"`
+	PublicURL     string                      `json:"public_url" doc:"Server public URL emails link to; empty when unset, so not validated as a URI"`
 	ServerName    string                      `json:"server_name"`
 	SMTPHost      string                      `json:"smtp_host"`
 	FromAddress   string                      `json:"from_address"`

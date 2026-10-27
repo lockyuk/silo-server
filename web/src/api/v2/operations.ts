@@ -421,6 +421,8 @@ export const v2Operations = {
   "GET /api/v2/notifications/email-preferences/address/capabilities":
     "getNotificationEmailVerificationCapabilities",
   "GET /api/v2/notifications/email/artwork/{token}": "getNotificationEmailArtwork",
+  "GET /api/v2/notifications/email/manage": "getNotificationEmailManagePage",
+  "GET /api/v2/notifications/email/open": "openNotificationEmailItem",
   "GET /api/v2/notifications/email/unsubscribe": "unsubscribeNotificationEmail",
   "GET /api/v2/notifications/email/verify": "verifyNotificationEmailAddress",
   "GET /api/v2/notifications/preferences": "getNotificationPreferences",
@@ -790,6 +792,7 @@ export const v2Operations = {
   "POST /api/v2/libraries/{id}/refresh-metadata": "refreshLibraryMetadata",
   "POST /api/v2/library-jobs/{job_id}/cancel": "cancelLibraryJob",
   "POST /api/v2/notifications/discord/link/init": "beginNotificationDiscordLink",
+  "POST /api/v2/notifications/email/manage": "saveNotificationEmailManagePage",
   "POST /api/v2/notifications/email/unsubscribe": "unsubscribeNotificationEmailOneClick",
   "POST /api/v2/notifications/push/devices": "registerPushDevice",
   "POST /api/v2/notifications/push/devices/{device_id}/retire": "retirePushDevice",

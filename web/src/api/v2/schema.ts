@@ -9460,6 +9460,41 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v2/notifications/email/manage": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Render the email alert choices a manage link belongs to. */
+    get: operations["getNotificationEmailManagePage"];
+    put?: never;
+    /** Save the email alert choices submitted from a manage page. */
+    post: operations["saveNotificationEmailManagePage"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/notifications/email/open": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Open an item linked from an alert email in the Silo app or the browser. */
+    get: operations["openNotificationEmailItem"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v2/notifications/email/unsubscribe": {
     parameters: {
       query?: never;
@@ -24377,6 +24412,7 @@ export interface components {
       /** Format: date-time */
       now: string;
       problems: string[];
+      /** @description Server public URL emails link to; empty when unset, so not validated as a URI */
       public_url: string;
       recipients: components["schemas"]["EmailAlertRecipientStatus"][];
       report: components["schemas"]["EmailAlertRunReport"];
@@ -24403,6 +24439,7 @@ export interface components {
       footer_text: string;
       header_title: string;
       intro: string;
+      /** @description Logo image URL as entered; may be empty, so not validated as a URI */
       logo_url: string;
       muted_color: string;
       /** @description Item links open the Silo app when it is installed. */
@@ -118099,6 +118136,165 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+    };
+  };
+  getNotificationEmailManagePage: {
+    parameters: {
+      query?: {
+        /** @description Email capability token. An unknown token returns an HTML error page. */
+        token?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Standalone email-link page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+      /** @description Standalone email-link page */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+      /** @description Standalone email-link page */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+      /** @description Standalone email-link page */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  saveNotificationEmailManagePage: {
+    parameters: {
+      query?: {
+        /** @description Email capability token. An unknown token returns an HTML error page. */
+        token?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Standalone email-link page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+      /** @description Standalone email-link page */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+      /** @description Standalone email-link page */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+      /** @description Standalone email-link page */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  openNotificationEmailItem: {
+    parameters: {
+      query?: {
+        /** @description Item id to open. */
+        id?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Standalone email-link page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+      /** @description Standalone email-link page */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
     };
   };

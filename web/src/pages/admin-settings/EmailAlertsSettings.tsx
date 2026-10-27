@@ -230,7 +230,7 @@ const VARS: [string, string, string[]][] = [
 ];
 const LIST_VARS = new Set(["shows", "movies", "episodes", "items"]);
 const CONDITION_VARS = new Set([
-  ...VARS[2][2],
+  ...(VARS[2]?.[2] ?? []),
   "single_episode",
   "multiple_episodes",
   "has_poster",
@@ -931,13 +931,23 @@ function DesignTab({
               placeholder="name"
               aria-label="Variable name"
               value={v.key}
-              onChange={(e) => update((s) => void (s.custom_vars![i].key = e.target.value))}
+              onChange={(e) =>
+                update((s) => {
+                  const cv = s.custom_vars?.[i];
+                  if (cv) cv.key = e.target.value;
+                })
+              }
             />
             <Input
               placeholder="value"
               aria-label="Variable value"
               value={v.value}
-              onChange={(e) => update((s) => void (s.custom_vars![i].value = e.target.value))}
+              onChange={(e) =>
+                update((s) => {
+                  const cv = s.custom_vars?.[i];
+                  if (cv) cv.value = e.target.value;
+                })
+              }
             />
             <Button
               variant="ghost"

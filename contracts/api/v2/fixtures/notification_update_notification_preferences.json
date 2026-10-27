@@ -6,5 +6,6 @@
   "notify_continue_watching": true,
   "notify_next_up": true,
   "notify_new_episodes": false,
-  "notify_new_movies": false
+  "notify_new_movies": false,
+  "push_enabled": true
 }

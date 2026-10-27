@@ -150,9 +150,13 @@ type Preferences struct {
 	NotifyNextUp           bool   `json:"notify_next_up"`
 	// NotifyNewEpisodes and NotifyNewMovies ask for every new episode and
 	// movie the profile can open, followed or not.
-	NotifyNewEpisodes bool      `json:"notify_new_episodes"`
-	NotifyNewMovies   bool      `json:"notify_new_movies"`
-	UpdatedAt         time.Time `json:"-"`
+	NotifyNewEpisodes bool `json:"notify_new_episodes"`
+	NotifyNewMovies   bool `json:"notify_new_movies"`
+	// PushEnabled queues phone and browser push for the profile's
+	// notifications; off leaves them in the inbox only. Not part of the
+	// frozen v1 shape.
+	PushEnabled bool      `json:"-"`
+	UpdatedAt   time.Time `json:"-"`
 }
 
 // DefaultPreferences returns the defaults for the profile on userID's
@@ -166,6 +170,7 @@ func DefaultPreferences(userID int, profileID string) Preferences {
 		NotifyWatchlist:        true,
 		NotifyContinueWatching: true,
 		NotifyNextUp:           true,
+		PushEnabled:            true,
 	}
 }
 

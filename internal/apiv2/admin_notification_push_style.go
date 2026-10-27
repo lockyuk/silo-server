@@ -19,7 +19,7 @@ type AdminPushStyleService interface {
 
 // PushStyleSettings mirrors pushstyle.Settings field for field.
 type PushStyleSettings struct {
-	EpisodeTitle string `json:"episode_title" doc:"Mustache template for a new episode's title."`
+	EpisodeTitle string `json:"episode_title" doc:"Mustache template for a new episode's title. May use <b>, <i>, <u>, <s> and <font color>."`
 	EpisodeBody  string `json:"episode_body" doc:"Mustache template for a new episode's text."`
 	MovieTitle   string `json:"movie_title" doc:"Mustache template for a new movie's title."`
 	MovieBody    string `json:"movie_body" doc:"Mustache template for a new movie's text."`
@@ -36,8 +36,8 @@ type PushStyleSettings struct {
 }
 
 type PushStylePreview struct {
-	Title    string `json:"title"`
-	Body     string `json:"body"`
+	Title    string `json:"title" doc:"HTML subset; see NotificationPushContent."`
+	Body     string `json:"body" doc:"HTML subset; see NotificationPushContent."`
 	Synopsis string `json:"synopsis,omitempty"`
 	Error    string `json:"error,omitempty" doc:"Why the templates did not render."`
 }

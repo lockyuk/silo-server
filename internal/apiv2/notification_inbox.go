@@ -60,8 +60,8 @@ type NotificationItem struct {
 // NotificationPushContent is a push notification rendered from the admin's
 // push templates.
 type NotificationPushContent struct {
-	Title    string `json:"title"`
-	Body     string `json:"body"`
+	Title    string `json:"title" doc:"HTML subset: <b>, <i>, <u>, <s> and <font color>, with values escaped. Decode it as HTML."`
+	Body     string `json:"body" doc:"Same HTML subset as title."`
 	Synopsis string `json:"synopsis,omitempty" doc:"Shown when the notification is expanded."`
 	Image    string `json:"image" enum:"poster,backdrop,none" doc:"Which image the admin chose."`
 	ImageURL string `json:"image_url,omitempty" format:"uri-reference"`

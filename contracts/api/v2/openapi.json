@@ -38120,6 +38120,7 @@
         "additionalProperties": false,
         "properties": {
           "body": {
+            "description": "Same HTML subset as title.",
             "type": "string"
           },
           "count": {
@@ -38145,6 +38146,7 @@
             "type": "string"
           },
           "title": {
+            "description": "HTML subset: \u003cb\u003e, \u003ci\u003e, \u003cu\u003e, \u003cs\u003e and \u003cfont color\u003e, with values escaped. Decode it as HTML.",
             "type": "string"
           }
         },
@@ -44685,6 +44687,7 @@
         "additionalProperties": false,
         "properties": {
           "body": {
+            "description": "HTML subset; see NotificationPushContent.",
             "type": "string"
           },
           "error": {
@@ -44695,6 +44698,7 @@
             "type": "string"
           },
           "title": {
+            "description": "HTML subset; see NotificationPushContent.",
             "type": "string"
           }
         },
@@ -44719,7 +44723,7 @@
             "type": "string"
           },
           "episode_title": {
-            "description": "Mustache template for a new episode's title.",
+            "description": "Mustache template for a new episode's title. May use \u003cb\u003e, \u003ci\u003e, \u003cu\u003e, \u003cs\u003e and \u003cfont color\u003e.",
             "type": "string"
           },
           "group_body": {

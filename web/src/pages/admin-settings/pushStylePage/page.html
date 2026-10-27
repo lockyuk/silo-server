@@ -29,6 +29,15 @@
           <div class="spacer"></div>
           <button id="reset-kind" class="small">Reset to default</button>
         </div>
+        <div class="row fmt" role="toolbar" aria-label="Formatting">
+          <button class="small" data-wrap="b" title="Bold"><b>B</b></button>
+          <button class="small" data-wrap="i" title="Italic"><i>I</i></button>
+          <button class="small" data-wrap="u" title="Underline"><u>U</u></button>
+          <button class="small" data-wrap="s" title="Strikethrough"><s>S</s></button>
+          <input type="color" id="fmt-color" value="#e50914" title="Text colour">
+          <button class="small" data-wrap="font" title="Colour the selection">Colour</button>
+          <span class="hint" style="margin:0">Select text in the title or text, then pick a style.</span>
+        </div>
         <label class="f"><span>Title</span><input type="text" id="t-title" maxlength="500" spellcheck="false"><small>About one line shows on a phone.</small></label>
         <label class="f"><span>Text</span><textarea id="t-body" rows="3" maxlength="500" spellcheck="false"></textarea><small>Two lines show collapsed. Line breaks become spaces.</small></label>
         <div class="vars" id="vars"></div>

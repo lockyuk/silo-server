@@ -224,7 +224,8 @@ type Item struct {
 	Episodes []Episode // one for an episode push, several for a group
 }
 
-// Rendered is a push's text.
+// Rendered is a push's text. Title and Body are the HTML subset templates
+// use; Synopsis is plain text.
 type Rendered struct {
 	Title    string `json:"title"`
 	Body     string `json:"body"`
@@ -324,8 +325,11 @@ func Render(s Settings, item Item) (Rendered, error) {
 	return out, nil
 }
 
+// render fills a template. Templates may format text with a small HTML
+// subset (<b>, <i>, <u>, <s>, <font color>), so values are HTML-escaped and
+// the phone decodes the result as HTML.
 func render(src string, vars map[string]any) (string, error) {
-	out, err := mustache.RenderRaw(src, true, vars)
+	out, err := mustache.Render(src, vars)
 	if err != nil {
 		return "", err
 	}

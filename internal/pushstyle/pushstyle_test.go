@@ -26,14 +26,14 @@ func TestDefaultsRenderBuiltInText(t *testing.T) {
 	}
 }
 
-func TestRenderDoesNotEscapeOrKeepNewlines(t *testing.T) {
+func TestRenderEscapesValuesKeepsFormattingAndDropsNewlines(t *testing.T) {
 	s := DefaultSettings()
-	s.EpisodeTitle = "{{series}} &\n{{code}}"
-	got, err := Render(s, Item{Kind: KindEpisode, Title: "Law & Order", Episodes: []Episode{{}}})
+	s.EpisodeTitle = "<b>{{series}}</b> &\n{{code}}"
+	got, err := Render(s, Item{Kind: KindEpisode, Title: "Law & <Order>", Episodes: []Episode{{}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Title != "Law & Order &" {
+	if got.Title != "<b>Law &amp; &lt;Order&gt;</b> &" {
 		t.Fatalf("title = %q", got.Title)
 	}
 }

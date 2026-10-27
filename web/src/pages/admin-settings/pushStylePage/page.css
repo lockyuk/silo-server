@@ -19,3 +19,5 @@ input[type=time] { background: var(--panel-2); color: var(--text); border: 1px s
 .note-thumb.big { width: 74px; height: 111px; }
 .note-hero { height: 150px; border-radius: 10px; margin-top: 10px; background: linear-gradient(120deg, #23415f, #6b4dff 55%, #12151b); }
 [hidden] { display: none !important; }
+.fmt { margin-bottom: 10px; }
+.fmt input[type=color] { width: 34px; height: 30px; padding: 1px; }

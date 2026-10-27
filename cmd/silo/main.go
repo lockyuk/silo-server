@@ -70,6 +70,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/ebooks"
 	evt "github.com/Silo-Server/silo-server/internal/events"
 	"github.com/Silo-Server/silo-server/internal/extrastills"
+	"github.com/Silo-Server/silo-server/internal/filmography"
 	"github.com/Silo-Server/silo-server/internal/historyimport"
 	"github.com/Silo-Server/silo-server/internal/idgen"
 	"github.com/Silo-Server/silo-server/internal/imagecache"
@@ -2185,6 +2186,7 @@ func main() {
 		}
 		personRefreshService = metadata.NewPersonRefreshService(deps.DB, pluginResolver, personRepo)
 		personRefreshService.SetImageResolver(imageResolver)
+		deps.Filmography = filmography.New(deps.DB, personRefreshService.Providers, imageResolver, catalog.NewItemRepository(deps.DB), settingsRepo)
 		// Person lookups reuse their resolved providers like the item chain
 		// cache does, and drop them on the same plugin lifecycle events.
 		if pluginService != nil {

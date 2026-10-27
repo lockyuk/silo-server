@@ -138,6 +138,8 @@ POST /api/v2/admin/email/test	non-media
 POST /api/v2/admin/files/{fileId}/contribute	non-media
 GET /api/v2/admin/files/{fileId}/contributions	non-media
 GET /api/v2/admin/filesystem/browse	non-media
+GET /api/v2/admin/filmography/settings	non-media
+PUT /api/v2/admin/filmography/settings	non-media
 GET /api/v2/admin/history-import-sources	non-media
 POST /api/v2/admin/history-import-sources	non-media
 DELETE /api/v2/admin/history-import-sources/{id}	non-media
@@ -501,6 +503,7 @@ GET /api/v2/catalog/items/{id}/versions	non-media
 POST /api/v2/catalog/letters	non-media
 GET /api/v2/catalog/people	non-media
 GET /api/v2/catalog/people/{id}	non-media
+GET /api/v2/catalog/people/{id}/filmography	non-media
 POST /api/v2/catalog/people/{id}/refresh	non-media
 POST /api/v2/catalog/query	non-media
 GET /api/v2/catalog/search/capabilities	non-media
@@ -1444,6 +1447,8 @@ POST /api/v2/admin/email/test	non-media
 POST /api/v2/admin/files/{fileId}/contribute	non-media
 GET /api/v2/admin/files/{fileId}/contributions	non-media
 GET /api/v2/admin/filesystem/browse	non-media
+GET /api/v2/admin/filmography/settings	non-media
+PUT /api/v2/admin/filmography/settings	non-media
 GET /api/v2/admin/history-import-sources	non-media
 POST /api/v2/admin/history-import-sources	non-media
 DELETE /api/v2/admin/history-import-sources/{id}	non-media
@@ -1807,6 +1812,7 @@ GET /api/v2/catalog/items/{id}/versions	non-media
 POST /api/v2/catalog/letters	non-media
 GET /api/v2/catalog/people	non-media
 GET /api/v2/catalog/people/{id}	non-media
+GET /api/v2/catalog/people/{id}/filmography	non-media
 POST /api/v2/catalog/people/{id}/refresh	non-media
 POST /api/v2/catalog/query	non-media
 GET /api/v2/catalog/search/capabilities	non-media

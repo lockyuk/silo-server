@@ -391,6 +391,60 @@ func (p *PluginProvider) GetPersonDetail(ctx context.Context, req PersonDetailRe
 	}, nil
 }
 
+// ErrPersonCreditsUnsupported reports a metadata plugin that cannot list a
+// person's credits, such as one built before the call existed.
+var ErrPersonCreditsUnsupported = errors.New("provider does not support person credits")
+
+// personCreditsClient is implemented by plugin clients that can list credits.
+type personCreditsClient interface {
+	GetPersonCredits(ctx context.Context, req *pluginv1.GetPersonCreditsRequest) (*pluginv1.GetPersonCreditsResponse, error)
+}
+
+// GetPersonCredits lists every movie and series a person worked on.
+func (p *PluginProvider) GetPersonCredits(ctx context.Context, req PersonDetailRequest) ([]PersonCredit, error) {
+	client, err := p.clientFactory(ctx, p.installationID, p.capabilityID)
+	if err != nil {
+		return nil, err
+	}
+	creditsClient, ok := client.(personCreditsClient)
+	if !ok {
+		return nil, ErrPersonCreditsUnsupported
+	}
+	providerIDs, err := structFromStringMap(req.ProviderIDs)
+	if err != nil {
+		return nil, err
+	}
+	response, err := creditsClient.GetPersonCredits(ctx, &pluginv1.GetPersonCreditsRequest{ProviderIds: providerIDs, Language: req.Language})
+	if err != nil {
+		if status.Code(err) == codes.Unimplemented {
+			return nil, ErrPersonCreditsUnsupported
+		}
+		return nil, err
+	}
+	out := make([]PersonCredit, 0, len(response.GetCredits()))
+	for _, c := range response.GetCredits() {
+		out = append(out, PersonCredit{
+			Provider:      p.capabilityID,
+			ItemType:      c.GetItemType(),
+			ProviderIDs:   mergePluginProviderIDs(p.capabilityID, c.GetProviderId(), c.GetProviderIds()),
+			Title:         c.GetTitle(),
+			OriginalTitle: c.GetOriginalTitle(),
+			ReleaseDate:   c.GetReleaseDate(),
+			Overview:      c.GetOverview(),
+			PosterPath:    p.remoteArtwork(ctx, c.GetPosterPath()),
+			BackdropPath:  p.remoteArtwork(ctx, c.GetBackdropPath()),
+			Department:    c.GetDepartment(),
+			Character:     c.GetCharacter(),
+			Job:           c.GetJob(),
+			EpisodeCount:  int(c.GetEpisodeCount()),
+			VoteAverage:   c.GetVoteAverage(),
+			Popularity:    c.GetPopularity(),
+			CreditID:      c.GetCreditId(),
+		})
+	}
+	return out, nil
+}
+
 func (p *PluginProvider) GetImages(ctx context.Context, req ImageRequest) ([]RemoteImage, error) {
 	providerID := req.ProviderIDs[p.capabilityID]
 	if providerID == "" {

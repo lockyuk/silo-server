@@ -152,6 +152,12 @@ func withoutAnsweredRateLimit(person *models.Person, err error) (*models.Person,
 // personProvidersTTL. A failed resolution is not kept. Resolution reads the
 // database rather than the plugins service's installation cache, which other
 // replicas do not refresh on a plugin change.
+// Providers returns the enabled metadata providers, resolved the way person
+// lookups resolve them.
+func (s *PersonRefreshService) Providers(ctx context.Context) ([]Provider, error) {
+	return s.resolveProviders(ctx)
+}
+
 func (s *PersonRefreshService) resolveProviders(ctx context.Context) ([]Provider, error) {
 	s.providersMu.Lock()
 	if s.providers != nil && time.Now().Before(s.providersExpiresAt) {

@@ -268,6 +268,27 @@ type PersonDetailResult struct {
 	ProviderIDs     map[string]string
 }
 
+// PersonCredit is one title a person worked on, in one role, as a provider
+// lists it. ProviderIDs identify the title, not the person.
+type PersonCredit struct {
+	Provider      string            `json:"provider"`
+	ItemType      string            `json:"item_type"`
+	ProviderIDs   map[string]string `json:"provider_ids"`
+	Title         string            `json:"title"`
+	OriginalTitle string            `json:"original_title,omitempty"`
+	ReleaseDate   string            `json:"release_date,omitempty"`
+	Overview      string            `json:"overview,omitempty"`
+	PosterPath    string            `json:"poster_path,omitempty"`
+	BackdropPath  string            `json:"backdrop_path,omitempty"`
+	Department    string            `json:"department,omitempty"`
+	Character     string            `json:"character,omitempty"`
+	Job           string            `json:"job,omitempty"`
+	EpisodeCount  int               `json:"episode_count,omitempty"`
+	VoteAverage   float64           `json:"vote_average,omitempty"`
+	Popularity    float64           `json:"popularity,omitempty"`
+	CreditID      string            `json:"credit_id,omitempty"`
+}
+
 // MetadataResult carries structured metadata from a single provider.
 type MetadataResult struct {
 	HasMetadata          bool

@@ -11,6 +11,7 @@ import EditPersonDialog from "@/components/EditPersonDialog";
 import ItemGrid from "@/components/ItemGrid";
 import PageBack from "@/components/PageBack";
 import PageUnavailable from "@/components/PageUnavailable";
+import { PersonFilmography } from "@/components/PersonFilmography";
 import { Button } from "@/components/ui/button";
 import { useCatalogWindow } from "@/hooks/queries/catalog";
 import { personKeys } from "@/hooks/queries/keys";
@@ -222,35 +223,39 @@ export default function PersonDetail() {
 
       {/* Filmography */}
       <div className="page-shell space-y-6 py-6 sm:py-8">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold tracking-tight">Filmography</h2>
-          <div className="flex gap-1.5">
-            {(["all", "movie", "series"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => {
-                  setTypeFilter(t);
-                  setVisibleRange([0, limit - 1]);
-                }}
-                className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
-                  typeFilter === t
-                    ? "border-border/20 bg-foreground/10 text-foreground"
-                    : "border-border/10 text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {t === "all" ? "All" : t === "movie" ? "Movies" : "Series"}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <ItemGrid
-          totalItems={catalogQuery.data?.totalItems ?? 0}
-          pages={catalogQuery.data?.pages ?? new Map()}
-          pageSize={limit}
-          loading={catalogQuery.isLoading}
-          onVisibleRangeChange={handleVisibleRangeChange}
+        <h2 className="text-xl font-semibold tracking-tight">Filmography</h2>
+        <PersonFilmography
+          personId={id!}
+          fallback={
+            <div className="space-y-6">
+              <div className="flex gap-1.5">
+                {(["all", "movie", "series"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => {
+                      setTypeFilter(t);
+                      setVisibleRange([0, limit - 1]);
+                    }}
+                    className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
+                      typeFilter === t
+                        ? "border-border/20 bg-foreground/10 text-foreground"
+                        : "border-border/10 text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {t === "all" ? "All" : t === "movie" ? "Movies" : "Series"}
+                  </button>
+                ))}
+              </div>
+              <ItemGrid
+                totalItems={catalogQuery.data?.totalItems ?? 0}
+                pages={catalogQuery.data?.pages ?? new Map()}
+                pageSize={limit}
+                loading={catalogQuery.isLoading}
+                onVisibleRangeChange={handleVisibleRangeChange}
+              />
+            </div>
+          }
         />
       </div>
 

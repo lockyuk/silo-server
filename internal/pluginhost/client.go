@@ -302,6 +302,12 @@ func (c *MetadataProviderClient) GetPersonDetail(ctx context.Context, req *plugi
 	return c.client.GetPersonDetail(callCtx, req)
 }
 
+func (c *MetadataProviderClient) GetPersonCredits(ctx context.Context, req *pluginv1.GetPersonCreditsRequest) (*pluginv1.GetPersonCreditsResponse, error) {
+	callCtx, cancel := ensureDeadline(ctx, c.timeout)
+	defer cancel()
+	return c.client.GetPersonCredits(callCtx, req)
+}
+
 func (c *MetadataProviderClient) GetSeasons(ctx context.Context, req *pluginv1.GetSeasonsRequest) (*pluginv1.GetSeasonsResponse, error) {
 	callCtx, cancel := ensureDeadline(ctx, c.timeout)
 	defer cancel()

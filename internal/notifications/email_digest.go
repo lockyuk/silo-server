@@ -8,6 +8,7 @@ import (
 
 	"github.com/Silo-Server/silo-server/internal/telemetry"
 
+	"github.com/Silo-Server/silo-server/internal/emailalerts"
 	"github.com/Silo-Server/silo-server/internal/mail"
 	"github.com/Silo-Server/silo-server/internal/userstore"
 	"github.com/jackc/pgx/v5"
@@ -163,7 +164,7 @@ var (
 // EmailAvailable reports whether the email channel can deliver right now:
 // a sender is wired, the kill switch is on, and SMTP is configured.
 func (s *System) EmailAvailable(ctx context.Context) bool {
-	return s != nil && s.emailWorker != nil &&
+	return s != nil && s.EmailAlerts != nil &&
 		s.Settings.EmailEnabled(ctx) && s.mailSender.Enabled(ctx)
 }
 
@@ -174,6 +175,13 @@ type EmailPreferencesState struct {
 	CustomEmail  string
 	PendingEmail string
 	IsChild      bool
+	// The recipient choices: what to send (followed or all), which types
+	// and libraries (empty = every), and how recent counts as new (0 = the
+	// server default).
+	Content     string
+	Types       []string
+	LibraryIDs  []int
+	MaxAgeHours int
 }
 
 // EmailPreferences returns the profile's email notification state.
@@ -190,7 +198,39 @@ func (s *System) EmailPreferences(ctx context.Context, userID int, profileID str
 	state.CustomEmail = prefs.CustomEmail
 	state.PendingEmail = prefs.PendingEmail
 	state.IsChild = s.profileIsChild(ctx, userID, profileID)
+	state.Content = prefs.Content
+	state.Types = prefs.Types
+	state.LibraryIDs = prefs.LibraryIDs
+	state.MaxAgeHours = prefs.MaxAgeHours
 	return state, nil
+}
+
+// EmailChoices are a profile's optional email recipient choices; nil
+// fields are left as they are.
+type EmailChoices struct {
+	Content     *string
+	Types       *[]string
+	LibraryIDs  *[]int
+	MaxAgeHours *int
+}
+
+// SetEmailChoices stores the profile's recipient choices.
+func (s *System) SetEmailChoices(ctx context.Context, userID int, profileID string, c EmailChoices) error {
+	if s == nil || s.EmailPrefs == nil {
+		return ErrEmailModeInvalid
+	}
+	if c.Content != nil && *c.Content != EmailContentAll && *c.Content != EmailContentFollowed {
+		return ErrEmailModeInvalid
+	}
+	if c.Types != nil {
+		types := emailalerts.CleanTypes(*c.Types)
+		c.Types = &types
+	}
+	if c.MaxAgeHours != nil {
+		h := emailalerts.CleanMaxAge(*c.MaxAgeHours)
+		c.MaxAgeHours = &h
+	}
+	return s.EmailPrefs.SetChoices(ctx, userID, profileID, c)
 }
 
 // SetEmailMode validates and stores the profile's email mode. Enabling

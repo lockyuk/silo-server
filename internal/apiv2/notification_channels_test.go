@@ -14,6 +14,7 @@ type fakeNotificationChannels struct {
 	user          int
 	profile, mode string
 	writes        int
+	choices       notifications.EmailChoices
 	err           error
 }
 
@@ -24,6 +25,10 @@ func (f *fakeNotificationChannels) EmailPreferences(_ context.Context, user int,
 func (f *fakeNotificationChannels) SetEmailMode(_ context.Context, user int, profile, mode string) error {
 	f.user, f.profile, f.mode = user, profile, mode
 	f.writes++
+	return f.err
+}
+func (f *fakeNotificationChannels) SetEmailChoices(_ context.Context, user int, profile string, c notifications.EmailChoices) error {
+	f.user, f.profile, f.choices = user, profile, c
 	return f.err
 }
 func (f *fakeNotificationChannels) DiscordPrefsFor(_ context.Context, user int) (notifications.DiscordPrefs, error) {

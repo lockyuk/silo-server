@@ -41,6 +41,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/diagnostics"
 	"github.com/Silo-Server/silo-server/internal/downloads"
 	evt "github.com/Silo-Server/silo-server/internal/events"
+	"github.com/Silo-Server/silo-server/internal/filmography"
 	"github.com/Silo-Server/silo-server/internal/historyimport"
 	"github.com/Silo-Server/silo-server/internal/httpstream"
 	"github.com/Silo-Server/silo-server/internal/intromarkers"
@@ -225,6 +226,7 @@ type Dependencies struct {
 	TrickplayReader           *trickplay.Reader              // published seek previews for players (nil when not configured)
 	TrickplayAdmin            *trickplay.Admin               // seek preview status and regeneration for administrators (nil when not configured)
 	ThemeDownloads            *themedownload.Service         // downloaded TV theme songs (nil without blob storage)
+	Filmography               *filmography.Service           // a person's full credits (nil without metadata plugins)
 	LibraryMonitoring         apiv2.LibraryMonitoringService // real-time monitoring status for the v2 admin read (may be nil)
 	ActivityLogWriter         activitylog.Writer
 	ActivityLogRepo           *activitylog.Repo
@@ -2835,6 +2837,9 @@ func newChiRouter(deps Dependencies) chi.Router {
 		}
 		if deps.ThemeDownloads != nil {
 			v2deps.AdminThemeSongs = deps.ThemeDownloads
+		}
+		if deps.Filmography != nil {
+			v2deps.Filmography = deps.Filmography
 		}
 		v2deps.NotificationDiscordManagement = newDiscordNotificationsHandler(deps, profileTokenService)
 		v2deps.NotificationEmailVerification = deps.Notifications.EmailVerification

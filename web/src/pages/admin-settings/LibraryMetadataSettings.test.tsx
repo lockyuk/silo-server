@@ -16,6 +16,7 @@ vi.mock("@tanstack/react-query", async (importOriginal) => ({
 
 // The theme songs card loads its own data; it has its own test.
 vi.mock("./ThemeSongsSettings", () => ({ ThemeSongsSettings: () => null }));
+vi.mock("./FilmographySettings", () => ({ FilmographySettings: () => null }));
 
 vi.mock("@/hooks/useSettingsForm", () => ({
   useSettingsForm: (...args: unknown[]) => useSettingsFormMock(...args),

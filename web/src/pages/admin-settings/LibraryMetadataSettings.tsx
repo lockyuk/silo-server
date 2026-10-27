@@ -30,6 +30,7 @@ import {
   subtitleSyncExecutionOptions,
 } from "./playbackSettings.utils";
 import { SettingField, SettingFieldStatus } from "./SettingField";
+import { FilmographySettings } from "./FilmographySettings";
 import { ThemeSongsSettings } from "./ThemeSongsSettings";
 import { WORKER_SETTING_DEFAULTS, hasWorkerOverrides } from "./settingsWorkerDefaults";
 
@@ -400,6 +401,8 @@ export default function LibraryMetadataSettings() {
         </FieldGroup>
 
         <ThemeSongsSettings />
+
+        <FilmographySettings />
       </div>
 
       <SaveBar

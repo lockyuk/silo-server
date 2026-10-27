@@ -27,6 +27,12 @@ type PersonProvider interface {
 	GetPersonDetail(ctx context.Context, req PersonDetailRequest) (*PersonDetailResult, error)
 }
 
+// PersonCreditsProvider lists every title a person worked on.
+type PersonCreditsProvider interface {
+	Provider
+	GetPersonCredits(ctx context.Context, req PersonDetailRequest) ([]PersonCredit, error)
+}
+
 // ImageProvider fetches available images (posters, backdrops, logos).
 type ImageProvider interface {
 	Provider

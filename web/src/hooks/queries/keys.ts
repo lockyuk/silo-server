@@ -191,6 +191,7 @@ export const personKeys = {
   search: (query: string, limit = 20, mediaScope?: string) =>
     ["people", "search", query, limit, mediaScope ?? "all"] as const,
   detail: (id: string) => ["people", "detail", id] as const,
+  filmography: (id: string) => ["people", "filmography", id] as const,
   catalog: (
     id: string,
     options: {

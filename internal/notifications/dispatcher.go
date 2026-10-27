@@ -42,6 +42,9 @@ type DeliveryRowPayload struct {
 	PosterPath      string  `json:"poster_path,omitempty"`
 	PosterURL       string  `json:"poster_url,omitempty"`
 	PosterThumbhash string  `json:"poster_thumbhash,omitempty"`
+	// Overview is the episode's synopsis, or the title's for a movie, shown
+	// as a rich notification's text.
+	Overview string `json:"overview,omitempty"`
 	// ImageURL is the title's backdrop for rich notifications, and Actions
 	// the buttons to offer; see NotificationDisplay.
 	ImageURL     string               `json:"image_url,omitempty"`
@@ -76,10 +79,20 @@ func PayloadForRow(row DeliveryRow) DeliveryRowPayload {
 		EpisodeNumber:   row.EpisodeNumber,
 		PosterPath:      posterPath,
 		PosterThumbhash: row.PosterThumbhash,
+		Overview:        notificationOverview(row),
 		ReasonFlags:     reasonFlags,
 		CreatedAt:       row.CreatedAt,
 		ReadAt:          row.ReadAt,
 	}
+}
+
+// notificationOverview picks the synopsis a notification shows: the episode's
+// for an episode alert, otherwise the joined title's.
+func notificationOverview(row DeliveryRow) string {
+	if row.EpisodeID != nil && *row.EpisodeID != "" {
+		return row.EpisodeOverview
+	}
+	return row.SeriesOverview
 }
 
 // WebsocketDispatcher publishes notification.created on ChannelNotifications,

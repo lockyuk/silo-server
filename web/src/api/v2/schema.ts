@@ -26850,6 +26850,8 @@ export interface components {
        * @example 1
        */
       library_id?: string;
+      /** @description Synopsis of the episode, or of the movie, for a rich notification's text. */
+      overview?: string;
       poster_path?: string;
       poster_thumbhash?: string;
       /** Format: uri-reference */

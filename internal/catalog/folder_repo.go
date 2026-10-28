@@ -127,6 +127,7 @@ type UpdateFolderInput struct {
 	IntroDetectionEnabled    *bool
 	TrickplayEnabled         *bool
 	TrailerKinds             *[]string // nil = no change; empty slice disables remote videos
+	EpisodeStillSource       *string   // models.EpisodeStillSource*; nil = no change
 	// RealtimeMonitoring is nil on the frozen /api/v1 update path, which
 	// never sets it, so the column stays unchanged there.
 	RealtimeMonitoring *bool
@@ -194,7 +195,7 @@ func normalizeTrailerKindsInput(kinds []string) []string {
 
 // folderColumns is the list of columns returned by all SELECT queries.
 // Kept in one place so scanFolder stays in sync.
-const folderColumns = `id, type, name, enabled, metadata_language, auto_translate_metadata, chapter_thumbnails_enabled, intro_detection_enabled, trickplay_enabled, realtime_monitoring, trailer_kinds, poster_path, last_scanned_at,
+const folderColumns = `id, type, name, enabled, metadata_language, auto_translate_metadata, chapter_thumbnails_enabled, intro_detection_enabled, trickplay_enabled, realtime_monitoring, trailer_kinds, episode_still_source, poster_path, last_scanned_at,
 	scan_warning_code, scan_warning_message, scan_warning_at, allow_empty_cleanup_once, sort_order`
 
 // scanFolder scans a single row into a *models.MediaFolder.
@@ -213,6 +214,7 @@ func scanFolder(row pgx.Row) (*models.MediaFolder, error) {
 		&f.TrickplayEnabled,
 		&f.RealtimeMonitoring,
 		&f.TrailerKinds,
+		&f.EpisodeStillSource,
 		&f.PosterPath,
 		&f.LastScannedAt,
 		&f.ScanWarningCode,
@@ -249,6 +251,7 @@ func scanFolders(rows pgx.Rows) ([]*models.MediaFolder, error) {
 			&f.TrickplayEnabled,
 			&f.RealtimeMonitoring,
 			&f.TrailerKinds,
+			&f.EpisodeStillSource,
 			&f.PosterPath,
 			&f.LastScannedAt,
 			&f.ScanWarningCode,
@@ -506,6 +509,11 @@ func (r *FolderRepository) Update(ctx context.Context, id int, input UpdateFolde
 	if input.AutoTranslateMetadata != nil {
 		setClauses = append(setClauses, fmt.Sprintf("auto_translate_metadata = $%d", argIndex))
 		args = append(args, *input.AutoTranslateMetadata)
+		argIndex++
+	}
+	if input.EpisodeStillSource != nil {
+		setClauses = append(setClauses, fmt.Sprintf("episode_still_source = $%d", argIndex))
+		args = append(args, *input.EpisodeStillSource)
 		argIndex++
 	}
 	if input.ChapterThumbnailsEnabled != nil {

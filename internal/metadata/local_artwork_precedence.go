@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/Silo-Server/silo-server/internal/fspath"
 	"github.com/Silo-Server/silo-server/internal/models"
@@ -283,4 +284,52 @@ func (r *localArtworkRetention) probe(dir string) rootcheck.Result {
 		r.probes[dir] = folder
 	}
 	return folder
+}
+
+// recordTMDBEpisodeStill keeps TMDB's still beside a TVDB one when both
+// providers return a still for the same episode, for libraries that ask for
+// high-quality stills (useTMDBEpisodeStills). TVDB screencaps top out around
+// 640x360 while TMDB stills are usually full HD. Nothing is kept when the air
+// dates disagree, since the two providers can number an episode differently
+// and the TMDB still would then belong to another episode.
+func recordTMDBEpisodeStill(target *EpisodeResult, source EpisodeResult) {
+	if target.tmdbStill != "" || !strings.HasPrefix(target.StillPath, "tvdb://") || !strings.HasPrefix(source.StillPath, "tmdb://") {
+		return
+	}
+	if !episodeAirDatesAgree(target.AirDate, source.AirDate) {
+		return
+	}
+	target.tmdbStill, target.tmdbStillThumbhash = source.StillPath, source.StillThumbhash
+}
+
+// useTMDBEpisodeStills swaps each episode's TVDB still for the TMDB still
+// recordTMDBEpisodeStill kept. A still that is no longer TVDB's, such as a
+// local sidecar that arrived later, is left alone.
+func useTMDBEpisodeStills(episodes []EpisodeResult) {
+	for i := range episodes {
+		ep := &episodes[i]
+		if ep.tmdbStill != "" && strings.HasPrefix(ep.StillPath, "tvdb://") {
+			ep.StillPath, ep.StillThumbhash = ep.tmdbStill, ep.tmdbStillThumbhash
+		}
+	}
+}
+
+// episodeAirDatesAgree reports whether two provider air dates name the same
+// broadcast, allowing a few days for time zones and regional premieres. A
+// missing or unparsable date cannot disagree.
+func episodeAirDatesAgree(a, b string) bool {
+	const layout = "2006-01-02"
+	if len(a) < len(layout) || len(b) < len(layout) {
+		return true
+	}
+	at, errA := time.Parse(layout, a[:len(layout)])
+	bt, errB := time.Parse(layout, b[:len(layout)])
+	if errA != nil || errB != nil {
+		return true
+	}
+	gap := at.Sub(bt)
+	if gap < 0 {
+		gap = -gap
+	}
+	return gap <= 3*24*time.Hour
 }

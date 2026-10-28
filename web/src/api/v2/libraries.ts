@@ -48,6 +48,7 @@ export function libraryFromV2(library: LibraryV2): Library {
     intro_detection_enabled: library.intro_detection_enabled,
     trickplay_enabled: library.trickplay_enabled,
     trickplay_supported: library.trickplay_supported,
+    episode_still_source: library.episode_still_source,
     trailer_kinds: library.trailer_kinds,
     realtime_monitoring: library.realtime_monitoring,
     sort_order: library.sort_order,

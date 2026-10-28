@@ -884,6 +884,33 @@ func (s *MetadataService) resolveProcessLanguages(ctx context.Context, req Proce
 	return []string{"en"}, nil
 }
 
+// wantsHighQualityEpisodeStills reports whether the library being refreshed
+// asks for high-quality episode stills. Without a folder scope, any library
+// holding the item that asks for them is enough.
+func (s *MetadataService) wantsHighQualityEpisodeStills(ctx context.Context, contentID string, folderID int) bool {
+	if s.folderRepo == nil {
+		return false
+	}
+	folderIDs := []int{folderID}
+	if folderID <= 0 {
+		if contentID == "" || s.libraryRepo == nil {
+			return false
+		}
+		ids, err := s.libraryRepo.GetFolderIDsForItem(ctx, contentID)
+		if err != nil {
+			return false
+		}
+		folderIDs = ids
+	}
+	for _, id := range folderIDs {
+		folder, err := s.folderRepo.GetByID(ctx, id)
+		if err == nil && folder != nil && folder.EpisodeStillSource == models.EpisodeStillSourceHighQuality {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *MetadataService) resolveFolderLanguage(ctx context.Context, folderID int) string {
 	if folderID <= 0 || s.folderRepo == nil {
 		return "en"
@@ -2324,6 +2351,9 @@ func (s *MetadataService) processInternal(ctx context.Context, req ProcessReques
 				}
 			}
 			allEpisodes = flattenEpisodeResults(episodeResults)
+			if s.wantsHighQualityEpisodeStills(ctx, req.ContentID, scopeFolderID) {
+				useTMDBEpisodeStills(allEpisodes)
+			}
 		}
 	}
 	// Phase 5: Merge & Persist.
@@ -4762,7 +4792,11 @@ func (s *MetadataService) fetchTargetEpisodeResults(ctx context.Context, provide
 			accumulateEpisodeResults(episodeResults, []EpisodeResult{episode}, language)
 		}
 	}
-	return flattenEpisodeResults(episodeResults), searched, nil
+	results := flattenEpisodeResults(episodeResults)
+	if s.wantsHighQualityEpisodeStills(ctx, "", folderID) {
+		useTMDBEpisodeStills(results)
+	}
+	return results, searched, nil
 }
 
 func (s *MetadataService) enqueueSeriesChildImages(ctx context.Context, seriesID string, inputs []EnqueueImageCacheJobInput) {
@@ -5038,6 +5072,7 @@ func accumulateEpisodeResults(accumulator map[episodeResultKey]*EpisodeResult, e
 		preferRequestedLanguageText(&existing.Overview, &existing.OverviewLanguage, episode.Overview, episode.OverviewLanguage, language)
 
 		recordEpisodeStillFallback(existing, episode)
+		recordTMDBEpisodeStill(existing, episode)
 		preferLocalEpisodeStill(existing, &episode)
 		MergeEpisodeResult(&episode, existing, MergeFillEmpty)
 	}

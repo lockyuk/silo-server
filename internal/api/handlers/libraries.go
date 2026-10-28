@@ -243,6 +243,8 @@ type updateLibraryRequest struct {
 	RealtimeMonitoring *bool `json:"-"`
 	// TrickplayEnabled is set only by the v2 updateLibrary operation.
 	TrickplayEnabled *bool `json:"-"`
+	// EpisodeStillSource is set only by the v2 updateLibrary operation.
+	EpisodeStillSource *string `json:"-"`
 }
 
 // affectsTrickplay reports whether the update can change which of the
@@ -306,6 +308,8 @@ type libraryResponse struct {
 	// view only.
 	TrickplayEnabled   bool `json:"-"`
 	TrickplaySupported bool `json:"-"`
+	// EpisodeStillSource is read by the v2 library view only.
+	EpisodeStillSource string `json:"-"`
 }
 
 type libraryMountCheckRootResponse struct {
@@ -447,6 +451,7 @@ func toLibraryResponse(f *models.MediaFolder) libraryResponse {
 		ScanWarningAt:              f.ScanWarningAt,
 		RealtimeMonitoring:         f.RealtimeMonitoring,
 		TrickplayEnabled:           f.TrickplayEnabled,
+		EpisodeStillSource:         f.EpisodeStillSource,
 	}
 }
 

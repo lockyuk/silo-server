@@ -25,13 +25,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { EpisodeStillSource } from "@/api/types";
+import type { EpisodeFrameStills, EpisodeStillSource } from "@/api/types";
 import { Switch } from "@/components/ui/switch";
 import { useLibraryRealtimeMonitoring } from "@/hooks/queries/admin/libraries";
 import { cn } from "@/lib/utils";
 import { extraKindGroupLabel, PROVIDER_TRAILER_KINDS } from "@/lib/extraKinds";
 import { LANGUAGES } from "@/player/utils/languageNames";
 
+import EpisodeStillSizes from "./EpisodeStillSizes";
 import { LIBRARY_TYPES } from "./libraryTypes";
 import {
   REALTIME_MONITORING_SETTINGS_PATH,
@@ -336,6 +337,8 @@ function ProviderLevelSection({
   );
 }
 
+const FRAME_POSITIONS = [10, 20, 30, 40, 50] as const;
+
 export function MetadataFields({ form }: { form: LibraryFormController }) {
   return (
     <div className="space-y-5">
@@ -394,6 +397,52 @@ export function MetadataFields({ form }: { form: LibraryFormController }) {
             refreshes the library&apos;s metadata.
           </p>
         </div>
+      )}
+      {form.library && (form.type === "series" || form.type === "mixed") && (
+        <div className="space-y-1.5">
+          <Label htmlFor="episode-frame-stills">Thumbnails from the video</Label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Select
+              value={form.episodeFrameStills}
+              onValueChange={(value) => form.setEpisodeFrameStills(value as EpisodeFrameStills)}
+            >
+              <SelectTrigger id="episode-frame-stills" className="w-full sm:w-64">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="off">Never</SelectItem>
+                <SelectItem value="missing">Only when there is no image</SelectItem>
+                <SelectItem value="below_full_hd">When there is no Full HD image</SelectItem>
+              </SelectContent>
+            </Select>
+            {form.episodeFrameStills !== "off" && (
+              <Select
+                value={String(form.episodeFramePosition)}
+                onValueChange={(value) => form.setEpisodeFramePosition(Number(value))}
+              >
+                <SelectTrigger aria-label="Frame position" className="w-full sm:w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {FRAME_POSITIONS.map((pct) => (
+                    <SelectItem key={pct} value={String(pct)}>
+                      {pct}% into the episode
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <p className="text-muted-foreground text-xs">
+            Takes a full-resolution frame from the episode&apos;s own file, skipping dark or blank
+            frames. A frame only replaces a provider image it is sharper than. Frames are taken in
+            the background by the &ldquo;Episode Thumbnails From Video&rdquo; task; switching this
+            off refreshes the library&apos;s metadata to put provider images back.
+          </p>
+        </div>
+      )}
+      {form.library && (form.type === "series" || form.type === "mixed") && (
+        <EpisodeStillSizes libraryId={form.library.id} />
       )}
       {form.settingSupport.trailers && (
         <div className="space-y-1.5">

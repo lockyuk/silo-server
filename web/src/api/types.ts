@@ -3468,6 +3468,10 @@ export interface Library {
   trickplay_supported?: boolean;
   /** Where episode stills come from; high_quality prefers TMDB's full-HD stills over TVDB's. */
   episode_still_source?: EpisodeStillSource;
+  /** When an episode thumbnail is taken from a frame of the video. */
+  episode_frame_stills?: EpisodeFrameStills;
+  /** How far into the episode, in percent, a frame thumbnail is taken. */
+  episode_frame_position?: number;
   /** Allow-list of video kinds fetched during metadata refresh; empty disables. */
   trailer_kinds: string[];
   /**
@@ -3605,6 +3609,7 @@ export interface StaleMediaID {
 }
 
 export type EpisodeStillSource = "provider_order" | "high_quality";
+export type EpisodeFrameStills = "off" | "missing" | "below_full_hd";
 
 export interface CreateLibraryRequest {
   paths: string[];
@@ -3617,8 +3622,10 @@ export interface CreateLibraryRequest {
   intro_detection_enabled?: boolean;
   /** Sent only when it changes, so a server without seek previews never sees it. */
   trickplay_enabled?: boolean;
-  /** Update only; createLibrary does not take it. Sent only when it changes. */
+  /** Update only, like the two below; createLibrary does not take them. Sent only when changed. */
   episode_still_source?: EpisodeStillSource;
+  episode_frame_stills?: EpisodeFrameStills;
+  episode_frame_position?: number;
   trailer_kinds?: string[];
   /** Omitted on create means on. */
   realtime_monitoring?: boolean;

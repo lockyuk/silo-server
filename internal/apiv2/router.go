@@ -234,6 +234,7 @@ type Dependencies struct {
 	AdminPushStyle                AdminPushStyleService
 	AdminThemeSongs               AdminThemeSongsService
 	Filmography                   FilmographyService
+	LibraryEpisodeStillSizes      LibraryEpisodeStillSizesService
 	NotificationDiscordManagement NotificationDiscordManagementService
 	NotificationRelay             NotificationRelayService
 	AdminNotificationPush         AdminNotificationPushService

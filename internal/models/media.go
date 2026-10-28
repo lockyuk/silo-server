@@ -19,6 +19,14 @@ const (
 	EpisodeStillSourceHighQuality   = "high_quality"
 )
 
+// When a library takes episode thumbnails from a frame of the video
+// (MediaFolder.EpisodeFrameStills; internal/episodeframes).
+const (
+	EpisodeFrameStillsOff         = "off"
+	EpisodeFrameStillsMissing     = "missing"
+	EpisodeFrameStillsBelowFullHD = "below_full_hd"
+)
+
 // MediaFolder represents a row in the media_folders table.
 type MediaFolder struct {
 	ID                       int
@@ -45,7 +53,12 @@ type MediaFolder struct {
 	// EpisodeStillSourceProviderOrder (the provider chain decides) or
 	// EpisodeStillSourceHighQuality (TMDB's full-HD stills beat TVDB's
 	// screencaps whatever the chain order).
-	EpisodeStillSource    string
+	EpisodeStillSource string
+	// EpisodeFrameStills is when an episode's thumbnail is a frame of its
+	// video instead (EpisodeFrameStills*), and EpisodeFramePosition how far
+	// into the episode, in percent, the frame is taken.
+	EpisodeFrameStills    string
+	EpisodeFramePosition  int
 	PosterPath            string     // S3 key for library poster image
 	LastScannedAt         *time.Time // nullable
 	ScanWarningCode       *string

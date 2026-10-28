@@ -379,6 +379,8 @@ export const adminKeys = {
     ["admin", "devices", userId, deviceId] as const,
   libraries: () => ["admin", "libraries"] as const,
   libraryRealtimeMonitoring: () => ["admin", "libraries", "realtimeMonitoring"] as const,
+  libraryEpisodeStillSizes: (id: number) =>
+    ["admin", "libraries", id, "episodeStillSizes"] as const,
   libraryCapabilities: () => ["admin", "libraries", "capabilities"] as const,
   trickplayLibraries: () => ["admin", "trickplay", "libraries"] as const,
   itemTrickplay: (itemId: string) => ["admin", "trickplay", "items", itemId] as const,

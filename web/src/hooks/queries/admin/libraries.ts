@@ -120,6 +120,19 @@ export function useLibraryRealtimeMonitoring() {
   });
 }
 
+/** A library's episode thumbnails counted by source and size band. */
+export function useLibraryEpisodeStillSizes(id: number) {
+  return useQuery({
+    queryKey: adminKeys.libraryEpisodeStillSizes(id),
+    queryFn: ({ signal }) =>
+      v2("GET /api/v2/libraries/{id}/episode-still-sizes", {
+        path: { id: String(id) },
+        signal,
+      }),
+    staleTime: 30_000,
+  });
+}
+
 /**
  * Library feature detection: `realtime_monitoring` says the server offers the
  * status above, `trickplay` that it makes seek previews.

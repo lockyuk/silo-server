@@ -8846,6 +8846,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v2/libraries/{id}/episode-still-sizes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Count the library's episode thumbnails by source and size. Sizes are measured by the generate_episode_frame_stills task. */
+    get: operations["getLibraryEpisodeStillSizes"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v2/libraries/{id}/metadata-match-queue": {
     parameters: {
       query?: never;
@@ -25822,6 +25839,18 @@ export interface components {
       /** @example true */
       enabled: boolean;
       /**
+       * Format: int64
+       * @description How far into the episode, in percent, a frame thumbnail is taken
+       * @example 20
+       */
+      episode_frame_position: number;
+      /**
+       * @description When an episode's thumbnail is taken from a frame of its video: never, only when no provider has an image, or also when the provider image is smaller than full HD (1920x1080)
+       * @example off
+       * @enum {string}
+       */
+      episode_frame_stills: "off" | "missing" | "below_full_hd";
+      /**
        * @description Where episode stills come from: provider_order follows the provider chain; high_quality prefers TMDB's full-HD stills over TVDB's low-resolution screencaps
        * @example provider_order
        * @enum {string}
@@ -26063,6 +26092,32 @@ export interface components {
        * @example 1
        */
       library_id: string;
+    };
+    LibraryEpisodeStillSizeCount: {
+      /**
+       * Format: int64
+       * @example 120
+       */
+      count: number;
+      /**
+       * @description Size band of the stored still; unmeasured covers stills not measured yet or still downloading
+       * @enum {string}
+       */
+      size: "4k" | "1080p" | "720p" | "below_720p" | "none" | "unmeasured" | "unreadable";
+      /**
+       * @description Where the still came from: TMDB, TheTVDB, a frame of the video, an image beside the file, another provider, or no still
+       * @enum {string}
+       */
+      source: "tmdb" | "tvdb" | "frame" | "local" | "other" | "none";
+    };
+    LibraryEpisodeStillSizes: {
+      counts: components["schemas"]["LibraryEpisodeStillSizeCount"][];
+      /**
+       * Format: int64
+       * @description Episodes in the library
+       * @example 25634
+       */
+      total: number;
     };
     LibraryMountCheck: {
       /**
@@ -26366,6 +26421,18 @@ export interface components {
       chapter_thumbnails_enabled?: boolean;
       /** @example true */
       enabled?: boolean;
+      /**
+       * Format: int64
+       * @description How far into the episode, in percent, new frame thumbnails are taken
+       * @example 20
+       */
+      episode_frame_position?: number;
+      /**
+       * @description When an episode's thumbnail is taken from a frame of its video; taking fewer queues a full metadata refresh that restores provider images
+       * @example below_full_hd
+       * @enum {string}
+       */
+      episode_frame_stills?: "off" | "missing" | "below_full_hd";
       /**
        * @description Where episode stills come from; a change queues a full metadata refresh
        * @example high_quality
@@ -113389,6 +113456,115 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["EmptyRootCleanup"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  getLibraryEpisodeStillSizes: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        /** @description The library */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LibraryEpisodeStillSizes"];
         };
       };
       /** @description Bad Request */

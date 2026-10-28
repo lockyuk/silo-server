@@ -16,6 +16,8 @@
   "trailer_kinds": [
     "trailer"
   ],
+  "episode_frame_stills": "off",
+  "episode_frame_position": 20,
   "episode_still_source": "provider_order",
   "realtime_monitoring": true,
   "sort_order": 0,

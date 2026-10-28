@@ -206,6 +206,25 @@ func (c *Cacher) CacheExtraStill(ctx context.Context, data []byte, extraID strin
 	return res.OriginalPath, res.Thumbhash, nil
 }
 
+// CacheEpisodeFrameStill stores a frame of an episode's video as its still
+// (internal/episodeframes), keyed under the series like a local sidecar still
+// with a "frame" discriminator.
+func (c *Cacher) CacheEpisodeFrameStill(ctx context.Context, data []byte, seriesID string, seasonNumber, episodeNumber int) (storedPath string, thumbhash string, err error) {
+	res, err := c.CacheBytes(ctx, data, CacheRequest{
+		ProviderID:       "local",
+		ContentType:      "series",
+		ContentID:        seriesID,
+		ImageType:        metadata.ImageStill,
+		SeasonNumber:     &seasonNumber,
+		EpisodeNumber:    &episodeNumber,
+		KeyDiscriminator: "frame",
+	})
+	if err != nil {
+		return "", "", err
+	}
+	return res.OriginalPath, res.Thumbhash, nil
+}
+
 // validateCacheRequest checks the required identity fields and the
 // episode/season invariant shared by Cache and CacheBytes. Keeping it in one
 // place prevents the season/episode guard from drifting between the two paths:

@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import Notifications from "./Notifications";
+import { stubRadixDom } from "./adminPage.test-support";
 const state = vi.hoisted(() => ({
   list: {
     data: undefined as unknown,
@@ -12,6 +14,7 @@ const state = vi.hoisted(() => ({
     fetchNextPage: vi.fn(),
     restart: vi.fn(),
   },
+  listArgs: [] as unknown[][],
   all: { mutateAsync: vi.fn(), isPending: false, isError: false, reset: vi.fn() },
 }));
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({}) }));
@@ -20,10 +23,22 @@ vi.mock("@/hooks/useDocumentTitle", () => ({ useDocumentTitle: () => {} }));
 vi.mock("@/hooks/queries/notifications", async (importOriginal) => ({
   formatEpisodeCode: (await importOriginal<typeof import("@/hooks/queries/notifications")>())
     .formatEpisodeCode,
-  useNotifications: () => state.list,
+  useNotifications: (...args: unknown[]) => {
+    state.listArgs.push(args);
+    return state.list;
+  },
   useUnreadNotificationCount: () => ({ data: 2 }),
   useMarkAllNotificationsRead: () => state.all,
   useMarkNotificationRead: () => ({ mutate: vi.fn() }),
+}));
+vi.mock("@/hooks/queries/libraries", () => ({
+  useAvailableUserLibraries: () => ({
+    data: [
+      { id: 3, name: "Films", type: "movies" },
+      { id: 4, name: "TV Shows", type: "series" },
+      { id: 5, name: "Books", type: "audiobooks" },
+    ],
+  }),
 }));
 const row = {
   id: "one",
@@ -160,4 +175,24 @@ it("shows one page at a time and reads the next page on demand", async () => {
   await waitFor(() => expect(screen.getByText("Second page")).toBeInTheDocument());
   expect(screen.queryByText("Displayed episode")).not.toBeInTheDocument();
   expect(state.list.fetchNextPage).toHaveBeenCalledOnce();
+});
+
+it("filters by library and age, and says when nothing matches", async () => {
+  stubRadixDom();
+  const user = userEvent.setup();
+  state.listArgs = [];
+  renderAt();
+  expect(state.listArgs.at(-1)).toEqual(["all", 20, { libraryId: undefined, maxAgeDays: 0 }]);
+
+  await user.click(screen.getByRole("combobox", { name: "Library" }));
+  expect(screen.queryByRole("option", { name: "Books" })).toBeNull();
+  await user.click(screen.getByRole("option", { name: "Films" }));
+  await user.click(screen.getByRole("combobox", { name: "Age" }));
+  await user.click(screen.getByRole("option", { name: "Last 7 days" }));
+  expect(state.listArgs.at(-1)).toEqual(["all", 20, { libraryId: "3", maxAgeDays: 7 }]);
+
+  state.list.data = { pages: [{ notifications: [], read_cutoff: "c", total: 0 }] };
+  await user.click(screen.getByRole("button", { name: /^Unread/ }));
+  expect(screen.getByText("No notifications match these filters")).toBeInTheDocument();
+  expect(state.listArgs.at(-1)).toEqual(["unread", 20, { libraryId: "3", maxAgeDays: 7 }]);
 });

@@ -118553,8 +118553,12 @@ export interface operations {
     parameters: {
       query?: {
         cursor?: string;
+        /** @description Only notifications from this library. */
+        library_id?: string;
         /** @description Page size; default 50, maximum 200 */
         limit?: number;
+        /** @description Only notifications from the last this many days; 0 covers any age. */
+        max_age_days?: number;
         status?: "all" | "unread";
       };
       header: {

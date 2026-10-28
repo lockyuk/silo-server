@@ -18,7 +18,7 @@ import (
 type NotificationInboxService interface {
 	NotificationPushDisplay(context.Context, int, string, string) (notifications.NotificationDisplay, error)
 	NotificationCapabilities(context.Context) handlers.NotificationCapabilitiesView
-	ListNotificationInbox(context.Context, int, string, bool, int, *notifications.Cursor, *notifications.Cursor) (handlers.NotificationInboxPageView, error)
+	ListNotificationInbox(context.Context, int, string, notifications.InboxFilter, int, *notifications.Cursor, *notifications.Cursor) (handlers.NotificationInboxPageView, error)
 	SyncNotificationInbox(context.Context, int, string, int, *notifications.Cursor) ([]notifications.DeliveryRowPayload, bool, int, error)
 	GetNotificationInboxItem(context.Context, int, string, string) (notifications.DeliveryRowPayload, error)
 	NotificationUnreadCount(context.Context, int, string) (int, error)
@@ -150,8 +150,10 @@ func notificationItemOf(row notifications.DeliveryRowPayload) NotificationItem {
 
 type NotificationListInput struct {
 	LimitParam
-	Cursor string `query:"cursor"`
-	Status string `query:"status" default:"all" enum:"all,unread"`
+	Cursor     string `query:"cursor"`
+	Status     string `query:"status" default:"all" enum:"all,unread"`
+	LibraryID  ID     `query:"library_id" doc:"Only notifications from this library."`
+	MaxAgeDays int    `query:"max_age_days" minimum:"0" maximum:"3650" doc:"Only notifications from the last this many days; 0 covers any age."`
 }
 type NotificationSyncInput struct {
 	LimitParam
@@ -229,6 +231,8 @@ type NotificationReadAllInput struct {
 type notificationListPosition struct {
 	Before  *notifications.Cursor
 	Through notifications.Cursor
+	// Since is the age cutoff fixed by the first page, so later pages keep it.
+	Since *time.Time `json:",omitempty"`
 }
 
 func notificationOperation(method, path, id string) Operation {
@@ -301,7 +305,15 @@ func registerNotificationInbox(reg *Registry) {
 		if p != nil {
 			return nil, p
 		}
-		scope := notificationCursorScope(ctx, "listNotifications", in.Status+"/"+strconv.Itoa(in.Limit))
+		filter := notifications.InboxFilter{Unread: in.Status == "unread"}
+		if in.LibraryID != "" {
+			id, p := in.LibraryID.positive("query.library_id")
+			if p != nil {
+				return nil, p
+			}
+			filter.LibraryID = id
+		}
+		scope := notificationCursorScope(ctx, "listNotifications", in.Status+"/"+strconv.Itoa(in.Limit)+"/"+strconv.Itoa(filter.LibraryID)+"/"+strconv.Itoa(in.MaxAgeDays))
 		var pos notificationListPosition
 		var through *notifications.Cursor
 		if in.Cursor != "" {
@@ -309,8 +321,11 @@ func registerNotificationInbox(reg *Registry) {
 				return nil, p
 			}
 			through = &pos.Through
+		} else if in.MaxAgeDays > 0 {
+			pos.Since = new(time.Now().AddDate(0, 0, -in.MaxAgeDays))
 		}
-		view, err := svc.ListNotificationInbox(ctx, claimsFrom(ctx).UserID, profileFrom(ctx), in.Status == "unread", in.Limit, pos.Before, through)
+		filter.Since = pos.Since
+		view, err := svc.ListNotificationInbox(ctx, claimsFrom(ctx).UserID, profileFrom(ctx), filter, in.Limit, pos.Before, through)
 		if err != nil {
 			return nil, serviceProblem(err)
 		}
@@ -321,7 +336,7 @@ func registerNotificationInbox(reg *Registry) {
 		next := ""
 		if view.More && len(view.Items) > 0 {
 			last := view.Items[len(view.Items)-1]
-			next, err = cursors.Encode(scope, notificationListPosition{Before: &notifications.Cursor{CreatedAt: last.CreatedAt, ID: last.ID}, Through: view.Through})
+			next, err = cursors.Encode(scope, notificationListPosition{Before: &notifications.Cursor{CreatedAt: last.CreatedAt, ID: last.ID}, Through: view.Through, Since: pos.Since})
 			if err != nil {
 				return nil, serviceProblem(err)
 			}

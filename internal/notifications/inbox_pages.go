@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -19,7 +20,15 @@ func (r *DeliveryRepository) InboxCutoff(ctx context.Context, userID int, profil
 	return cursor, err
 }
 
-func (r *DeliveryRepository) ListInboxWindow(ctx context.Context, userID int, profileID string, unread bool, limit int, before *Cursor, through Cursor) ([]DeliveryRow, bool, error) {
+// InboxFilter narrows the inbox list. A zero LibraryID covers every library
+// and a nil Since covers any age.
+type InboxFilter struct {
+	Unread    bool
+	LibraryID int
+	Since     *time.Time
+}
+
+func (r *DeliveryRepository) ListInboxWindow(ctx context.Context, userID int, profileID string, filter InboxFilter, limit int, before *Cursor, through Cursor) ([]DeliveryRow, bool, error) {
 	limit = max(1, min(limit, 200))
 	if through.ID == "" {
 		return []DeliveryRow{}, false, nil
@@ -30,7 +39,7 @@ func (r *DeliveryRepository) ListInboxWindow(ctx context.Context, userID int, pr
 		beforeTime = before.CreatedAt
 		beforeID = before.ID
 	}
-	rows, err := r.pool.Query(ctx, deliveryRowSelect+` WHERE d.user_id = $1 AND d.profile_id = $2 AND (NOT $3 OR d.read_at IS NULL) AND (d.created_at,d.id)<=($4,$5) AND ($6::timestamptz IS NULL OR (d.created_at,d.id)<($6,$7)) ORDER BY d.created_at DESC,d.id DESC LIMIT $8`, userID, profileID, unread, through.CreatedAt, through.ID, beforeTime, beforeID, limit+1)
+	rows, err := r.pool.Query(ctx, deliveryRowSelect+` WHERE d.user_id = $1 AND d.profile_id = $2 AND (NOT $3 OR d.read_at IS NULL) AND (d.created_at,d.id)<=($4,$5) AND ($6::timestamptz IS NULL OR (d.created_at,d.id)<($6,$7)) AND ($9 = 0 OR d.library_id = $9) AND ($10::timestamptz IS NULL OR d.created_at >= $10) ORDER BY d.created_at DESC,d.id DESC LIMIT $8`, userID, profileID, filter.Unread, through.CreatedAt, through.ID, beforeTime, beforeID, limit+1, filter.LibraryID, filter.Since)
 	if err != nil {
 		return nil, false, err
 	}
@@ -46,12 +55,12 @@ func (r *DeliveryRepository) ListInboxWindow(ctx context.Context, userID int, pr
 }
 
 // InboxCount counts the deliveries a window covers, for page numbers.
-func (r *DeliveryRepository) InboxCount(ctx context.Context, userID int, profileID string, unread bool, through Cursor) (int, error) {
+func (r *DeliveryRepository) InboxCount(ctx context.Context, userID int, profileID string, filter InboxFilter, through Cursor) (int, error) {
 	if through.ID == "" {
 		return 0, nil
 	}
 	var n int
-	err := r.pool.QueryRow(ctx, `SELECT count(*) FROM notification_deliveries d WHERE d.user_id = $1 AND d.profile_id = $2 AND (NOT $3 OR d.read_at IS NULL) AND (d.created_at,d.id)<=($4,$5)`, userID, profileID, unread, through.CreatedAt, through.ID).Scan(&n)
+	err := r.pool.QueryRow(ctx, `SELECT count(*) FROM notification_deliveries d WHERE d.user_id = $1 AND d.profile_id = $2 AND (NOT $3 OR d.read_at IS NULL) AND (d.created_at,d.id)<=($4,$5) AND ($6 = 0 OR d.library_id = $6) AND ($7::timestamptz IS NULL OR d.created_at >= $7)`, userID, profileID, filter.Unread, through.CreatedAt, through.ID, filter.LibraryID, filter.Since).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("count notification inbox: %w", err)
 	}

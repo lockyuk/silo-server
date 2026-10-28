@@ -37,15 +37,25 @@ function notification(
   }
   return { ...row, library_id: libraryID, reason_flags: reasonFlags };
 }
+/** Narrows the inbox: one library, or the last so many days. */
+export type NotificationListFilter = { libraryId?: string; maxAgeDays?: number };
+
 export async function listNotifications(
   status: "all" | "unread",
   cursor?: string,
   profileContext = captureNotificationAuthority(),
   limit = 25,
+  filter: NotificationListFilter = {},
 ) {
   requireNotificationAuthority(profileContext);
   const body = await v2("GET /api/v2/notifications", {
-    query: { status, limit, cursor },
+    query: {
+      status,
+      limit,
+      cursor,
+      library_id: filter.libraryId || undefined,
+      max_age_days: filter.maxAgeDays || undefined,
+    },
     profileContext,
   });
   requireNotificationAuthority(profileContext);

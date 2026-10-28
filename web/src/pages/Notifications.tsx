@@ -7,6 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TablePagination } from "@/components/ui/pagination";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useAvailableUserLibraries } from "@/hooks/queries/libraries";
+import {
   formatEpisodeCode,
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
@@ -39,6 +47,14 @@ function storePageSize(size: number) {
     /* Storage is unavailable; the choice lasts for this visit. */
   }
 }
+
+const ALL = "all";
+const AGES = [
+  { days: 1, label: "Last 24 hours" },
+  { days: 7, label: "Last 7 days" },
+  { days: 30, label: "Last 30 days" },
+  { days: 90, label: "Last 90 days" },
+];
 
 const CHANNELS: Record<NotificationChannel, { label: string; icon: typeof Mail }> = {
   email_instant: { label: "Instant email", icon: Mail },
@@ -242,7 +258,15 @@ function NotificationsInbox() {
   const [pageSize, setPageSize] = useState(storedPageSize);
   const [page, setPage] = useState(0);
   const [turning, setTurning] = useState(false);
-  const list = useNotifications(statusFilter, pageSize);
+  const [libraryId, setLibraryId] = useState(ALL);
+  const [maxAgeDays, setMaxAgeDays] = useState(0);
+  const { data: libraryData } = useAvailableUserLibraries({ includeHidden: true });
+  const libraries = (libraryData ?? []).filter((l) => l.type === "movies" || l.type === "series");
+  const filtered = libraryId !== ALL || maxAgeDays > 0;
+  const list = useNotifications(statusFilter, pageSize, {
+    libraryId: libraryId === ALL ? undefined : libraryId,
+    maxAgeDays,
+  });
   const { data: unreadCount } = useUnreadNotificationCount();
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
@@ -306,7 +330,7 @@ function NotificationsInbox() {
         </div>
       </div>
 
-      <div className="mb-4 flex gap-1.5">
+      <div className="mb-4 flex flex-wrap items-center gap-1.5">
         {(["all", "unread"] as const).map((status) => (
           <Button
             key={status}
@@ -320,6 +344,48 @@ function NotificationsInbox() {
             {status === "all" ? "All" : `Unread${unreadCount ? ` (${unreadCount})` : ""}`}
           </Button>
         ))}
+        <div className="ml-auto flex flex-wrap gap-1.5">
+          {libraries.length > 1 && (
+            <Select
+              value={libraryId}
+              onValueChange={(value) => {
+                setLibraryId(value);
+                setPage(0);
+              }}
+            >
+              <SelectTrigger className="h-8 w-[160px]" aria-label="Library">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All libraries</SelectItem>
+                {libraries.map((library) => (
+                  <SelectItem key={library.id} value={String(library.id)}>
+                    {library.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Select
+            value={String(maxAgeDays)}
+            onValueChange={(value) => {
+              setMaxAgeDays(Number(value));
+              setPage(0);
+            }}
+          >
+            <SelectTrigger className="h-8 w-[150px]" aria-label="Age">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="0">Any time</SelectItem>
+              {AGES.map((age) => (
+                <SelectItem key={age.days} value={String(age.days)}>
+                  {age.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {markAllRead.isError && (
@@ -357,10 +423,16 @@ function NotificationsInbox() {
         <div className="text-muted-foreground flex flex-col items-center gap-3 py-20 text-center">
           <BellOff className="h-10 w-10 opacity-50" />
           <div className="text-sm">
-            {statusFilter === "unread" ? "No unread notifications" : "No notifications yet"}
+            {filtered
+              ? "No notifications match these filters"
+              : statusFilter === "unread"
+                ? "No unread notifications"
+                : "No notifications yet"}
           </div>
           <div className="max-w-sm text-xs">
-            New episodes and movies show up here as they arrive.
+            {filtered
+              ? "Try another library or a longer time span."
+              : "New episodes and movies show up here as they arrive."}
           </div>
         </div>
       ) : (

@@ -181371,6 +181371,33 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "description": "Only notifications from this library.",
+            "explode": false,
+            "in": "query",
+            "name": "library_id",
+            "schema": {
+              "description": "Only notifications from this library.",
+              "examples": [
+                "1"
+              ],
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only notifications from the last this many days; 0 covers any age.",
+            "explode": false,
+            "in": "query",
+            "name": "max_age_days",
+            "schema": {
+              "description": "Only notifications from the last this many days; 0 covers any age.",
+              "format": "int64",
+              "maximum": 3650,
+              "minimum": 0,
+              "type": "integer"
+            }
           }
         ],
         "responses": {

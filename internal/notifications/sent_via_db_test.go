@@ -72,7 +72,7 @@ func TestSentViaReportsEmailLegsAndPushDB(t *testing.T) {
 			t.Errorf("%s = %q, want %q", id, s, w)
 		}
 	}
-	n, err := NewDeliveryRepository(p).InboxCount(ctx, 1, "p", false, Cursor{CreatedAt: at.Add(time.Hour), ID: "zz"})
+	n, err := NewDeliveryRepository(p).InboxCount(ctx, 1, "p", InboxFilter{}, Cursor{CreatedAt: at.Add(time.Hour), ID: "zz"})
 	if err != nil || n != 4 {
 		t.Fatalf("InboxCount = %d, %v; want 4", n, err)
 	}

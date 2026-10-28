@@ -218,6 +218,7 @@ func (h *LibraryHandler) UpdateLibrary(ctx context.Context, id, userID int, req 
 		TrailerKinds:             req.TrailerKinds,
 		RealtimeMonitoring:       req.RealtimeMonitoring,
 		TrickplayEnabled:         req.TrickplayEnabled,
+		EpisodeStillSource:       req.EpisodeStillSource,
 	})
 	if err != nil {
 		if errors.Is(err, catalog.ErrFolderNotFound) {
@@ -255,16 +256,23 @@ func (h *LibraryHandler) UpdateLibrary(ctx context.Context, id, userID int, req 
 	if languageChanged {
 		h.wakeMetadataMatcher(ctx, folder.ID)
 	}
-	if h.JobRepo != nil && languageChanged {
+	// A new episode still source only reaches stored episodes through a full
+	// refresh, which also covers a language change made alongside it.
+	stillSourceChanged := oldFolder.EpisodeStillSource != folder.EpisodeStillSource
+	if h.JobRepo != nil && (languageChanged || stillSourceChanged) {
+		mode, reason := adminjob.LibraryRefreshModeQuick, "Queued metadata refresh after library language change"
+		if stillSourceChanged {
+			mode, reason = adminjob.LibraryRefreshModeFull, "Queued metadata refresh after episode thumbnail source change"
+		}
 		job, jobErr := h.JobRepo.CreateLibraryRefresh(ctx, userID, adminjob.LibraryRefreshRequest{
 			LibraryID:   folder.ID,
 			LibraryName: folder.Name,
-			Mode:        adminjob.LibraryRefreshModeQuick,
-		}, "Queued metadata refresh after library language change")
+			Mode:        mode,
+		}, reason)
 		if jobErr != nil {
 			var conflict *adminjob.ActiveJobConflictError
 			if !errors.As(jobErr, &conflict) {
-				slog.WarnContext(ctx, "queue language-change metadata refresh failed", "component", "api", "library_id", folder.ID, "error", jobErr)
+				slog.WarnContext(ctx, "queue library-settings metadata refresh failed", "component", "api", "library_id", folder.ID, "error", jobErr)
 			}
 		} else {
 			publishEventJob(ctx, h.EventsHub, "job.created", job)

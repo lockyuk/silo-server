@@ -13,6 +13,12 @@ const (
 	mediaCodecH264         = "h264"
 )
 
+// Episode still sources a library can choose (MediaFolder.EpisodeStillSource).
+const (
+	EpisodeStillSourceProviderOrder = "provider_order"
+	EpisodeStillSourceHighQuality   = "high_quality"
+)
+
 // MediaFolder represents a row in the media_folders table.
 type MediaFolder struct {
 	ID                       int
@@ -34,7 +40,12 @@ type MediaFolder struct {
 	// TrailerKinds is the allow-list of remote video kinds (ExtraKind values)
 	// fetched during metadata refresh for this library. Empty disables remote
 	// videos entirely.
-	TrailerKinds          []string
+	TrailerKinds []string
+	// EpisodeStillSource picks where episode stills come from:
+	// EpisodeStillSourceProviderOrder (the provider chain decides) or
+	// EpisodeStillSourceHighQuality (TMDB's full-HD stills beat TVDB's
+	// screencaps whatever the chain order).
+	EpisodeStillSource    string
 	PosterPath            string     // S3 key for library poster image
 	LastScannedAt         *time.Time // nullable
 	ScanWarningCode       *string

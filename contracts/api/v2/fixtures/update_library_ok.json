@@ -16,6 +16,7 @@
   "trailer_kinds": [
     "trailer"
   ],
+  "episode_still_source": "provider_order",
   "realtime_monitoring": true,
   "sort_order": 0,
   "poster_url": "https://s3.example.test/poster.jpg",

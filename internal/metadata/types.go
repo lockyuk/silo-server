@@ -580,6 +580,10 @@ type EpisodeResult struct {
 	// stillFallback is the remote still a local one displaced while results
 	// merged; the episode shows it until the local copy is cached.
 	stillFallback string
+	// tmdbStill is TMDB's still for an episode whose still came from TVDB;
+	// see recordTMDBEpisodeStill.
+	tmdbStill          string
+	tmdbStillThumbhash string
 	// titleLocal marks a title from the library's own files, which stands
 	// even when it looks like a numbered stand-in.
 	titleLocal bool

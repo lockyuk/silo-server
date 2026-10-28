@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
 
-import type { CreateLibraryRequest, Library, LibraryProviderChainResponse } from "@/api/types";
+import type {
+  CreateLibraryRequest,
+  EpisodeStillSource,
+  Library,
+  LibraryProviderChainResponse,
+} from "@/api/types";
 import {
   useCreateLibrary,
   useLibraryProviderDefaults,
@@ -178,6 +183,9 @@ export function useLibraryForm({
   const [chapterThumbnailsEnabled, setChapterThumbnailsEnabled] = useState(
     library?.chapter_thumbnails_enabled ?? false,
   );
+  const savedEpisodeStillSource = library?.episode_still_source ?? "provider_order";
+  const [episodeStillSource, setEpisodeStillSource] =
+    useState<EpisodeStillSource>(savedEpisodeStillSource);
   const savedTrickplay = library?.trickplay_enabled ?? false;
   const [trickplayEnabled, setTrickplayEnabled] = useState(savedTrickplay);
   // A new library follows its type's default until the switch is set:
@@ -337,6 +345,9 @@ export function useLibraryForm({
     if (trickplay !== savedTrickplay) {
       body.trickplay_enabled = trickplay;
     }
+    if (library && episodeStillSource !== savedEpisodeStillSource) {
+      body.episode_still_source = episodeStillSource;
+    }
 
     if (library) {
       updateMutation.mutate(
@@ -400,6 +411,8 @@ export function useLibraryForm({
     setChapterThumbnailsEnabled,
     trickplayEnabled,
     setTrickplayEnabled,
+    episodeStillSource,
+    setEpisodeStillSource,
     introDetectionEnabled,
     setIntroDetectionEnabled,
     trailerKinds,

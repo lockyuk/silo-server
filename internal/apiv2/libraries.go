@@ -1,6 +1,7 @@
 package apiv2
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/adminjob"
 	"github.com/Silo-Server/silo-server/internal/api/handlers"
 	catalogpkg "github.com/Silo-Server/silo-server/internal/catalog"
+	"github.com/Silo-Server/silo-server/internal/models"
 )
 
 // The libraries domain, administrator side: the /libraries operations that
@@ -37,6 +39,7 @@ type Library struct {
 	TrickplayEnabled           bool     `json:"trickplay_enabled" doc:"Generate seek-bar preview images for the library's video files" example:"false"`
 	TrickplaySupported         bool     `json:"trickplay_supported" doc:"Whether the server can produce seek-bar previews (public asset storage is configured)" example:"true"`
 	TrailerKinds               []string `json:"trailer_kinds" doc:"Remote video kinds fetched during metadata refresh; empty disables them" example:"[\"trailer\"]"`
+	EpisodeStillSource         string   `json:"episode_still_source" enum:"provider_order,high_quality" doc:"Where episode stills come from: provider_order follows the provider chain; high_quality prefers TMDB's full-HD stills over TVDB's low-resolution screencaps" example:"provider_order"`
 	RealtimeMonitoring         bool     `json:"realtime_monitoring" doc:"Scan automatically when files in the library's folders change. Takes effect only while the server-wide scanner.realtime_monitoring setting is on." example:"true"`
 	SortOrder                  int      `json:"sort_order" doc:"Position among libraries, lowest first" example:"0"`
 	PosterURL                  string   `json:"poster_url,omitempty" format:"uri-reference" doc:"Presigned poster URL; absent when the library has no poster"`
@@ -72,6 +75,7 @@ type LibraryUpdate struct {
 	IntroDetectionEnabled    *bool     `json:"intro_detection_enabled,omitempty" nullable:"false" example:"false"`
 	TrickplayEnabled         *bool     `json:"trickplay_enabled,omitempty" nullable:"false" doc:"Generate seek-bar preview images; turning it off deletes the library's previews" example:"false"`
 	TrailerKinds             *[]string `json:"trailer_kinds,omitempty" nullable:"false" doc:"Replaces the allow-list; empty disables remote videos" example:"[\"trailer\"]"`
+	EpisodeStillSource       *string   `json:"episode_still_source,omitempty" nullable:"false" enum:"provider_order,high_quality" doc:"Where episode stills come from; a change queues a full metadata refresh" example:"high_quality"`
 	RealtimeMonitoring       *bool     `json:"realtime_monitoring,omitempty" nullable:"false" doc:"Scan automatically when files in the library's folders change. Takes effect only while the server-wide scanner.realtime_monitoring setting is on." example:"true"`
 }
 
@@ -1124,6 +1128,7 @@ func (reg *Registry) updateLibrary(ctx context.Context, in *LibraryUpdateInput) 
 		TrailerKinds:             in.Body.TrailerKinds,
 		RealtimeMonitoring:       in.Body.RealtimeMonitoring,
 		TrickplayEnabled:         in.Body.TrickplayEnabled,
+		EpisodeStillSource:       in.Body.EpisodeStillSource,
 	})
 	if err != nil {
 		return nil, libraryProblem(err)
@@ -1551,6 +1556,7 @@ func libraryOf(v handlers.LibraryView) Library {
 		TrickplayEnabled:           v.TrickplayEnabled,
 		TrickplaySupported:         v.TrickplaySupported,
 		TrailerKinds:               NonNil(v.TrailerKinds),
+		EpisodeStillSource:         cmp.Or(v.EpisodeStillSource, models.EpisodeStillSourceProviderOrder),
 		RealtimeMonitoring:         v.RealtimeMonitoring,
 		SortOrder:                  v.SortOrder,
 		PosterURL:                  v.PosterURL,

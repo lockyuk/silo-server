@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -620,5 +621,47 @@ func TestTargetRefreshMarksLocalArtworkSearchOnlyWhenTheLocalProviderAnswered(t 
 				t.Fatalf("searched levels = %b, want %b", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestUseTMDBEpisodeStillsReplacesTVDBStills(t *testing.T) {
+	const localStill = "file:///media/tv/Show/Season 01/Show S01E04-thumb.jpg?v=10-1"
+	accumulator := make(map[episodeResultKey]*EpisodeResult)
+	accumulateEpisodeResults(accumulator, []EpisodeResult{
+		{SeasonNumber: 1, EpisodeNumber: 1, Title: "Pilot", AirDate: "2020-01-05", StillPath: "tvdb://still-1.jpg", StillThumbhash: "tvdb-1"},
+		{SeasonNumber: 1, EpisodeNumber: 2, Title: "Two", AirDate: "2020-01-12", StillPath: "tvdb://still-2.jpg", StillThumbhash: "tvdb-2"},
+		{SeasonNumber: 1, EpisodeNumber: 3, Title: "Three", StillPath: "tvdb://still-3.jpg"},
+		{SeasonNumber: 1, EpisodeNumber: 4, Title: "Four", StillPath: "tvdb://still-4.jpg"},
+	}, "")
+	accumulateEpisodeResults(accumulator, []EpisodeResult{
+		{SeasonNumber: 1, EpisodeNumber: 1, Title: "Other", AirDate: "2020-01-06", StillPath: "tmdb://still-1.jpg", StillThumbhash: "tmdb-1"},
+		{SeasonNumber: 1, EpisodeNumber: 2, AirDate: "2020-03-01", StillPath: "tmdb://still-2.jpg", StillThumbhash: "tmdb-2"},
+		{SeasonNumber: 1, EpisodeNumber: 4, StillPath: "tmdb://still-4.jpg"},
+	}, "")
+	accumulateEpisodeResults(accumulator, []EpisodeResult{{SeasonNumber: 1, EpisodeNumber: 4, StillPath: localStill}}, "")
+
+	// Provider order keeps every TVDB still.
+	for _, ep := range flattenEpisodeResults(accumulator) {
+		if ep.EpisodeNumber != 4 && !strings.HasPrefix(ep.StillPath, "tvdb://") {
+			t.Fatalf("provider order episode %d = %q, want the TVDB still", ep.EpisodeNumber, ep.StillPath)
+		}
+	}
+
+	episodes := flattenEpisodeResults(accumulator)
+	useTMDBEpisodeStills(episodes)
+	want := map[int][2]string{
+		1: {"tmdb://still-1.jpg", "tmdb-1"}, // TMDB beats TVDB; the title stays TVDB's
+		2: {"tvdb://still-2.jpg", "tvdb-2"}, // air dates disagree
+		3: {"tvdb://still-3.jpg", ""},       // TMDB has no still
+		4: {localStill, ""},                 // a local sidecar beats both
+	}
+	for _, ep := range episodes {
+		w := want[ep.EpisodeNumber]
+		if ep.StillPath != w[0] || ep.StillThumbhash != w[1] {
+			t.Fatalf("high quality episode %d = %q/%q, want %q/%q", ep.EpisodeNumber, ep.StillPath, ep.StillThumbhash, w[0], w[1])
+		}
+	}
+	if episodes[0].Title != "Pilot" {
+		t.Fatalf("episode 1 title = %q, want the first provider's", episodes[0].Title)
 	}
 }

@@ -25822,6 +25822,12 @@ export interface components {
       /** @example true */
       enabled: boolean;
       /**
+       * @description Where episode stills come from: provider_order follows the provider chain; high_quality prefers TMDB's full-HD stills over TVDB's low-resolution screencaps
+       * @example provider_order
+       * @enum {string}
+       */
+      episode_still_source: "provider_order" | "high_quality";
+      /**
        * @description Opaque identifier
        * @example 1
        */
@@ -26360,6 +26366,12 @@ export interface components {
       chapter_thumbnails_enabled?: boolean;
       /** @example true */
       enabled?: boolean;
+      /**
+       * @description Where episode stills come from; a change queues a full metadata refresh
+       * @example high_quality
+       * @enum {string}
+       */
+      episode_still_source?: "provider_order" | "high_quality";
       /** @example false */
       intro_detection_enabled?: boolean;
       /**

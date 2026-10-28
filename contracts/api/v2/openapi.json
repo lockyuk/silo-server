@@ -33781,6 +33781,17 @@
             ],
             "type": "boolean"
           },
+          "episode_still_source": {
+            "description": "Where episode stills come from: provider_order follows the provider chain; high_quality prefers TMDB's full-HD stills over TVDB's low-resolution screencaps",
+            "enum": [
+              "provider_order",
+              "high_quality"
+            ],
+            "examples": [
+              "provider_order"
+            ],
+            "type": "string"
+          },
           "id": {
             "description": "Opaque identifier",
             "examples": [
@@ -33914,6 +33925,7 @@
           "trickplay_enabled",
           "trickplay_supported",
           "trailer_kinds",
+          "episode_still_source",
           "realtime_monitoring",
           "sort_order"
         ],
@@ -34973,6 +34985,17 @@
               true
             ],
             "type": "boolean"
+          },
+          "episode_still_source": {
+            "description": "Where episode stills come from; a change queues a full metadata refresh",
+            "enum": [
+              "provider_order",
+              "high_quality"
+            ],
+            "examples": [
+              "high_quality"
+            ],
+            "type": "string"
           },
           "intro_detection_enabled": {
             "examples": [

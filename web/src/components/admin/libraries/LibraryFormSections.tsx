@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { EpisodeStillSource } from "@/api/types";
 import { Switch } from "@/components/ui/switch";
 import { useLibraryRealtimeMonitoring } from "@/hooks/queries/admin/libraries";
 import { cn } from "@/lib/utils";
@@ -372,6 +373,28 @@ export function MetadataFields({ form }: { form: LibraryFormController }) {
         />
       </div>
       {form.library && <LibraryTranslatePanel libraryId={form.library.id} />}
+      {form.library && (form.type === "series" || form.type === "mixed") && (
+        <div className="space-y-1.5">
+          <Label htmlFor="episode-still-source">Episode thumbnails</Label>
+          <Select
+            value={form.episodeStillSource}
+            onValueChange={(value) => form.setEpisodeStillSource(value as EpisodeStillSource)}
+          >
+            <SelectTrigger id="episode-still-source" className="w-full sm:w-64">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="high_quality">High quality (prefer TMDB)</SelectItem>
+              <SelectItem value="provider_order">Follow provider order</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-muted-foreground text-xs">
+            TVDB episode images are small (640×360 at most); TMDB&apos;s are usually full HD. High
+            quality uses TMDB&apos;s image whenever it has one for the episode. Saving a change
+            refreshes the library&apos;s metadata.
+          </p>
+        </div>
+      )}
       {form.settingSupport.trailers && (
         <div className="space-y-1.5">
           <Label>Trailer &amp; extras types</Label>

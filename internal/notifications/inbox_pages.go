@@ -45,6 +45,56 @@ func (r *DeliveryRepository) ListInboxWindow(ctx context.Context, userID int, pr
 	return result, more, nil
 }
 
+// InboxCount counts the deliveries a window covers, for page numbers.
+func (r *DeliveryRepository) InboxCount(ctx context.Context, userID int, profileID string, unread bool, through Cursor) (int, error) {
+	if through.ID == "" {
+		return 0, nil
+	}
+	var n int
+	err := r.pool.QueryRow(ctx, `SELECT count(*) FROM notification_deliveries d WHERE d.user_id = $1 AND d.profile_id = $2 AND (NOT $3 OR d.read_at IS NULL) AND (d.created_at,d.id)<=($4,$5)`, userID, profileID, unread, through.CreatedAt, through.ID).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count notification inbox: %w", err)
+	}
+	return n, nil
+}
+
+// SentVia reports how each delivery reached the profile beyond the inbox:
+// email_instant, email_daily and email_weekly for the alert emails that
+// carried its item, and push once a phone push went out (on its own or
+// inside a grouped push).
+func (r *DeliveryRepository) SentVia(ctx context.Context, userID int, profileID string, ids []string) (map[string][]string, error) {
+	out := make(map[string][]string, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT d.id,
+		       ARRAY(SELECT 'email_' || s.leg FROM notification_email_sent_items s
+		             WHERE s.user_id = d.user_id AND s.profile_id = d.profile_id
+		               AND s.content_id = COALESCE(d.episode_id, d.series_id)
+		             ORDER BY array_position(ARRAY['instant','daily','weekly'], s.leg))
+		       || CASE WHEN EXISTS (SELECT 1 FROM push_delivery_attempts a
+		                            WHERE a.notification_delivery_id = d.id AND a.outcome IN ('delivered', 'batched'))
+		               THEN ARRAY['push'] ELSE '{}'::text[] END
+		FROM notification_deliveries d
+		WHERE d.user_id = $1 AND d.profile_id = $2 AND d.id = ANY($3)`, userID, profileID, ids)
+	if err != nil {
+		return nil, fmt.Errorf("read notification channels: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var via []string
+		if err := rows.Scan(&id, &via); err != nil {
+			return nil, fmt.Errorf("scan notification channels: %w", err)
+		}
+		if len(via) > 0 {
+			out[id] = via
+		}
+	}
+	return out, rows.Err()
+}
+
 // MarkReadThrough never expands the target when the same command is retried.
 func (r *DeliveryRepository) MarkReadThrough(ctx context.Context, userID int, profileID string, through Cursor) (int64, error) {
 	if through.ID == "" {

@@ -3041,11 +3041,17 @@ export interface AppNotification {
   reason_flags: NotificationReasonFlags;
   created_at: string;
   read_at: string | null;
+  /** Channels that carried it besides the inbox; inbox pages only. */
+  sent_via?: NotificationChannel[];
 }
+
+export type NotificationChannel = "email_instant" | "email_daily" | "email_weekly" | "push";
 
 export interface NotificationListResponse {
   notifications: AppNotification[];
   next_cursor?: string;
+  /** Notifications across every page. */
+  total?: number;
 }
 
 export interface NotificationSyncResponse {

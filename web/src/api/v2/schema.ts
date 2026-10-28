@@ -27633,6 +27633,8 @@ export interface components {
       };
       /** Format: int64 */
       season_number?: number;
+      /** @description Channels that carried the notification besides the inbox: the alert emails that included it and phone push. Filled on inbox pages only. */
+      sent_via?: ("email_instant" | "email_daily" | "email_weekly" | "push")[];
       /**
        * @description Opaque identifier
        * @example 1
@@ -27652,6 +27654,11 @@ export interface components {
       /** @description Cursor state; absent for bounded unpaginated collections */
       page?: components["schemas"]["PageInfo"];
       read_cutoff: string;
+      /**
+       * Format: int64
+       * @description Notifications in the whole list (every page), for page numbers.
+       */
+      total: number;
     };
     NotificationPreferences: {
       enabled: boolean;

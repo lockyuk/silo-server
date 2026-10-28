@@ -37938,6 +37938,19 @@
             "format": "int64",
             "type": "integer"
           },
+          "sent_via": {
+            "description": "Channels that carried the notification besides the inbox: the alert emails that included it and phone push. Filled on inbox pages only.",
+            "items": {
+              "enum": [
+                "email_instant",
+                "email_daily",
+                "email_weekly",
+                "push"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
           "series_id": {
             "description": "Opaque identifier",
             "examples": [
@@ -37984,10 +37997,16 @@
           },
           "read_cutoff": {
             "type": "string"
+          },
+          "total": {
+            "description": "Notifications in the whole list (every page), for page numbers.",
+            "format": "int64",
+            "type": "integer"
           }
         },
         "required": [
           "read_cutoff",
+          "total",
           "items"
         ],
         "type": "object"

@@ -1,31 +1,51 @@
 import { useAuth } from "@/hooks/useAuth";
 import { notificationScope } from "@/api/v2/notifications";
-import { Fragment, useState, useRef } from "react";
-import { useSearchParams } from "react-router";
-import { Bell, BellOff, Check, CheckCheck, Loader2, Settings2 } from "lucide-react";
-import type { AppNotification } from "@/api/types";
+import { useState, useRef } from "react";
+import { Bell, BellOff, Check, CheckCheck, Mail, Smartphone } from "lucide-react";
+import type { AppNotification, NotificationChannel } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Separator } from "@/components/ui/separator";
+import { TablePagination } from "@/components/ui/pagination";
 import {
   formatEpisodeCode,
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
-  useNotificationPreferences,
   useNotifications,
   useUnreadNotificationCount,
-  useUpdateNotificationPreferences,
 } from "@/hooks/queries/notifications";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { preferredDateLocale } from "@/lib/datetime";
 import { requestDetailHref } from "@/lib/mediaRequests";
 import ViewTransitionLink from "@/components/ViewTransitionLink";
-import { NotifiedSeriesList } from "@/components/notifications/NotifiedSeriesList";
-import { useNotificationCapability } from "@/hooks/queries/notificationWebhooks";
 import { NotificationPoster } from "@/components/notifications/NotificationPoster";
-import { NOTIFICATION_REASONS } from "@/components/notifications/reasons";
+
+const PAGE_SIZES = [10, 20, 50];
+const PAGE_SIZE_KEY = "silo.notifications.pageSize";
+
+function storedPageSize(): number {
+  try {
+    const value = Number(localStorage.getItem(PAGE_SIZE_KEY));
+    if (PAGE_SIZES.includes(value)) return value;
+  } catch {
+    /* Storage is unavailable; use the default. */
+  }
+  return 20;
+}
+
+function storePageSize(size: number) {
+  try {
+    localStorage.setItem(PAGE_SIZE_KEY, String(size));
+  } catch {
+    /* Storage is unavailable; the choice lasts for this visit. */
+  }
+}
+
+const CHANNELS: Record<NotificationChannel, { label: string; icon: typeof Mail }> = {
+  email_instant: { label: "Instant email", icon: Mail },
+  email_daily: { label: "Daily digest", icon: Mail },
+  email_weekly: { label: "Weekly digest", icon: Mail },
+  push: { label: "Push", icon: Smartphone },
+};
 
 function formatNotificationTime(value: string): string {
   const date = new Date(value);
@@ -121,16 +141,6 @@ function notificationHref(notification: AppNotification): string | null {
   return null;
 }
 
-function reasonLabels(notification: AppNotification): string[] {
-  const flags = notification.reason_flags ?? {};
-  const labels: string[] = NOTIFICATION_REASONS.filter((reason) => flags[reason.key]).map(
-    (reason) => reason.label,
-  );
-  // "Everything new" explains a row only when no follow reason does.
-  if (labels.length === 0 && flags.new_release) labels.push("New release");
-  return labels;
-}
-
 function NotificationRow({
   notification,
   onMarkRead,
@@ -163,16 +173,22 @@ function NotificationRow({
         <div className="text-muted-foreground mt-0.5 truncate text-sm">
           {notificationDescription(notification)}
         </div>
-        {reasonLabels(notification).length > 0 && (
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {reasonLabels(notification).map((label) => (
-              <span
-                key={label}
-                className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[10px] font-medium"
-              >
-                {label}
-              </span>
-            ))}
+        {notification.sent_via && notification.sent_via.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1" aria-label="Sent as">
+            {notification.sent_via.map((channel) => {
+              const info = CHANNELS[channel];
+              if (!info) return null;
+              const Icon = info.icon;
+              return (
+                <span
+                  key={channel}
+                  className="bg-muted text-muted-foreground inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                >
+                  <Icon className="h-3 w-3" />
+                  {info.label}
+                </span>
+              );
+            })}
           </div>
         )}
       </div>
@@ -216,123 +232,6 @@ function NotificationRow({
   );
 }
 
-function NotificationPreferencesPopover({
-  open,
-  onOpenChange,
-  onSeeSeries,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** Opens the Series view; absent when the server has none. */
-  onSeeSeries?: () => void;
-}) {
-  const { data: prefs, isLoading, refetch } = useNotificationPreferences();
-  const updatePrefs = useUpdateNotificationPreferences();
-
-  const toggles: Array<{
-    key:
-      | "enabled"
-      | "notify_favorites"
-      | "notify_watchlist"
-      | "notify_continue_watching"
-      | "notify_next_up";
-    label: string;
-    description: string;
-  }> = [
-    {
-      key: "enabled",
-      label: "Notifications",
-      description: "Master switch for this profile",
-    },
-    {
-      key: "notify_favorites",
-      label: "Favorites",
-      description: "New episodes of favorited series",
-    },
-    {
-      key: "notify_watchlist",
-      label: "Watchlist",
-      description: "New episodes of watchlisted series",
-    },
-    {
-      key: "notify_continue_watching",
-      label: "Continue Watching",
-      description: "Series you are actively watching",
-    },
-    {
-      key: "notify_next_up",
-      label: "Next Up",
-      description: "The next episode after your progress",
-    },
-  ];
-
-  return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Settings2 className="mr-1.5 h-4 w-4" />
-          Preferences
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-4">
-        {isLoading ? (
-          <div className="space-y-3">
-            <Skeleton className="h-6 w-full" />
-            <Skeleton className="h-6 w-full" />
-            <Skeleton className="h-6 w-full" />
-          </div>
-        ) : !prefs ? (
-          <div className="space-y-3">
-            <p className="text-muted-foreground text-sm">Couldn’t load preferences.</p>
-            <Button size="sm" variant="outline" onClick={() => void refetch()}>
-              Retry
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-3.5">
-            {toggles.map((toggle, index) => (
-              <Fragment key={toggle.key}>
-                {index === 1 && <Separator />}
-                <div
-                  className={`flex items-center justify-between gap-3 transition-opacity ${
-                    index > 0 && !prefs.enabled ? "opacity-50" : ""
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium">{toggle.label}</div>
-                    <div className="text-muted-foreground text-xs">{toggle.description}</div>
-                  </div>
-                  <Switch
-                    checked={prefs[toggle.key]}
-                    disabled={index > 0 && !prefs.enabled}
-                    onCheckedChange={(checked) => updatePrefs.mutate({ [toggle.key]: checked })}
-                  />
-                </div>
-              </Fragment>
-            ))}
-            {onSeeSeries && (
-              <>
-                <Separator />
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="h-auto p-0"
-                  onClick={() => {
-                    onOpenChange(false);
-                    onSeeSeries();
-                  }}
-                >
-                  See which series notify you
-                </Button>
-              </>
-            )}
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
-  );
-}
-
 export default function Notifications() {
   useAuth();
   return <NotificationsInbox key={notificationScope()} />;
@@ -340,18 +239,16 @@ export default function Notifications() {
 function NotificationsInbox() {
   useDocumentTitle("Notifications");
   const [statusFilter, setStatusFilter] = useState<"all" | "unread">("all");
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [preferencesOpen, setPreferencesOpen] = useState(false);
-  const { data: capability } = useNotificationCapability();
-  const seriesAvailable = capability?.series?.available === true;
-  const showSeries = seriesAvailable && searchParams.get("view") === "series";
-  const openSeries = seriesAvailable ? () => setSearchParams({ view: "series" }) : undefined;
-  const list = useNotifications(statusFilter);
+  const [pageSize, setPageSize] = useState(storedPageSize);
+  const [page, setPage] = useState(0);
+  const [turning, setTurning] = useState(false);
+  const list = useNotifications(statusFilter, pageSize);
   const { data: unreadCount } = useUnreadNotificationCount();
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
   const markAllBusy = useRef(false);
-  const cutoff = list.data?.pages[0]?.read_cutoff;
+  const pages = list.data?.pages ?? [];
+  const cutoff = pages[0]?.read_cutoff;
   async function markDisplayedRead() {
     if (markAllBusy.current || !cutoff) return;
     markAllBusy.current = true;
@@ -364,7 +261,28 @@ function NotificationsInbox() {
     }
   }
 
-  const notifications = list.data?.pages.flatMap((page) => page.notifications) ?? [];
+  // Pages come one cursor at a time, so a jump ahead reads the pages between.
+  async function goToPage(target: number) {
+    if (turning) return;
+    setTurning(true);
+    try {
+      let loaded = pages.length;
+      let more = list.hasNextPage;
+      while (loaded <= target && more) {
+        const result = await list.fetchNextPage();
+        if (result.isError) break;
+        loaded = result.data?.pages.length ?? loaded;
+        more = result.hasNextPage;
+      }
+      setPage(Math.min(target, Math.max(0, loaded - 1)));
+    } finally {
+      setTurning(false);
+    }
+  }
+
+  const shownPage = Math.min(page, Math.max(0, pages.length - 1));
+  const notifications = pages[shownPage]?.notifications ?? [];
+  const total = pages[0]?.total ?? notifications.length;
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8">
@@ -374,7 +292,7 @@ function NotificationsInbox() {
           Notifications
         </h1>
         <div className="ml-auto flex items-center gap-2">
-          {!showSeries && (unreadCount ?? 0) > 0 && (
+          {(unreadCount ?? 0) > 0 && (
             <Button
               variant="outline"
               size="sm"
@@ -385,11 +303,6 @@ function NotificationsInbox() {
               Mark all read
             </Button>
           )}
-          <NotificationPreferencesPopover
-            open={preferencesOpen}
-            onOpenChange={setPreferencesOpen}
-            onSeeSeries={openSeries}
-          />
         </div>
       </div>
 
@@ -397,102 +310,85 @@ function NotificationsInbox() {
         {(["all", "unread"] as const).map((status) => (
           <Button
             key={status}
-            variant={!showSeries && statusFilter === status ? "secondary" : "ghost"}
+            variant={statusFilter === status ? "secondary" : "ghost"}
             size="sm"
             onClick={() => {
               setStatusFilter(status);
-              if (showSeries) setSearchParams({}, { replace: true });
+              setPage(0);
             }}
           >
             {status === "all" ? "All" : `Unread${unreadCount ? ` (${unreadCount})` : ""}`}
           </Button>
         ))}
-        {openSeries && (
-          <Button variant={showSeries ? "secondary" : "ghost"} size="sm" onClick={openSeries}>
-            Series
-          </Button>
-        )}
       </div>
 
-      {showSeries ? (
-        <NotifiedSeriesList
-          onOpenPreferences={() => setPreferencesOpen(true)}
-          canMute={capability?.series?.mute === true}
-        />
+      {markAllRead.isError && (
+        <p role="alert">
+          Could not mark the displayed notifications read.{" "}
+          <Button
+            onClick={() => {
+              void list.restart().then(() => markAllRead.reset());
+            }}
+          >
+            Reload inbox
+          </Button>{" "}
+          before trying again.
+        </p>
+      )}
+      {list.isError && (
+        <div role="alert">
+          Could not load notifications.{" "}
+          <Button
+            onClick={() => {
+              void list.restart().then(() => markAllRead.reset());
+            }}
+          >
+            Reload notifications
+          </Button>
+        </div>
+      )}
+      {list.isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <Skeleton key={index} className="h-20 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : notifications.length === 0 && !list.isError ? (
+        <div className="text-muted-foreground flex flex-col items-center gap-3 py-20 text-center">
+          <BellOff className="h-10 w-10 opacity-50" />
+          <div className="text-sm">
+            {statusFilter === "unread" ? "No unread notifications" : "No notifications yet"}
+          </div>
+          <div className="max-w-sm text-xs">
+            New episodes and movies show up here as they arrive.
+          </div>
+        </div>
       ) : (
         <>
-          {markAllRead.isError && (
-            <p role="alert">
-              Could not mark the displayed notifications read.{" "}
-              <Button
-                onClick={() => {
-                  void list.restart().then(() => markAllRead.reset());
-                }}
-              >
-                Reload inbox
-              </Button>{" "}
-              before trying again.
-            </p>
-          )}
-          {list.isError && (
-            <div role="alert">
-              Could not load notifications.{" "}
-              <Button
-                onClick={() => {
-                  void list.restart().then(() => markAllRead.reset());
-                }}
-              >
-                Reload notifications
-              </Button>
-            </div>
-          )}
-          {list.isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 5 }).map((_, index) => (
-                <Skeleton key={index} className="h-20 w-full rounded-xl" />
-              ))}
-            </div>
-          ) : notifications.length === 0 && !list.isError ? (
-            <div className="text-muted-foreground flex flex-col items-center gap-3 py-20 text-center">
-              <BellOff className="h-10 w-10 opacity-50" />
-              <div className="text-sm">
-                {statusFilter === "unread" ? "No unread notifications" : "No notifications yet"}
-              </div>
-              <div className="max-w-sm text-xs">
-                You will be notified here when new episodes arrive for series you favorite,
-                watchlist, or are watching.
-              </div>
-              {openSeries && (
-                <Button variant="link" size="sm" onClick={openSeries}>
-                  See which series can notify you
-                </Button>
-              )}
-            </div>
-          ) : (
-            <>
-              <ul className="list-none space-y-1">
-                {notifications.map((notification) => (
-                  <NotificationRow
-                    key={notification.id}
-                    notification={notification}
-                    onMarkRead={(id) => markRead.mutate(id)}
-                  />
-                ))}
-              </ul>
-              {list.hasNextPage && (
-                <div className="mt-6 flex justify-center">
-                  <Button
-                    variant="outline"
-                    onClick={() => list.fetchNextPage()}
-                    disabled={list.isFetchingNextPage}
-                  >
-                    {list.isFetchingNextPage && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Load more
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
+          <ul className="list-none space-y-1">
+            {notifications.map((notification) => (
+              <NotificationRow
+                key={notification.id}
+                notification={notification}
+                onMarkRead={(id) => markRead.mutate(id)}
+              />
+            ))}
+          </ul>
+          <TablePagination
+            className="mt-6"
+            page={shownPage}
+            pageSize={pageSize}
+            total={total}
+            onPageChange={(next) => void goToPage(next)}
+            onPageSizeChange={(size) => {
+              storePageSize(size);
+              setPageSize(size);
+              setPage(0);
+            }}
+            pageSizeOptions={PAGE_SIZES}
+            itemNoun="notification"
+            isFetching={turning || list.isFetchingNextPage}
+          />
         </>
       )}
     </div>

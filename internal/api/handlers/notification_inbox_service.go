@@ -14,6 +14,8 @@ type NotificationInboxPageView struct {
 	Items   []notifications.DeliveryRowPayload
 	Through notifications.Cursor
 	More    bool
+	// Total counts every delivery the window covers, across all pages.
+	Total int
 }
 
 func (h *NotificationsHandler) ListNotificationInbox(ctx context.Context, userID int, profile string, unread bool, limit int, before, through *notifications.Cursor) (NotificationInboxPageView, error) {
@@ -31,7 +33,23 @@ func (h *NotificationsHandler) ListNotificationInbox(ctx context.Context, userID
 	if err != nil {
 		return NotificationInboxPageView{}, err
 	}
-	return NotificationInboxPageView{Items: h.system.PayloadsForRows(ctx, rows), Through: boundary, More: more}, nil
+	total, err := h.system.Deliveries.InboxCount(ctx, userID, profile, unread, boundary)
+	if err != nil {
+		return NotificationInboxPageView{}, err
+	}
+	items := h.system.PayloadsForRows(ctx, rows)
+	ids := make([]string, 0, len(items))
+	for _, item := range items {
+		ids = append(ids, item.ID)
+	}
+	via, err := h.system.Deliveries.SentVia(ctx, userID, profile, ids)
+	if err != nil {
+		return NotificationInboxPageView{}, err
+	}
+	for i := range items {
+		items[i].SentVia = via[items[i].ID]
+	}
+	return NotificationInboxPageView{Items: items, Through: boundary, More: more, Total: total}, nil
 }
 func (h *NotificationsHandler) SyncNotificationInbox(ctx context.Context, userID int, profile string, limit int, since *notifications.Cursor) ([]notifications.DeliveryRowPayload, bool, int, error) {
 	// Initial sync is the existing bounded newest snapshot, returned ascending.

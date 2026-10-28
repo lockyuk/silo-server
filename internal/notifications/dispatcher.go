@@ -56,6 +56,9 @@ type DeliveryRowPayload struct {
 	ReasonFlags json.RawMessage `json:"reason_flags"`
 	CreatedAt   time.Time       `json:"created_at"`
 	ReadAt      *time.Time      `json:"read_at"`
+	// SentVia lists the channels that carried the delivery besides the
+	// inbox (see DeliveryRepository.SentVia). Only inbox pages fill it.
+	SentVia []string `json:"sent_via,omitempty"`
 }
 
 // PayloadForRow converts a DeliveryRow into its wire shape.

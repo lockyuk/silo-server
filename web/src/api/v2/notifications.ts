@@ -41,10 +41,11 @@ export async function listNotifications(
   status: "all" | "unread",
   cursor?: string,
   profileContext = captureNotificationAuthority(),
+  limit = 25,
 ) {
   requireNotificationAuthority(profileContext);
   const body = await v2("GET /api/v2/notifications", {
-    query: { status, limit: 25, cursor },
+    query: { status, limit, cursor },
     profileContext,
   });
   requireNotificationAuthority(profileContext);
@@ -65,6 +66,7 @@ export async function listNotifications(
     notifications: body.items.map(notification),
     next_cursor: body.page.has_more ? body.page.next_cursor : undefined,
     read_cutoff: body.read_cutoff,
+    total: typeof body.total === "number" ? body.total : undefined,
   };
 }
 export type NotifiedSeries = V2Result<"GET /api/v2/notifications/series">["items"][number];

@@ -485,6 +485,23 @@ func (r *EmailAlertsRepository) AppendLog(ctx context.Context, entries ...EmailA
 	return err
 }
 
+// RecordSentItems notes that a profile's email of the given leg carried
+// these items. Sending one again keeps the first time.
+func (r *EmailAlertsRepository) RecordSentItems(ctx context.Context, userID int, profileID, leg string, contentIDs []string, at time.Time) error {
+	if len(contentIDs) == 0 {
+		return nil
+	}
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO notification_email_sent_items (user_id, profile_id, content_id, leg, sent_at)
+		SELECT $1, $2, unnest($3::text[]), $4, $5
+		ON CONFLICT DO NOTHING`,
+		userID, profileID, contentIDs, leg, at)
+	if err != nil {
+		return fmt.Errorf("record emailed items: %w", err)
+	}
+	return nil
+}
+
 // Log returns the newest sends first.
 func (r *EmailAlertsRepository) Log(ctx context.Context, limit int) ([]EmailAlertLogEntry, error) {
 	rows, err := r.pool.Query(ctx, `

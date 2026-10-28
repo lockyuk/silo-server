@@ -69,11 +69,14 @@ function invalidateInbox(queryClient: QueryClient, scope = notificationScope()) 
     void queryClient.invalidateQueries({ queryKey: notificationInboxKeys.list(status, scope) });
   void queryClient.invalidateQueries({ queryKey: notificationInboxKeys.count(scope) });
 }
-export function useNotifications(status: "all" | "unread" = "all") {
+export function useNotifications(
+  status: "all" | "unread" = "all",
+  pageSize = NOTIFICATIONS_PAGE_SIZE,
+) {
   const context = captureProfileRequestContext();
   const scope = notificationScope(context);
   const queryClient = useQueryClient();
-  const queryKey = notificationInboxKeys.list(status, scope);
+  const queryKey = [...notificationInboxKeys.list(status, scope), pageSize];
   const query = useInfiniteQuery({
     queryKey,
     initialPageParam: undefined as string | undefined,
@@ -82,6 +85,7 @@ export function useNotifications(status: "all" | "unread" = "all") {
         status,
         pageParam,
         context ?? captureNotificationAuthority(),
+        pageSize,
       );
       const params =
         queryClient.getQueryData<{ pageParams: (string | undefined)[] }>(queryKey)?.pageParams ??
@@ -477,9 +481,10 @@ function updateCachedLists(
   queryClient: QueryClient,
   update: (notification: AppNotification) => AppNotification,
 ) {
+  // Each page size is its own cached list under the status key.
   for (const status of ["all", "unread"] as const) {
-    queryClient.setQueryData<NotificationsInfiniteData>(
-      notificationInboxKeys.list(status),
+    queryClient.setQueriesData<NotificationsInfiniteData>(
+      { queryKey: notificationInboxKeys.list(status) },
       (data) =>
         data
           ? {
@@ -498,22 +503,27 @@ function updateCachedLists(
 export function applyNotificationCreated(queryClient: QueryClient, notification: AppNotification) {
   const context = captureProfileRequestContext();
   if (!context || notification.profile_id !== context.profileId) return;
-  queryClient.setQueryData<NotificationsInfiniteData>(notificationInboxKeys.list("all"), (data) => {
-    const first = data?.pages[0];
-    if (!data || !first) {
-      return data;
-    }
-    if (first.notifications.some((entry) => entry.id === notification.id)) {
-      return data;
-    }
-    return {
-      ...data,
-      pages: [
-        { ...first, notifications: [notification, ...first.notifications] },
-        ...data.pages.slice(1),
-      ],
-    };
-  });
+  queryClient.setQueriesData<NotificationsInfiniteData>(
+    { queryKey: notificationInboxKeys.list("all") },
+    (data) => {
+      const first = data?.pages[0];
+      if (!data || !first) {
+        return data;
+      }
+      if (first.notifications.some((entry) => entry.id === notification.id)) {
+        return data;
+      }
+      return {
+        ...data,
+        pages: [
+          { ...first, notifications: [notification, ...first.notifications] },
+          ...data.pages.slice(1),
+        ],
+      };
+    },
+  );
+  // The prepend shows it at once; the re-read restores page sizes and totals.
+  void queryClient.invalidateQueries({ queryKey: notificationInboxKeys.list("all") });
   void queryClient.invalidateQueries({ queryKey: notificationInboxKeys.list("unread") });
   if (!notification.read_at) {
     queryClient.setQueryData<number>(notificationInboxKeys.count(), (count) => (count ?? 0) + 1);

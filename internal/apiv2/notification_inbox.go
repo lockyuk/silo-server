@@ -55,6 +55,7 @@ type NotificationItem struct {
 	ReasonFlags     NotificationReasonFlags  `json:"reason_flags"`
 	CreatedAt       Instant                  `json:"created_at"`
 	ReadAt          NullableInstant          `json:"read_at"`
+	SentVia         []string                 `json:"sent_via,omitempty" enum:"email_instant,email_daily,email_weekly,push" doc:"Channels that carried the notification besides the inbox: the alert emails that included it and phone push. Filled on inbox pages only."`
 }
 
 // NotificationPushContent is a push notification rendered from the admin's
@@ -131,7 +132,7 @@ func (NotificationReasonFlags) Schema(huma.Registry) *huma.Schema {
 }
 
 func notificationItemOf(row notifications.DeliveryRowPayload) NotificationItem {
-	out := NotificationItem{ID: ID(row.ID), Type: row.Type, ProfileID: ID(row.ProfileID), SeriesTitle: row.SeriesTitle, EpisodeTitle: row.EpisodeTitle, SeasonNumber: row.SeasonNumber, EpisodeNumber: row.EpisodeNumber, PosterPath: row.PosterPath, PosterURL: row.PosterURL, PosterThumbhash: row.PosterThumbhash, Overview: row.Overview, ImageURL: row.ImageURL, ThumbnailURL: row.ThumbnailURL, Actions: notificationActionsOf(row.Actions), Push: notificationPushContentOf(row.Push), ReasonFlags: NotificationReasonFlags(row.ReasonFlags), CreatedAt: NewInstant(row.CreatedAt)}
+	out := NotificationItem{ID: ID(row.ID), Type: row.Type, ProfileID: ID(row.ProfileID), SeriesTitle: row.SeriesTitle, EpisodeTitle: row.EpisodeTitle, SeasonNumber: row.SeasonNumber, EpisodeNumber: row.EpisodeNumber, PosterPath: row.PosterPath, PosterURL: row.PosterURL, PosterThumbhash: row.PosterThumbhash, Overview: row.Overview, ImageURL: row.ImageURL, ThumbnailURL: row.ThumbnailURL, Actions: notificationActionsOf(row.Actions), Push: notificationPushContentOf(row.Push), ReasonFlags: NotificationReasonFlags(row.ReasonFlags), CreatedAt: NewInstant(row.CreatedAt), SentVia: row.SentVia}
 	if row.LibraryID != nil {
 		out.LibraryID = new(ID(strconv.Itoa(*row.LibraryID)))
 	}
@@ -164,6 +165,7 @@ type NotificationListOutput struct {
 	Body struct {
 		Collection[NotificationItem]
 		ReadCutoff string `json:"read_cutoff"`
+		Total      int    `json:"total" doc:"Notifications in the whole list (every page), for page numbers."`
 	}
 }
 type NotificationSyncOutput struct {
@@ -331,6 +333,7 @@ func registerNotificationInbox(reg *Registry) {
 		out := new(NotificationListOutput)
 		out.Body.Collection = Paginated(items, next)
 		out.Body.ReadCutoff = cutoff
+		out.Body.Total = view.Total
 		return out, nil
 	})
 	Register(reg, notificationOperation(http.MethodGet, "/sync", "syncNotifications"), func(ctx context.Context, in *NotificationSyncInput) (*NotificationSyncOutput, error) {

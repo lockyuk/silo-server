@@ -316,6 +316,15 @@ func (a *EmailAlerts) RunDue(ctx context.Context, reason string) *EmailAlertsRep
 			st.NextAttemptAt = nil
 			st.LastSentAt = &now
 			st.Watermark = maxCursor(st.Watermark, last)
+			if job.rec.Kind == EmailRecipientProfile {
+				ids := make([]string, 0, len(refs))
+				for _, ref := range refs {
+					ids = append(ids, ref.contentID)
+				}
+				if err := a.repo.RecordSentItems(ctx, job.rec.UserID, job.rec.ProfileID, job.leg, ids, now); err != nil {
+					a.logger.WarnContext(ctx, "record emailed items", "error", err)
+				}
+			}
 			if job.leg == emailalerts.LegInstant {
 				st.LastInstantAt = &now
 				if day := s.Day(now); st.Day == day {

@@ -8,35 +8,22 @@ const state = vi.hoisted(() => ({
     isLoading: false,
     isError: false,
     hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: vi.fn(),
     restart: vi.fn(),
   },
   all: { mutateAsync: vi.fn(), isPending: false, isError: false, reset: vi.fn() },
-  capability: undefined as unknown,
-  prefs: undefined as unknown,
-  series: {} as Record<string, unknown>,
-  seriesOptions: [] as unknown[],
-  mute: { mutate: vi.fn(), isPending: false, variables: undefined as unknown },
 }));
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({}) }));
 vi.mock("@/api/v2/notifications", () => ({ notificationScope: () => "owner" }));
 vi.mock("@/hooks/useDocumentTitle", () => ({ useDocumentTitle: () => {} }));
-vi.mock("@/hooks/queries/notificationWebhooks", () => ({
-  useNotificationCapability: () => ({ data: state.capability }),
-}));
 vi.mock("@/hooks/queries/notifications", async (importOriginal) => ({
   formatEpisodeCode: (await importOriginal<typeof import("@/hooks/queries/notifications")>())
     .formatEpisodeCode,
-  useNotificationSeries: (status: string, options: unknown) => {
-    state.seriesOptions.push(options);
-    return state.series[status];
-  },
   useNotifications: () => state.list,
   useUnreadNotificationCount: () => ({ data: 2 }),
   useMarkAllNotificationsRead: () => state.all,
   useMarkNotificationRead: () => ({ mutate: vi.fn() }),
-  useNotificationPreferences: () => ({ data: state.prefs, isLoading: false }),
-  useUpdateNotificationPreferences: () => ({ mutate: vi.fn() }),
-  useSetNotificationSeriesMuted: () => state.mute,
 }));
 const row = {
   id: "one",
@@ -65,13 +52,8 @@ beforeEach(() => {
   state.all.mutateAsync.mockReset();
   state.all.reset.mockReset();
   state.list.restart.mockReset().mockResolvedValue(undefined);
-  state.capability = undefined;
-  state.prefs = undefined;
-  state.series = {};
-  state.seriesOptions = [];
-  state.mute.mutate.mockReset();
-  state.mute.isPending = false;
-  state.mute.variables = undefined;
+  state.list.hasNextPage = false;
+  state.list.fetchNextPage.mockReset();
 });
 afterEach(cleanup);
 it("submits the displayed cutoff once while the mutation remains pending", async () => {
@@ -144,144 +126,38 @@ it("does not describe failed initial loading as an empty inbox or permit an unbo
   expect(screen.getByRole("button", { name: "Reload notifications" })).toBeInTheDocument();
 });
 
-const prefs = {
-  profile_id: "owner",
-  enabled: true,
-  notify_favorites: true,
-  notify_watchlist: false,
-  notify_continue_watching: true,
-  notify_next_up: true,
-};
-const reasons = (set: Partial<Record<string, boolean>>) => ({
-  favorite: false,
-  watchlist: false,
-  continue_watching: false,
-  next_up: false,
-  ...set,
+it("shows how each notification was sent", () => {
+  showOnly({ ...row, sent_via: ["email_instant", "email_daily", "push"] });
+  renderAt();
+  const sent = screen.getByLabelText("Sent as");
+  expect(sent).toHaveTextContent("Instant email");
+  expect(sent).toHaveTextContent("Daily digest");
+  expect(sent).toHaveTextContent("Push");
+  expect(sent).not.toHaveTextContent("Weekly digest");
 });
-function seriesQuery(series: unknown[]) {
-  return { data: { pages: [{ series }] }, isLoading: false, isError: false, hasNextPage: false };
-}
-function seriesEntry(id: string, title: string, entry: Record<string, unknown>) {
-  return {
-    item: { content_id: id, title, type: "series", status: "matched", genres: [], keywords: [] },
-    ...entry,
-  };
-}
-it("offers the Series view only when the server lists notified series", () => {
+it("has no Series view or Preferences", () => {
   renderAt("/notifications?view=series");
   expect(screen.queryByRole("button", { name: "Series" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Preferences/ })).not.toBeInTheDocument();
   expect(screen.getByText("Displayed episode")).toBeInTheDocument();
 });
-it("searches, filters, and sorts the Series view from the URL", async () => {
-  state.capability = { series: { available: true } };
-  state.series = { active: seriesQuery([]), inactive: seriesQuery([]) };
-  renderAt("/notifications?view=series&reason=watchlist&sort=-year");
-  expect(state.seriesOptions.at(-1)).toEqual({ q: "", reason: "watchlist", sort: "-year" });
-  expect(screen.getByRole("combobox", { name: "Filter by reason" })).toHaveTextContent("Watchlist");
-  expect(screen.getByRole("combobox", { name: "Sort" })).toHaveTextContent("Release year");
-  expect(screen.getByText("No series match. Try another search or reason.")).toBeInTheDocument();
-  fireEvent.change(screen.getByRole("searchbox", { name: "Search series" }), {
-    target: { value: " bear " },
+it("shows one page at a time and reads the next page on demand", async () => {
+  const second = { ...row, id: "two", series_title: "Second page" };
+  state.list.hasNextPage = true;
+  state.list.data = { pages: [{ notifications: [row], read_cutoff: "c", total: 25 }] };
+  state.list.fetchNextPage.mockImplementation(async () => {
+    state.list.data = {
+      pages: [
+        { notifications: [row], read_cutoff: "c", total: 25 },
+        { notifications: [second], read_cutoff: "c", total: 25 },
+      ],
+    };
+    return { isError: false, data: state.list.data, hasNextPage: false };
   });
-  await waitFor(() =>
-    expect(state.seriesOptions.at(-1)).toEqual({ q: "bear", reason: "watchlist", sort: "-year" }),
-  );
-});
-it("pages the notifying series before showing the silenced ones", () => {
-  state.capability = { series: { available: true } };
-  state.prefs = prefs;
-  const active = {
-    ...seriesQuery([
-      seriesEntry("series:bear", "The Bear", {
-        reasons: reasons({ favorite: true }),
-        active_reasons: reasons({ favorite: true }),
-        notifies: true,
-      }),
-    ]),
-    hasNextPage: true,
-    fetchNextPage: vi.fn(),
-  };
-  const inactive = {
-    ...seriesQuery([
-      seriesEntry("series:slow", "Slow Horses", {
-        reasons: reasons({ watchlist: true }),
-        active_reasons: reasons({}),
-        notifies: false,
-      }),
-    ]),
-    hasNextPage: true,
-    fetchNextPage: vi.fn(),
-  };
-  state.series = { active, inactive };
-  renderAt("/notifications?view=series");
-  expect(screen.queryByText("Slow Horses")).not.toBeInTheDocument();
-  // jsdom has no IntersectionObserver, so the foot offers a button.
-  fireEvent.click(screen.getByRole("button", { name: "Load more" }));
-  expect(active.fetchNextPage).toHaveBeenCalledOnce();
-  expect(inactive.fetchNextPage).not.toHaveBeenCalled();
-});
-it("keeps loading when a page resolves to no visible series", () => {
-  state.capability = { series: { available: true } };
-  const active = { ...seriesQuery([]), hasNextPage: true, fetchNextPage: vi.fn() };
-  state.series = { active, inactive: seriesQuery([]) };
-  renderAt("/notifications?view=series");
-  expect(screen.queryByText("No series notify you yet")).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Load more" }));
-  expect(active.fetchNextPage).toHaveBeenCalledOnce();
-});
-it("mutes a series from its row and lists muted series under Won't notify with Unmute", () => {
-  state.capability = { series: { available: true, mute: true } };
-  state.prefs = prefs;
-  state.series = {
-    active: seriesQuery([
-      seriesEntry("series:andor", "Andor", {
-        reasons: reasons({ favorite: true }),
-        active_reasons: reasons({ favorite: true }),
-        notifies: true,
-        muted: false,
-      }),
-    ]),
-    inactive: seriesQuery([
-      seriesEntry("series:wire", "The Wire", {
-        reasons: reasons({ favorite: true }),
-        active_reasons: reasons({ favorite: true }),
-        notifies: false,
-        muted: true,
-      }),
-    ]),
-  };
-  renderAt("/notifications?view=series");
-  fireEvent.click(screen.getByRole("button", { name: "Mute Andor" }));
-  expect(state.mute.mutate).toHaveBeenLastCalledWith({
-    seriesId: "series:andor",
-    title: "Andor",
-    muted: true,
-  });
-  const wire = screen.getByRole("link", { name: /The Wire/ });
-  expect(wire).toHaveTextContent("Muted");
-  expect(wire).toHaveTextContent("Favorite (off)");
-  expect(screen.queryByRole("button", { name: "Mute The Wire" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Unmute The Wire" }));
-  expect(state.mute.mutate).toHaveBeenLastCalledWith({
-    seriesId: "series:wire",
-    title: "The Wire",
-    muted: false,
-  });
-});
-it("offers no Mute when the server cannot mute a series", () => {
-  state.capability = { series: { available: true } };
-  state.series = {
-    active: seriesQuery([
-      seriesEntry("series:andor", "Andor", {
-        reasons: reasons({ favorite: true }),
-        active_reasons: reasons({ favorite: true }),
-        notifies: true,
-      }),
-    ]),
-    inactive: seriesQuery([]),
-  };
-  renderAt("/notifications?view=series");
-  expect(screen.getByRole("link", { name: /Andor/ })).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: /Mute/ })).not.toBeInTheDocument();
+  renderAt();
+  expect(screen.getByRole("button", { name: "Page 2" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /next page/i }));
+  await waitFor(() => expect(screen.getByText("Second page")).toBeInTheDocument());
+  expect(screen.queryByText("Displayed episode")).not.toBeInTheDocument();
+  expect(state.list.fetchNextPage).toHaveBeenCalledOnce();
 });

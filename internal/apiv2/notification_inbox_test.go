@@ -84,7 +84,7 @@ func (*fakeNotificationInbox) NotificationCapabilities(context.Context) handlers
 func (f *fakeNotificationInbox) row(profile string) notifications.DeliveryRowPayload {
 	return notifications.DeliveryRowPayload{ID: notificationFixtureID, Type: "request.approved", ProfileID: profile, CreatedAt: f.cutoff.CreatedAt, ReasonFlags: json.RawMessage(`{"request_id":"request-1"}`)}
 }
-func (f *fakeNotificationInbox) ListNotificationInbox(_ context.Context, _ int, profile string, _ bool, _ int, before, through *notifications.Cursor) (handlers.NotificationInboxPageView, error) {
+func (f *fakeNotificationInbox) ListNotificationInbox(_ context.Context, _ int, profile string, _ notifications.InboxFilter, _ int, before, through *notifications.Cursor) (handlers.NotificationInboxPageView, error) {
 	boundary := f.cutoff
 	if through != nil {
 		boundary = *through

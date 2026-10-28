@@ -22,6 +22,7 @@ import {
   notificationScope,
   requireNotificationAuthority,
   listNotifications,
+  type NotificationListFilter,
   listNotificationSeries,
   setNotificationSeriesMuted,
   type NotifiedSeriesOptions,
@@ -72,11 +73,17 @@ function invalidateInbox(queryClient: QueryClient, scope = notificationScope()) 
 export function useNotifications(
   status: "all" | "unread" = "all",
   pageSize = NOTIFICATIONS_PAGE_SIZE,
+  filter: NotificationListFilter = {},
 ) {
   const context = captureProfileRequestContext();
   const scope = notificationScope(context);
   const queryClient = useQueryClient();
-  const queryKey = [...notificationInboxKeys.list(status, scope), pageSize];
+  const queryKey = [
+    ...notificationInboxKeys.list(status, scope),
+    pageSize,
+    filter.libraryId ?? "",
+    filter.maxAgeDays ?? 0,
+  ];
   const query = useInfiniteQuery({
     queryKey,
     initialPageParam: undefined as string | undefined,
@@ -86,6 +93,7 @@ export function useNotifications(
         pageParam,
         context ?? captureNotificationAuthority(),
         pageSize,
+        filter,
       );
       const params =
         queryClient.getQueryData<{ pageParams: (string | undefined)[] }>(queryKey)?.pageParams ??

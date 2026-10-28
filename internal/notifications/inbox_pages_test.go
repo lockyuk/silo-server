@@ -103,12 +103,12 @@ func TestNotificationInboxCutoffReplayAndTies(t *testing.T) {
 	if err != nil || cutoff.ID != high {
 		t.Fatalf("%+v %v", cutoff, err)
 	}
-	first, more, err := r.ListInboxWindow(ctx, 1, profile, false, 1, nil, cutoff)
+	first, more, err := r.ListInboxWindow(ctx, 1, profile, InboxFilter{}, 1, nil, cutoff)
 	if err != nil || len(first) != 1 || !more || first[0].ID != high {
 		t.Fatalf("%+v %v %v", first, more, err)
 	}
 	insert(fresh, profile, stamp.Add(time.Microsecond))
-	second, more, err := r.ListInboxWindow(ctx, 1, profile, false, 1, &Cursor{CreatedAt: first[0].CreatedAt, ID: first[0].ID}, cutoff)
+	second, more, err := r.ListInboxWindow(ctx, 1, profile, InboxFilter{}, 1, &Cursor{CreatedAt: first[0].CreatedAt, ID: first[0].ID}, cutoff)
 	if err != nil || len(second) != 1 || more || second[0].ID != low {
 		t.Fatalf("%+v %v %v", second, more, err)
 	}

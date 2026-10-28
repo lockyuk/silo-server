@@ -18,7 +18,7 @@ type NotificationInboxPageView struct {
 	Total int
 }
 
-func (h *NotificationsHandler) ListNotificationInbox(ctx context.Context, userID int, profile string, unread bool, limit int, before, through *notifications.Cursor) (NotificationInboxPageView, error) {
+func (h *NotificationsHandler) ListNotificationInbox(ctx context.Context, userID int, profile string, filter notifications.InboxFilter, limit int, before, through *notifications.Cursor) (NotificationInboxPageView, error) {
 	var boundary notifications.Cursor
 	var err error
 	if through == nil {
@@ -29,11 +29,11 @@ func (h *NotificationsHandler) ListNotificationInbox(ctx context.Context, userID
 	} else {
 		boundary = *through
 	}
-	rows, more, err := h.system.Deliveries.ListInboxWindow(ctx, userID, profile, unread, limit, before, boundary)
+	rows, more, err := h.system.Deliveries.ListInboxWindow(ctx, userID, profile, filter, limit, before, boundary)
 	if err != nil {
 		return NotificationInboxPageView{}, err
 	}
-	total, err := h.system.Deliveries.InboxCount(ctx, userID, profile, unread, boundary)
+	total, err := h.system.Deliveries.InboxCount(ctx, userID, profile, filter, boundary)
 	if err != nil {
 		return NotificationInboxPageView{}, err
 	}

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 import type {
   CreateLibraryRequest,
+  EpisodeFrameStills,
   EpisodeStillSource,
   Library,
   LibraryProviderChainResponse,
@@ -186,6 +187,11 @@ export function useLibraryForm({
   const savedEpisodeStillSource = library?.episode_still_source ?? "provider_order";
   const [episodeStillSource, setEpisodeStillSource] =
     useState<EpisodeStillSource>(savedEpisodeStillSource);
+  const savedFrameStills = library?.episode_frame_stills ?? "off";
+  const [episodeFrameStills, setEpisodeFrameStills] =
+    useState<EpisodeFrameStills>(savedFrameStills);
+  const savedFramePosition = library?.episode_frame_position ?? 20;
+  const [episodeFramePosition, setEpisodeFramePosition] = useState(savedFramePosition);
   const savedTrickplay = library?.trickplay_enabled ?? false;
   const [trickplayEnabled, setTrickplayEnabled] = useState(savedTrickplay);
   // A new library follows its type's default until the switch is set:
@@ -348,6 +354,12 @@ export function useLibraryForm({
     if (library && episodeStillSource !== savedEpisodeStillSource) {
       body.episode_still_source = episodeStillSource;
     }
+    if (library && episodeFrameStills !== savedFrameStills) {
+      body.episode_frame_stills = episodeFrameStills;
+    }
+    if (library && episodeFramePosition !== savedFramePosition) {
+      body.episode_frame_position = episodeFramePosition;
+    }
 
     if (library) {
       updateMutation.mutate(
@@ -413,6 +425,10 @@ export function useLibraryForm({
     setTrickplayEnabled,
     episodeStillSource,
     setEpisodeStillSource,
+    episodeFrameStills,
+    setEpisodeFrameStills,
+    episodeFramePosition,
+    setEpisodeFramePosition,
     introDetectionEnabled,
     setIntroDetectionEnabled,
     trailerKinds,

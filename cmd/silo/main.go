@@ -68,6 +68,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/diagnostics"
 	"github.com/Silo-Server/silo-server/internal/downloads"
 	"github.com/Silo-Server/silo-server/internal/ebooks"
+	"github.com/Silo-Server/silo-server/internal/episodeframes"
 	evt "github.com/Silo-Server/silo-server/internal/events"
 	"github.com/Silo-Server/silo-server/internal/extrastills"
 	"github.com/Silo-Server/silo-server/internal/filmography"
@@ -3255,6 +3256,11 @@ func main() {
 			stillCacher.SetArtworkRevisionTracker(catalog.NewArtworkRevisionTracker(deps.DB))
 			taskMgr.Register(tasks.NewGenerateExtraStillsTask(
 				extrastills.NewGenerator(deps.DB, deps.FileRepo, chapterBackfiller, stillCacher), 200,
+			))
+			// Episodes get a frame when their library asks for one; the same
+			// task measures every episode still for the library size summary.
+			taskMgr.Register(tasks.NewGenerateEpisodeFrameStillsTask(
+				episodeframes.NewGenerator(deps.DB, deps.FileRepo, chapterBackfiller, stillCacher, deps.Blobs.Assets), 5000, 150,
 			))
 		}
 		maintenanceSteps = append(maintenanceSteps, tasks.NewActivityLogCleanupTask(deps.DB, settingsRepo, activityPM))

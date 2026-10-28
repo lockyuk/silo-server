@@ -5562,6 +5562,7 @@ func (s *MetadataService) persistSeasonAndEpisodeRows(
 	seasonIDs := make(map[int]string, len(seasons))
 	isCanonicalWrite := strings.EqualFold(canonicalLanguage, language)
 	imagesLocked := artworkLocked(series)
+	frameStills := s.episodeFrameStills(ctx, seriesID)
 	imageJobs := make([]EnqueueImageCacheJobInput, 0, len(seasons)+len(episodes))
 	seasonArtwork := newLocalArtworkRetention(ctx, seriesID, localArtworkSeason)
 	episodeArtwork := seasonArtwork.atLevel(localArtworkEpisode)
@@ -6127,6 +6128,7 @@ func (s *MetadataService) persistSeasonAndEpisodeRows(
 			}
 			providerEpisode := ep
 			providerEpisode.StillPath, providerEpisode.StillSourcePath = splitProviderImagePath(ep.StillPath)
+			incomingStillSource := providerEpisode.StillSourcePath
 			if existingEpisode != nil && isCanonicalWrite {
 				mergedEpisode := episodeResultFromModel(existingEpisode)
 				MergeEpisodeResult(&providerEpisode, &mergedEpisode, mergeMode)
@@ -6140,7 +6142,7 @@ func (s *MetadataService) persistSeasonAndEpisodeRows(
 					existingEpisode.StillThumbhash,
 					s.autoCacheImages.Load(),
 				)
-				if imagesLocked && existingEpisode.StillPath != "" {
+				if (imagesLocked && existingEpisode.StillPath != "") || frameStills.keeps(existingEpisode, incomingStillSource) {
 					nextPath = existingEpisode.StillPath
 					nextThumbhash = existingEpisode.StillThumbhash
 					nextSourcePath = existingEpisode.StillSourcePath

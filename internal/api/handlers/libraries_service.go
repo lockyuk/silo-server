@@ -219,6 +219,8 @@ func (h *LibraryHandler) UpdateLibrary(ctx context.Context, id, userID int, req 
 		RealtimeMonitoring:       req.RealtimeMonitoring,
 		TrickplayEnabled:         req.TrickplayEnabled,
 		EpisodeStillSource:       req.EpisodeStillSource,
+		EpisodeFrameStills:       req.EpisodeFrameStills,
+		EpisodeFramePosition:     req.EpisodeFramePosition,
 	})
 	if err != nil {
 		if errors.Is(err, catalog.ErrFolderNotFound) {
@@ -257,12 +259,15 @@ func (h *LibraryHandler) UpdateLibrary(ctx context.Context, id, userID int, req 
 		h.wakeMetadataMatcher(ctx, folder.ID)
 	}
 	// A new episode still source only reaches stored episodes through a full
-	// refresh, which also covers a language change made alongside it.
-	stillSourceChanged := oldFolder.EpisodeStillSource != folder.EpisodeStillSource
+	// refresh, which also covers a language change made alongside it. So does
+	// taking fewer thumbnails from video frames: the refresh puts the provider
+	// images back. Taking more needs no refresh; the frame task finds them.
+	stillSourceChanged := oldFolder.EpisodeStillSource != folder.EpisodeStillSource ||
+		frameStillsRank(folder.EpisodeFrameStills) < frameStillsRank(oldFolder.EpisodeFrameStills)
 	if h.JobRepo != nil && (languageChanged || stillSourceChanged) {
 		mode, reason := adminjob.LibraryRefreshModeQuick, "Queued metadata refresh after library language change"
 		if stillSourceChanged {
-			mode, reason = adminjob.LibraryRefreshModeFull, "Queued metadata refresh after episode thumbnail source change"
+			mode, reason = adminjob.LibraryRefreshModeFull, "Queued metadata refresh after episode thumbnail settings change"
 		}
 		job, jobErr := h.JobRepo.CreateLibraryRefresh(ctx, userID, adminjob.LibraryRefreshRequest{
 			LibraryID:   folder.ID,
@@ -1488,4 +1493,16 @@ func normalizeLibraryPaths(paths []string) ([]string, error) {
 		normalized[i] = filepath.Clean(path)
 	}
 	return normalized, nil
+}
+
+// frameStillsRank orders the episode frame-still modes by how many episodes
+// they give a frame.
+func frameStillsRank(mode string) int {
+	switch mode {
+	case models.EpisodeFrameStillsMissing:
+		return 1
+	case models.EpisodeFrameStillsBelowFullHD:
+		return 2
+	}
+	return 0
 }

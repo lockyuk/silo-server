@@ -258,6 +258,15 @@ func (c *Cacher) CacheBytes(ctx context.Context, data []byte, req CacheRequest) 
 	if len(data) == 0 {
 		return nil, fmt.Errorf("imagecache: image data is empty")
 	}
+	if req.ImageType == metadata.ImageLogo {
+		// Every client lines a logo's left edge up with its other copy, so a
+		// provider's transparent margin is cut off once, here, for all of them.
+		trimmedData, _, err := imageutil.TrimTransparentBorder(data)
+		if err != nil {
+			return nil, fmt.Errorf("imagecache: trim logo: %w", err)
+		}
+		data = trimmedData
+	}
 	thumbhash, err := imageutil.Thumbhash(data)
 	if err != nil {
 		return nil, fmt.Errorf("imagecache: thumbhash: %w", err)

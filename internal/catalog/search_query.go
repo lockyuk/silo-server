@@ -55,12 +55,17 @@ func parseSearchQuery(raw string) parsedSearchQuery {
 // short token ("a vengers") is judged on "vengers", not "a".
 const fuzzyMinTokenLen = 4
 
-// Single-token inputs shorter than this stay on the exact whole-title path.
-// Even a non-prefix FTS lexeme such as "la" or "the" can match a large share
-// of a multilingual catalog; ranking that set while the user is still typing
-// is both wasteful and visibly slow. Multi-word input with a short final token
-// uses the separate leading-title B-tree transition path below.
+// Single-token inputs shorter than this skip word-prefix FTS. Even a
+// non-prefix FTS lexeme such as "la" or "the" can match a large share of a
+// multilingual catalog; ranking that set while the user is still typing is
+// both wasteful and visibly slow. Two and three letters, and multi-word input
+// with a short final token, use the leading-title B-tree path below, so "top"
+// finds "Top Boy" as the user types; one letter matches whole titles only.
 const searchPrefixMinTokenLen = 4
+
+// searchLeadingMinTokenLen is the shortest single token that may use the
+// leading-title path. One letter would admit a large share of the catalog.
+const searchLeadingMinTokenLen = 2
 
 // eligibleForFuzzy reports whether a parsed query should use the trigram fuzzy
 // title fallback. A quoted phrase with a short remainder stays exclusively on
@@ -81,17 +86,25 @@ func eligibleForFuzzy(parsed parsedSearchQuery) bool {
 
 func useExactShortTitleSearch(parsed parsedSearchQuery) bool {
 	fields := strings.Fields(parsed.NormalizedText)
-	return len(fields) == 1 && len([]rune(fields[0])) < searchPrefixMinTokenLen
+	return len(fields) == 1 && len([]rune(fields[0])) < searchLeadingMinTokenLen
 }
 
-// useLeadingShortTitleSearch handles the brief typeahead state where the user
-// has completed at least one word but the final word is still too short for a
-// selective catalog-wide lexeme expansion (for example, "the m"). A normalized
-// leading-title B-tree lookup is deterministic and cheap during those few
-// keystrokes; regular word-prefix FTS resumes at searchPrefixMinTokenLen.
+// useLeadingShortTitleSearch handles the brief typeahead state where the
+// final word is still too short for a selective catalog-wide lexeme expansion,
+// either a lone short word ("top") or a short word after completed ones ("the
+// m"). A normalized leading-title B-tree lookup is deterministic and cheap
+// during those few keystrokes; regular word-prefix FTS resumes at
+// searchPrefixMinTokenLen.
 func useLeadingShortTitleSearch(parsed parsedSearchQuery) bool {
 	fields := strings.Fields(parsed.NormalizedText)
-	return len(fields) > 1 && len([]rune(fields[len(fields)-1])) < searchPrefixMinTokenLen
+	if len(fields) == 0 {
+		return false
+	}
+	last := len([]rune(fields[len(fields)-1]))
+	if len(fields) == 1 && last < searchLeadingMinTokenLen {
+		return false
+	}
+	return last < searchPrefixMinTokenLen
 }
 
 func extractBalancedPhrase(input string) (string, string) {

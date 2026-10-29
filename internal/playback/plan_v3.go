@@ -311,7 +311,16 @@ func PlanPlaybackV3(input PlannerInputV3) (result PlannerResultV3) {
 	originalSubtitleOK := subtitle.Terminal == nil && !subtitle.RequiresBurn
 	remuxSubtitleOK := remuxSubtitle.Terminal == nil && !remuxSubtitle.RequiresBurn
 	hlsRemuxSubtitleOK := hlsSubtitle.Terminal == nil && !hlsSubtitle.RequiresBurn
-	quality := ResolveQualityPolicyV3(input.Request, source)
+	qualityRequest := input.Request
+	if input.LocalNetwork {
+		// On the server's own network the link is not what limits a stream: a
+		// client's short throughput probe there under-reads (a Fire TV on
+		// Wi-Fi measured 17 Mbps and had a 16 Mbps 4K file transcoded to
+		// 1080p). Auto quality plays the source as the device can, and only
+		// the hard caps, the client's and the server's, still lower it.
+		qualityRequest.BandwidthEstimateKbps = nil
+	}
+	quality := ResolveQualityPolicyV3(qualityRequest, source)
 	if serverBitrateRequiresEncode {
 		// The quality resolver uses the video track rate to choose an encode
 		// target, which can undercount a source-preserving route's total rate.

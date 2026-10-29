@@ -594,11 +594,15 @@ func TestPlanPlaybackV3DirectPlaysWhateverTheLimitsAllow(t *testing.T) {
 		quality    string
 		estimate   int
 		capKbps    int
+		local      bool
 		wantDirect bool
 		wantHeight int
 	}{
 		{name: "auto without an estimate", file: remux1080, quality: "auto", wantDirect: true},
 		{name: "auto on a link that cannot", file: remux1080, quality: "auto", estimate: 8_000, wantHeight: 1080},
+		// At home a probe's estimate does not lower auto; a hard cap still does.
+		{name: "auto on the local network ignores a low estimate", file: web4K, quality: "auto", estimate: 8_000, local: true, wantDirect: true},
+		{name: "auto on the local network keeps a cap", file: remux1080, quality: "auto", capKbps: 8_000, local: true, wantHeight: 1080},
 		{name: "auto under a cap the source fits", file: remux1080, quality: "auto", capKbps: 40_000, wantDirect: true},
 		{name: "the legacy original preference", file: web4K, quality: "original", wantDirect: true},
 		{name: "1080p ignores a low estimate", file: remux1080, quality: "1080p", estimate: 2_000, wantDirect: true},
@@ -619,7 +623,7 @@ func TestPlanPlaybackV3DirectPlaysWhateverTheLimitsAllow(t *testing.T) {
 			if tc.capKbps > 0 {
 				req.BandwidthCapKbps = &tc.capKbps
 			}
-			result := PlanPlaybackV3(PlannerInputV3{Request: req, RequestedFile: tc.file, EffectiveFile: tc.file, Settings: PlannerSettingsV3{TranscodeEnabled: true, Allow4KTranscode: true}, Registry: testTransformationRegistryV3()})
+			result := PlanPlaybackV3(PlannerInputV3{Request: req, RequestedFile: tc.file, EffectiveFile: tc.file, Settings: PlannerSettingsV3{TranscodeEnabled: true, Allow4KTranscode: true}, Registry: testTransformationRegistryV3(), LocalNetwork: tc.local})
 			if result.Plan == nil {
 				t.Fatalf("no plan: %s", ExplainPlannerResultV3(result))
 			}

@@ -100,12 +100,12 @@ func TestBuildTitlePrefixTsQuery(t *testing.T) {
 }
 
 func TestUseLeadingShortTitleSearch(t *testing.T) {
-	for _, query := range []string{"the m", "harry p", "law ord"} {
+	for _, query := range []string{"the m", "harry p", "law ord", "top", "zo"} {
 		if !useLeadingShortTitleSearch(parseSearchQuery(query)) {
 			t.Fatalf("%q should use the leading-title transition path", query)
 		}
 	}
-	for _, query := range []string{"lan", "the matr", "star wars"} {
+	for _, query := range []string{"t", "lang", "the matr", "star wars"} {
 		if useLeadingShortTitleSearch(parseSearchQuery(query)) {
 			t.Fatalf("%q should use exact-short or regular FTS, not leading-title transition", query)
 		}

@@ -86,8 +86,10 @@ func TestSearchYearSuffixedTitleIsExactPostgres(t *testing.T) {
 			}
 		}},
 		{query: "Spy", want: func(t *testing.T, ids []string) {
-			if !slices.Equal(ids, []string{id("spy-2015")}) {
-				t.Fatalf("short whole-title results = %v, want only the year-suffixed title", ids)
+			// A short word also admits titles that start with it, behind
+			// the year-suffixed exact title.
+			if !slices.Equal(ids, []string{id("spy-2015"), id("spyder")}) {
+				t.Fatalf("short title results = %v, want the year-suffixed title, then the prefix match", ids)
 			}
 		}},
 	} {

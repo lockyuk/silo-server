@@ -183,6 +183,7 @@ export const v2Operations = {
   "GET /api/v2/admin/jobs/capabilities": "getAdminJobCapabilities",
   "GET /api/v2/admin/jobs/{id}": "getAdminJob",
   "GET /api/v2/admin/jobs/{id}/artifact": "downloadAdminJobArtifact",
+  "GET /api/v2/admin/libraries/{id}/rating-sources": "getAdminLibraryRatingSources",
   "GET /api/v2/admin/libraries/{library_id}/collection-groups": "listAdminCollectionGroups",
   "GET /api/v2/admin/libraries/{library_id}/collection-groups/order":
     "getAdminCollectionGroupOrder",
@@ -737,6 +738,8 @@ export const v2Operations = {
   "POST /api/v2/admin/tasks/{key}/cancel": "cancelAdminTask",
   "POST /api/v2/admin/tasks/{key}/run": "runAdminTask",
   "POST /api/v2/admin/theme-songs/run": "runAdminThemeSongs",
+  "POST /api/v2/admin/theme-songs/series/{id}/approve": "approveAdminThemeSong",
+  "POST /api/v2/admin/theme-songs/series/{id}/reject": "rejectAdminThemeSong",
   "POST /api/v2/admin/theme-songs/series/{id}/retry": "retryAdminThemeSong",
   "POST /api/v2/admin/theme-songs/series/{id}/skip": "skipAdminThemeSong",
   "POST /api/v2/admin/users": "createAdminUser",
@@ -882,6 +885,7 @@ export const v2Operations = {
   "PUT /api/v2/admin/history-imports/mappings/{id}": "updateAdminHistoryImportMapping",
   "PUT /api/v2/admin/history-imports/sources/{id}/token": "setAdminHistoryImportToken",
   "PUT /api/v2/admin/invite-codes/{id}": "updateAdminInviteCode",
+  "PUT /api/v2/admin/libraries/{id}/rating-sources": "updateAdminLibraryRatingSources",
   "PUT /api/v2/admin/libraries/{library_id}/collection-groups/order":
     "reorderAdminCollectionGroups",
   "PUT /api/v2/admin/markers/providers/{provider}": "updateAdminMarkerProvider",

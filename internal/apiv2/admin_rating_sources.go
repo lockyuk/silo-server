@@ -62,3 +62,65 @@ func registerAdminRatingSources(reg *Registry) {
 		return &AdminRatingSourceCollectionOutput{Body: NewCollection(items)}, nil
 	})
 }
+
+// AdminLibraryRatingSources is one library's choice of the rating sources its
+// titles show.
+type AdminLibraryRatingSources struct {
+	UseServerDefault bool     `json:"use_server_default" doc:"True when the library shows what the server-wide setting shows (IMDb, TMDB and catalog.extra_rating_sources)"`
+	Sources          []string `json:"sources" doc:"The sources the library shows, in no particular order; empty with use_server_default. May leave out IMDb or TMDB, and may name any source listAdminRatingSources lists"`
+}
+
+type AdminLibraryRatingSourcesInput struct {
+	ID int `path:"id" minimum:"1" doc:"Library id."`
+}
+
+type AdminLibraryRatingSourcesUpdateInput struct {
+	ID   int `path:"id" minimum:"1" doc:"Library id."`
+	Body AdminLibraryRatingSources
+}
+
+type AdminLibraryRatingSourcesOutput struct{ Body AdminLibraryRatingSources }
+
+func registerAdminLibraryRatingSources(reg *Registry) {
+	get := Operation{Operation: humaOp(http.MethodGet, Prefix+"/admin/libraries/{id}/rating-sources", "getAdminLibraryRatingSources", "admin-settings",
+		"Read which external rating sources one library's titles show."), Class: ClassActingAdmin, ServiceBacked: true}
+	Register(reg, get, func(ctx context.Context, in *AdminLibraryRatingSourcesInput) (*AdminLibraryRatingSourcesOutput, error) {
+		sources, ok, err := reg.deps.RatingSources.LibraryChoice(ctx, in.ID)
+		if err != nil {
+			return nil, serviceProblem(err)
+		}
+		return &AdminLibraryRatingSourcesOutput{Body: AdminLibraryRatingSources{UseServerDefault: !ok, Sources: NonNil(sources)}}, nil
+	})
+
+	put := Operation{Operation: humaOp(http.MethodPut, Prefix+"/admin/libraries/{id}/rating-sources", "updateAdminLibraryRatingSources", "admin-settings",
+		"Choose which external rating sources one library's titles show, or make it follow the server-wide setting again."),
+		Class: ClassActingAdmin, ServiceBacked: true, DemoRestricted: true, RetrySafety: RetrySafetyNaturalIdempotent}
+	Register(reg, put, func(ctx context.Context, in *AdminLibraryRatingSourcesUpdateInput) (*AdminLibraryRatingSourcesOutput, error) {
+		var sources []string
+		if !in.Body.UseServerDefault {
+			known, err := reg.deps.RatingSources.Sources(ctx)
+			if err != nil {
+				return nil, serviceProblem(err)
+			}
+			valid := make(map[string]bool, len(known))
+			for _, s := range known {
+				valid[s.Source] = true
+			}
+			seen := map[string]bool{}
+			sources = []string{}
+			for _, s := range in.Body.Sources {
+				if !valid[s] {
+					return nil, validationProblem(locationBody+".sources", codeInvalid, "Unknown rating source "+s+".")
+				}
+				if !seen[s] {
+					seen[s] = true
+					sources = append(sources, s)
+				}
+			}
+		}
+		if err := reg.deps.RatingSources.SetLibraryChoice(ctx, in.ID, sources); err != nil {
+			return nil, serviceProblem(err)
+		}
+		return &AdminLibraryRatingSourcesOutput{Body: AdminLibraryRatingSources{UseServerDefault: sources == nil, Sources: NonNil(sources)}}, nil
+	})
+}

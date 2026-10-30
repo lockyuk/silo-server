@@ -1434,6 +1434,7 @@ func catalogItemCardOf(d *catalogpkg.ItemDetail) CatalogItem {
 func catalogItemDetailOf(d *catalogpkg.ItemDetail, sel ratingsources.Selection) CatalogItemDetail {
 	card := catalogItemCardOf(d)
 	ratingSources := d.RatingSources
+	sel = sel.ForItem(ratingOwnerID(d.Type, d.ContentID, d.SeriesID))
 	if !d.ViewerCurates {
 		card = withShownRatings(card, sel)
 		ratingSources = shownRatingSources(ratingSources, sel)

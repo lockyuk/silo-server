@@ -2605,6 +2605,24 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v2/admin/libraries/{id}/rating-sources": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read which external rating sources one library's titles show. */
+    get: operations["getAdminLibraryRatingSources"];
+    /** Choose which external rating sources one library's titles show, or make it follow the server-wide setting again. */
+    put: operations["updateAdminLibraryRatingSources"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v2/admin/libraries/{library_id}/collection-groups": {
     parameters: {
       query?: never;
@@ -5579,6 +5597,40 @@ export interface paths {
     post?: never;
     /** Delete one series' downloaded theme. The next run downloads it again. */
     delete: operations["deleteAdminThemeSong"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/admin/theme-songs/series/{id}/approve": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Download the YouTube search result waiting for a title and keep it as its theme. */
+    post: operations["approveAdminThemeSong"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/admin/theme-songs/series/{id}/reject": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Turn down the search result waiting for a title and search again, skipping every result rejected for it. */
+    post: operations["rejectAdminThemeSong"];
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;
@@ -16718,6 +16770,12 @@ export interface components {
        */
       user_id: string;
       value: string;
+    };
+    AdminLibraryRatingSources: {
+      /** @description The sources the library shows, in no particular order; empty with use_server_default. May leave out IMDb or TMDB, and may name any source listAdminRatingSources lists */
+      sources: string[];
+      /** @description True when the library shows what the server-wide setting shows (IMDb, TMDB and catalog.extra_rating_sources) */
+      use_server_default: boolean;
     };
     AdminLiteraryCandidate: {
       /** @description Scoring evidence keyed by signal name; empty, never null. */
@@ -32941,6 +32999,22 @@ export interface components {
       id: string;
       title: string;
     };
+    ThemeSongCandidate: {
+      channel: string;
+      /** Format: int64 */
+      duration_seconds: number;
+      /** Format: date-time */
+      found_at: string;
+      /** @description What YouTube was searched for. */
+      query: string;
+      title: string;
+      /**
+       * Format: uri
+       * @description The video's watch page, to listen before approving.
+       */
+      url: string;
+      video_id: string;
+    };
     ThemeSongCounts: {
       /** Format: int64 */
       downloaded: number;
@@ -32953,16 +33027,22 @@ export interface components {
       /** Format: int64 */
       pending: number;
       /** Format: int64 */
+      review: number;
+      /** Format: int64 */
       skipped: number;
     };
     ThemeSongDownloadConfig: {
-      /** @description Download theme songs for series without one in their folder. */
+      /** @description Download theme songs for series and movies without one in their folder. */
       enabled: boolean;
       /**
        * Format: int64
-       * @description Days before a theme the source lacked is asked for again.
+       * @description Days before a theme the sources lacked is asked for again.
        */
       recheck_days: number;
+      /** @description After Plex, use ThemerrDB's community YouTube theme links (series and movies). */
+      themerrdb: boolean;
+      /** @description Last, search YouTube; each result waits for an admin to approve it. */
+      youtube_search: boolean;
     };
     ThemeSongRunReport: {
       /** Format: int64 */
@@ -32978,6 +33058,8 @@ export interface components {
       /** Format: int64 */
       not_available: number;
       reason: string;
+      /** Format: int64 */
+      review: number;
       /** Format: int64 */
       series: number;
       /** Format: int64 */
@@ -33008,6 +33090,8 @@ export interface components {
       transcode: boolean;
     };
     ThemeSongSeries: {
+      /** @description The search result waiting for review. */
+      candidate?: components["schemas"]["ThemeSongCandidate"];
       /** Format: date-time */
       checked_at?: string;
       /** @description Why the last download failed. */
@@ -33016,13 +33100,31 @@ export interface components {
       downloaded_at?: string;
       id: string;
       /**
-       * @description folder: a theme file in the series folder is used; downloaded: Silo's stored copy is used; skipped: an admin stopped looking for one.
+       * @description Where the downloaded theme came from.
        * @enum {string}
        */
-      state: "folder" | "downloaded" | "not_available" | "failed" | "pending" | "skipped";
+      source?: "plex" | "themerrdb" | "youtube";
+      /**
+       * @description folder: a theme file in the title's folder is used; downloaded: Silo's stored copy is used; skipped: an admin stopped looking for one; review: a YouTube search result waits for approval.
+       * @enum {string}
+       */
+      state:
+        | "folder"
+        | "downloaded"
+        | "not_available"
+        | "failed"
+        | "pending"
+        | "skipped"
+        | "review";
       title: string;
-      /** @description TheTVDB id the theme is looked up by; empty when the series has none. */
+      /** @description TMDB id ThemerrDB is asked by. */
+      tmdb_id: string;
+      /** @description TheTVDB id Plex is asked by; empty when the series has none. */
       tvdb_id: string;
+      /** @enum {string} */
+      type: "series" | "movie";
+      /** Format: int64 */
+      year: number;
     };
     ThemeSongSet: {
       items: components["schemas"]["ThemeSong"][];
@@ -58757,6 +58859,255 @@ export interface operations {
         headers: {
           /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
           ETag?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  getAdminLibraryRatingSources: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        /** @description Library id. */
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdminLibraryRatingSources"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  updateAdminLibraryRatingSources: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        /** @description Library id. */
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AdminLibraryRatingSources"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdminLibraryRatingSources"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Timeout */
+      408: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
           [name: string]: unknown;
         };
         content: {
@@ -85356,7 +85707,7 @@ export interface operations {
         "X-Profile-Token"?: string;
       };
       path: {
-        /** @description Series id. */
+        /** @description Series or movie id. */
         id: string;
       };
       cookie?: never;
@@ -85455,6 +85806,242 @@ export interface operations {
       };
     };
   };
+  approveAdminThemeSong: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        /** @description Series or movie id. */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ThemeSongSeries"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  rejectAdminThemeSong: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        /** @description Series or movie id. */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ThemeSongSeries"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
   retryAdminThemeSong: {
     parameters: {
       query?: never;
@@ -85465,7 +86052,7 @@ export interface operations {
         "X-Profile-Token"?: string;
       };
       path: {
-        /** @description Series id. */
+        /** @description Series or movie id. */
         id: string;
       };
       cookie?: never;
@@ -85574,7 +86161,7 @@ export interface operations {
         "X-Profile-Token"?: string;
       };
       path: {
-        /** @description Series id. */
+        /** @description Series or movie id. */
         id: string;
       };
       cookie?: never;

@@ -669,6 +669,7 @@ func registerAll(reg *Registry) {
 	registerAdminCatalogLiterary(reg)
 	registerAdminRecommendations(reg)
 	registerAdminRatingSources(reg)
+	registerAdminLibraryRatingSources(reg)
 	registerAdminCatalogPeople(reg)
 	registerAdminCatalogTranslation(reg)
 	registerAdminCatalogItemMetadata(reg)

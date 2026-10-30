@@ -5432,6 +5432,9 @@ func v2Dependencies(
 			}
 		}
 		out.RatingSources = ratingsources.NewPolicy(settings, declared)
+		if deps.DB != nil {
+			out.RatingSources.UseLibraryStore(ratingsources.NewLibraryStore(deps.DB))
+		}
 	}
 	if deps.RateLimitMW != nil {
 		out.RateLimit = deps.RateLimitMW.Handler

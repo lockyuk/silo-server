@@ -243,7 +243,23 @@ func catalogItemOfListing(v handlers.CollectionItemView, sel ratingsources.Selec
 // title pages. IMDb and TMDB are always shown. Item detail applies it too,
 // except for a viewer who curates the item's metadata (see
 // catalogItemDetailOf).
+// ratingOwnerID names the item whose library decides which ratings show: an
+// episode's or a season's series, otherwise the item itself.
+func ratingOwnerID(itemType, contentID, seriesID string) string {
+	if seriesID != "" && (itemType == "episode" || itemType == "season") {
+		return seriesID
+	}
+	return contentID
+}
+
 func withShownRatings(item CatalogItem, sel ratingsources.Selection) CatalogItem {
+	sel = sel.ForItem(ratingOwnerID(item.Type, item.ContentID, item.SeriesID))
+	if !sel.Shows(models.RatingSourceIMDB) {
+		item.RatingIMDB = nil
+	}
+	if !sel.Shows(models.RatingSourceTMDB) {
+		item.RatingTMDB = nil
+	}
 	if !sel.Shows(models.RatingSourceRTCritic) {
 		item.RatingRTCritic = nil
 	}

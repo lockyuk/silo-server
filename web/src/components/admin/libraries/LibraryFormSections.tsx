@@ -42,6 +42,7 @@ import {
 import { contentLevelLabel } from "./useLibraryForm";
 import type { LevelChainItem, LibraryFormController } from "./useLibraryForm";
 import { LibraryTranslatePanel } from "./LibraryTranslatePanel";
+import { LibraryRatingSourcesPanel } from "./LibraryRatingSourcesPanel";
 
 function SettingCard({
   htmlFor,
@@ -376,6 +377,7 @@ export function MetadataFields({ form }: { form: LibraryFormController }) {
         />
       </div>
       {form.library && <LibraryTranslatePanel libraryId={form.library.id} />}
+      {form.library && <LibraryRatingSourcesPanel libraryId={form.library.id} />}
       {form.library && (form.type === "movies" || form.type === "mixed") && (
         <>
           <div className="flex items-start justify-between gap-4">

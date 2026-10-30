@@ -29,6 +29,51 @@ type Selection struct {
 	extra      map[string]struct{}
 	declared   []models.RatingSourceDefinition
 	declaredID map[string]struct{}
+
+	// byLibrary holds the libraries that choose their own sources, and
+	// libraryOf the libraries of each item in them; see ForItem.
+	byLibrary map[int]map[string]struct{}
+	libraryOf map[string][]int
+	// only, when set, is the item's library's own choice; see ForItem.
+	only map[string]struct{}
+}
+
+// WithLibraries returns the selection with each library's own choice of
+// sources (library id to source names) and the libraries each of their items
+// belongs to.
+func (s Selection) WithLibraries(byLibrary map[int][]string, libraryOf map[string][]int) Selection {
+	s.byLibrary = make(map[int]map[string]struct{}, len(byLibrary))
+	for id, sources := range byLibrary {
+		set := make(map[string]struct{}, len(sources))
+		for _, source := range sources {
+			set[source] = struct{}{}
+		}
+		s.byLibrary[id] = set
+	}
+	s.libraryOf = libraryOf
+	return s
+}
+
+// ForItem narrows the selection to what the library of contentID chooses, when
+// that library chooses its own sources: it may hide IMDb or TMDB, and may show
+// a declared source the server-wide setting leaves off. An item in several
+// such libraries takes the first by library id. Any other item keeps the
+// server-wide selection.
+func (s Selection) ForItem(contentID string) Selection {
+	if len(s.byLibrary) == 0 || contentID == "" {
+		return s
+	}
+	best := -1
+	for _, id := range s.libraryOf[contentID] {
+		if _, ok := s.byLibrary[id]; ok && (best < 0 || id < best) {
+			best = id
+		}
+	}
+	if best < 0 {
+		return s
+	}
+	s.only = s.byLibrary[best]
+	return s
 }
 
 // WithDeclared returns the selection with the given plugin-declared source
@@ -55,6 +100,16 @@ func NewSelection(extra ...string) Selection {
 // own, and otherwise only for a source an enabled plugin declares and the
 // administrator turned on.
 func (s Selection) Shows(source string) bool {
+	if s.only != nil {
+		if _, chosen := s.only[source]; !chosen {
+			return false
+		}
+		if models.RatingSourceAlwaysShown(source) {
+			return true
+		}
+		_, declared := s.declaredID[source]
+		return declared
+	}
 	if models.RatingSourceAlwaysShown(source) {
 		return true
 	}
@@ -117,12 +172,18 @@ type DeclaredSource struct {
 // in provider order, each source once.
 type DeclaredFunc func(ctx context.Context) ([]DeclaredSource, error)
 
+// LibrariesFunc reads each library's own choice of sources (only libraries
+// that set one) and the libraries every item in those libraries belongs to.
+type LibrariesFunc func(ctx context.Context) (byLibrary map[int][]string, libraryOf map[string][]int, err error)
+
 // Policy reads config.CatalogExtraRatingSourcesSettingKey and the sources
 // metadata plugins declare, and caches a successful read for cacheTTL.
 type Policy struct {
-	settings config.SettingReader
-	declared DeclaredFunc
-	now      func() time.Time
+	settings  config.SettingReader
+	declared  DeclaredFunc
+	libraries LibrariesFunc
+	store     *LibraryStore
+	now       func() time.Time
 
 	refresh singleflight.Group
 
@@ -139,6 +200,13 @@ type Policy struct {
 // sources that are always shown; a nil lister shows no plugin sources.
 func NewPolicy(settings config.SettingReader, declared DeclaredFunc) *Policy {
 	return &Policy{settings: settings, declared: declared, now: time.Now}
+}
+
+// UseLibraries adds per-library choices to every selection the policy reads.
+func (p *Policy) UseLibraries(libraries LibrariesFunc) {
+	if p != nil {
+		p.libraries = libraries
+	}
 }
 
 // Selection returns the sources to show. Once the cache expires, one read per
@@ -187,6 +255,15 @@ func (p *Policy) read(ctx context.Context) Selection {
 		declared, haveDeclared = definitionsOf(sources), true
 	}
 	sel := NewSelection(config.ParseRatingSourceList(value)...).WithDeclared(declared)
+	if p.libraries != nil {
+		byLibrary, libraryOf, err := p.libraries(ctx)
+		if err != nil {
+			// Keep the last per-library choices rather than drop them.
+			sel.byLibrary, sel.libraryOf = last.byLibrary, last.libraryOf
+		} else {
+			sel = sel.WithLibraries(byLibrary, libraryOf)
+		}
+	}
 
 	p.mu.Lock()
 	p.selection = sel

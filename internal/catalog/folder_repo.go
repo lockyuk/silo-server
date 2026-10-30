@@ -130,6 +130,8 @@ type UpdateFolderInput struct {
 	EpisodeStillSource       *string   // models.EpisodeStillSource*; nil = no change
 	EpisodeFrameStills       *string   // models.EpisodeFrameStills*; nil = no change
 	EpisodeFramePosition     *int      // percent into the episode; nil = no change
+	AutoCollectionsEnabled   *bool
+	CollectionArtworkEnabled *bool
 	// RealtimeMonitoring is nil on the frozen /api/v1 update path, which
 	// never sets it, so the column stays unchanged there.
 	RealtimeMonitoring *bool
@@ -197,7 +199,7 @@ func normalizeTrailerKindsInput(kinds []string) []string {
 
 // folderColumns is the list of columns returned by all SELECT queries.
 // Kept in one place so scanFolder stays in sync.
-const folderColumns = `id, type, name, enabled, metadata_language, auto_translate_metadata, chapter_thumbnails_enabled, intro_detection_enabled, trickplay_enabled, realtime_monitoring, trailer_kinds, episode_still_source, episode_frame_stills, episode_frame_position, poster_path, last_scanned_at,
+const folderColumns = `id, type, name, enabled, metadata_language, auto_translate_metadata, chapter_thumbnails_enabled, intro_detection_enabled, trickplay_enabled, realtime_monitoring, trailer_kinds, episode_still_source, episode_frame_stills, episode_frame_position, auto_collections_enabled, collection_artwork_enabled, poster_path, last_scanned_at,
 	scan_warning_code, scan_warning_message, scan_warning_at, allow_empty_cleanup_once, sort_order`
 
 // scanFolder scans a single row into a *models.MediaFolder.
@@ -219,6 +221,8 @@ func scanFolder(row pgx.Row) (*models.MediaFolder, error) {
 		&f.EpisodeStillSource,
 		&f.EpisodeFrameStills,
 		&f.EpisodeFramePosition,
+		&f.AutoCollectionsEnabled,
+		&f.CollectionArtworkEnabled,
 		&f.PosterPath,
 		&f.LastScannedAt,
 		&f.ScanWarningCode,
@@ -258,6 +262,8 @@ func scanFolders(rows pgx.Rows) ([]*models.MediaFolder, error) {
 			&f.EpisodeStillSource,
 			&f.EpisodeFrameStills,
 			&f.EpisodeFramePosition,
+			&f.AutoCollectionsEnabled,
+			&f.CollectionArtworkEnabled,
 			&f.PosterPath,
 			&f.LastScannedAt,
 			&f.ScanWarningCode,
@@ -515,6 +521,16 @@ func (r *FolderRepository) Update(ctx context.Context, id int, input UpdateFolde
 	if input.AutoTranslateMetadata != nil {
 		setClauses = append(setClauses, fmt.Sprintf("auto_translate_metadata = $%d", argIndex))
 		args = append(args, *input.AutoTranslateMetadata)
+		argIndex++
+	}
+	if input.AutoCollectionsEnabled != nil {
+		setClauses = append(setClauses, fmt.Sprintf("auto_collections_enabled = $%d", argIndex))
+		args = append(args, *input.AutoCollectionsEnabled)
+		argIndex++
+	}
+	if input.CollectionArtworkEnabled != nil {
+		setClauses = append(setClauses, fmt.Sprintf("collection_artwork_enabled = $%d", argIndex))
+		args = append(args, *input.CollectionArtworkEnabled)
 		argIndex++
 	}
 	if input.EpisodeFrameStills != nil {

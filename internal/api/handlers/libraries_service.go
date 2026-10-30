@@ -221,6 +221,8 @@ func (h *LibraryHandler) UpdateLibrary(ctx context.Context, id, userID int, req 
 		EpisodeStillSource:       req.EpisodeStillSource,
 		EpisodeFrameStills:       req.EpisodeFrameStills,
 		EpisodeFramePosition:     req.EpisodeFramePosition,
+		AutoCollectionsEnabled:   req.AutoCollectionsEnabled,
+		CollectionArtworkEnabled: req.CollectionArtworkEnabled,
 	})
 	if err != nil {
 		if errors.Is(err, catalog.ErrFolderNotFound) {
@@ -281,6 +283,15 @@ func (h *LibraryHandler) UpdateLibrary(ctx context.Context, id, userID int, req 
 			}
 		} else {
 			publishEventJob(ctx, h.EventsHub, "job.created", job)
+		}
+	}
+
+	// Build, restyle or remove the library's automatic collections now
+	// rather than at the next daily run.
+	if h.TaskStarter != nil && (oldFolder.AutoCollectionsEnabled != folder.AutoCollectionsEnabled ||
+		(folder.AutoCollectionsEnabled && oldFolder.CollectionArtworkEnabled != folder.CollectionArtworkEnabled)) {
+		if _, err := h.TaskStarter.StartTask(AutoMovieCollectionsTaskKey); err != nil {
+			slog.WarnContext(ctx, "start automatic collections sync failed", "component", "api", "library_id", folder.ID, "error", err)
 		}
 	}
 

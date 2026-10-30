@@ -67,6 +67,8 @@ type LibraryCollectionHandler struct {
 	// read those posters from ArtworkStore. Nil when storage serves its own
 	// URLs.
 	ArtworkSigner *artworkurl.Signer
+	// AutoTMDB serves the automatic movie collections sync; nil disables it.
+	AutoTMDB AutoCollectionsTMDB
 }
 
 var errLibraryCollectionInUse = catalog.ErrLibraryCollectionInUse
@@ -2884,7 +2886,7 @@ func defaultCollectionVisibility(visibility string) string {
 
 func normalizeCollectionManagementMode(mode string) string {
 	switch strings.TrimSpace(strings.ToLower(mode)) {
-	case collectionManagementModeSection, collectionManagementModeTemplateBundle:
+	case collectionManagementModeSection, collectionManagementModeTemplateBundle, collectionManagementModeAuto:
 		return strings.TrimSpace(strings.ToLower(mode))
 	default:
 		return collectionManagementModeManual

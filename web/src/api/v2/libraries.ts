@@ -51,6 +51,8 @@ export function libraryFromV2(library: LibraryV2): Library {
     episode_still_source: library.episode_still_source,
     episode_frame_stills: library.episode_frame_stills,
     episode_frame_position: library.episode_frame_position,
+    auto_collections_enabled: library.auto_collections_enabled,
+    collection_artwork_enabled: library.collection_artwork_enabled,
     trailer_kinds: library.trailer_kinds,
     realtime_monitoring: library.realtime_monitoring,
     sort_order: library.sort_order,

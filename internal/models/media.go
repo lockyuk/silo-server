@@ -57,15 +57,21 @@ type MediaFolder struct {
 	// EpisodeFrameStills is when an episode's thumbnail is a frame of its
 	// video instead (EpisodeFrameStills*), and EpisodeFramePosition how far
 	// into the episode, in percent, the frame is taken.
-	EpisodeFrameStills    string
-	EpisodeFramePosition  int
-	PosterPath            string     // S3 key for library poster image
-	LastScannedAt         *time.Time // nullable
-	ScanWarningCode       *string
-	ScanWarningMessage    *string
-	ScanWarningAt         *time.Time
-	AllowEmptyCleanupOnce bool
-	SortOrder             int
+	EpisodeFrameStills   string
+	EpisodeFramePosition int
+	// AutoCollectionsEnabled has the automatic sync build one collection per
+	// TMDB collection (franchise) the library holds two or more films of.
+	AutoCollectionsEnabled bool
+	// CollectionArtworkEnabled gives those collections TMDB's poster and
+	// backdrop; off, they get the generated collage instead.
+	CollectionArtworkEnabled bool
+	PosterPath               string     // S3 key for library poster image
+	LastScannedAt            *time.Time // nullable
+	ScanWarningCode          *string
+	ScanWarningMessage       *string
+	ScanWarningAt            *time.Time
+	AllowEmptyCleanupOnce    bool
+	SortOrder                int
 }
 
 // MediaFile represents a row in the media_files table.

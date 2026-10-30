@@ -33755,6 +33755,13 @@
       "Library": {
         "additionalProperties": false,
         "properties": {
+          "auto_collections_enabled": {
+            "description": "Build a collection for each TMDB collection (franchise) the library holds two or more films of, kept in sync daily. Movie libraries only.",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          },
           "auto_translate_metadata": {
             "description": "Translate descriptions when providers lack the language",
             "examples": [
@@ -33770,6 +33777,13 @@
           },
           "chapter_thumbnails_supported": {
             "description": "Whether the server can produce chapter thumbnails (public asset storage is configured)",
+            "examples": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "collection_artwork_enabled": {
+            "description": "Give automatic collections TMDB's poster and backdrop; off, they get a collage of their films' posters",
             "examples": [
               true
             ],
@@ -33949,6 +33963,8 @@
           "trailer_kinds",
           "episode_frame_stills",
           "episode_frame_position",
+          "auto_collections_enabled",
+          "collection_artwork_enabled",
           "episode_still_source",
           "realtime_monitoring",
           "sort_order"
@@ -35059,6 +35075,13 @@
       "LibraryUpdate": {
         "additionalProperties": false,
         "properties": {
+          "auto_collections_enabled": {
+            "description": "Build a collection for each TMDB collection the library holds two or more films of; turning it off removes them. A change starts the collections sync",
+            "examples": [
+              true
+            ],
+            "type": "boolean"
+          },
           "auto_translate_metadata": {
             "examples": [
               false
@@ -35068,6 +35091,13 @@
           "chapter_thumbnails_enabled": {
             "examples": [
               false
+            ],
+            "type": "boolean"
+          },
+          "collection_artwork_enabled": {
+            "description": "Use TMDB's poster and backdrop for automatic collections instead of a collage",
+            "examples": [
+              true
             ],
             "type": "boolean"
           },

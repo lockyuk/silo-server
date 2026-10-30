@@ -25825,6 +25825,11 @@ export interface components {
     };
     Library: {
       /**
+       * @description Build a collection for each TMDB collection (franchise) the library holds two or more films of, kept in sync daily. Movie libraries only.
+       * @example false
+       */
+      auto_collections_enabled: boolean;
+      /**
        * @description Translate descriptions when providers lack the language
        * @example false
        */
@@ -25836,6 +25841,11 @@ export interface components {
        * @example true
        */
       chapter_thumbnails_supported: boolean;
+      /**
+       * @description Give automatic collections TMDB's poster and backdrop; off, they get a collage of their films' posters
+       * @example true
+       */
+      collection_artwork_enabled: boolean;
       /** @example true */
       enabled: boolean;
       /**
@@ -26415,10 +26425,20 @@ export interface components {
       total: number;
     };
     LibraryUpdate: {
+      /**
+       * @description Build a collection for each TMDB collection the library holds two or more films of; turning it off removes them. A change starts the collections sync
+       * @example true
+       */
+      auto_collections_enabled?: boolean;
       /** @example false */
       auto_translate_metadata?: boolean;
       /** @example false */
       chapter_thumbnails_enabled?: boolean;
+      /**
+       * @description Use TMDB's poster and backdrop for automatic collections instead of a collage
+       * @example true
+       */
+      collection_artwork_enabled?: boolean;
       /** @example true */
       enabled?: boolean;
       /**

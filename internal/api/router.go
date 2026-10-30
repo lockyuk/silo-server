@@ -233,9 +233,10 @@ type Dependencies struct {
 	ActivityLogRepo           *activitylog.Repo
 	OpsLogRepo                *opslog.Repo
 	FFmpegLogSink             playback.FFmpegLogSink
-	RedisClient               *redis.Client              // for session listing (may be nil)
-	TaskManager               *taskmanager.TaskManager   // task manager (may be nil)
-	ArtifactManager           *downloads.ArtifactManager // download prepare-to-file pipeline (may be nil)
+	RedisClient               *redis.Client                // for session listing (may be nil)
+	TaskManager               *taskmanager.TaskManager     // task manager (may be nil)
+	AutoCollectionsTMDB       handlers.AutoCollectionsTMDB // automatic movie collections' TMDB lookups (nil disables them)
+	ArtifactManager           *downloads.ArtifactManager   // download prepare-to-file pipeline (may be nil)
 	AdminJobCancelRegistry    *adminjob.CancelRegistry
 	IntroRepository           *intromarkers.Repository
 	IntroAnalyzer             *intromarkers.Analyzer
@@ -807,6 +808,9 @@ func newChiRouter(deps Dependencies) chi.Router {
 		}
 		if deps.DB != nil {
 			libraryHandler.JobRepo = adminjob.NewRepository(deps.DB)
+			if deps.TaskManager != nil {
+				libraryHandler.TaskStarter = deps.TaskManager
+			}
 		}
 
 		// Library poster uploads are writable client-facing assets, so they
@@ -2205,6 +2209,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 			Executor: &catalog.QueryExecutor{Pool: deps.DB},
 		}
 		libraryCollectionHandler.SmartCountRefresher = refresher
+		libraryCollectionHandler.AutoTMDB = deps.AutoCollectionsTMDB
 		appCtx := deps.AppContext
 		if appCtx == nil {
 			appCtx = context.Background()
@@ -5078,6 +5083,32 @@ func NewTMDBCollectionFetcher(apiKey string) catalog.TMDBCollectionFetcher {
 	return &tmdbCollectionAdapter{
 		client: tmdb.NewClient(apiKey, 40),
 	}
+}
+
+// NewAutoCollectionsTMDB serves the automatic movie collections sync.
+func NewAutoCollectionsTMDB(apiKey string) handlers.AutoCollectionsTMDB {
+	return &autoCollectionsTMDBAdapter{client: tmdb.NewClient(apiKey, 40)}
+}
+
+type autoCollectionsTMDBAdapter struct {
+	client *tmdb.Client
+}
+
+func (a *autoCollectionsTMDBAdapter) MovieCollectionID(ctx context.Context, movieID int) (int, error) {
+	return a.client.MovieCollectionID(ctx, movieID)
+}
+
+func (a *autoCollectionsTMDBAdapter) CollectionInfo(ctx context.Context, collectionID int) (handlers.AutoCollectionInfo, error) {
+	collection, err := a.client.GetCollection(ctx, collectionID)
+	if err != nil || collection == nil {
+		return handlers.AutoCollectionInfo{}, err
+	}
+	return handlers.AutoCollectionInfo{
+		Name:         collection.Name,
+		Overview:     collection.Overview,
+		PosterPath:   collection.PosterPath,
+		BackdropPath: collection.BackdropPath,
+	}, nil
 }
 
 // tmdbCollectionAdapter adapts the tmdb.Client to the catalog.TMDBCollectionFetcher interface.

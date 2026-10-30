@@ -3457,6 +3457,26 @@ func main() {
 		if collectionSyncScheduler != nil {
 			taskMgr.Register(tasks.NewSyncCollectionsTask(collectionSyncScheduler))
 		}
+		if deps.CollectionService != nil {
+			// Its own handler over the shared collection service, as the
+			// template bundle executor below has; the router's sets up
+			// collages on that service.
+			deps.AutoCollectionsTMDB = api.NewAutoCollectionsTMDB(cfg.TMDBAPIKey)
+			autoCollections := handlers.NewLibraryCollectionHandler(
+				catalog.NewLibraryCollectionRepository(deps.DB),
+				deps.CollectionService,
+				catalog.NewItemRepository(deps.DB),
+				nil,
+			)
+			autoCollections.ArtworkStore = deps.Blobs.Assets
+			autoCollections.ArtworkResolver = deps.ArtworkResolver
+			autoCollections.FolderRepo = deps.FolderRepo
+			if autoCollections.FolderRepo == nil {
+				autoCollections.FolderRepo = catalog.NewFolderRepository(deps.DB)
+			}
+			autoCollections.AutoTMDB = deps.AutoCollectionsTMDB
+			taskMgr.Register(tasks.NewSyncAutoMovieCollectionsTask(autoCollections))
+		}
 		if trendingRefresher != nil {
 			taskMgr.Register(tasks.NewRefreshTrendingDiscoverTask(trendingRefresher))
 		}

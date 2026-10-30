@@ -376,6 +376,41 @@ export function MetadataFields({ form }: { form: LibraryFormController }) {
         />
       </div>
       {form.library && <LibraryTranslatePanel libraryId={form.library.id} />}
+      {form.library && (form.type === "movies" || form.type === "mixed") && (
+        <>
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-0.5">
+              <Label htmlFor="auto-collections">Automatic collections</Label>
+              <p className="text-muted-foreground text-xs">
+                Creates a collection for each TMDB collection (such as a film series) this library
+                has two or more films of, and keeps them up to date daily. Switching it off removes
+                them.
+              </p>
+            </div>
+            <Switch
+              id="auto-collections"
+              checked={form.autoCollectionsEnabled}
+              onCheckedChange={form.setAutoCollectionsEnabled}
+            />
+          </div>
+          {form.autoCollectionsEnabled && (
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-0.5">
+                <Label htmlFor="collection-artwork">Collection artwork</Label>
+                <p className="text-muted-foreground text-xs">
+                  Uses TMDB&apos;s poster and background for each collection. Off, a collection
+                  shows a collage of its films&apos; posters.
+                </p>
+              </div>
+              <Switch
+                id="collection-artwork"
+                checked={form.collectionArtworkEnabled}
+                onCheckedChange={form.setCollectionArtworkEnabled}
+              />
+            </div>
+          )}
+        </>
+      )}
       {form.library && (form.type === "series" || form.type === "mixed") && (
         <div className="space-y-1.5">
           <Label htmlFor="episode-still-source">Episode thumbnails</Label>

@@ -19,24 +19,43 @@ type AdminThemeSongsService interface {
 	Retry(context.Context, string) (themedownload.Series, error)
 	Remove(context.Context, string) (themedownload.Series, error)
 	Skip(context.Context, string) (themedownload.Series, error)
+	Approve(context.Context, string) (themedownload.Series, error)
+	Reject(context.Context, string) (themedownload.Series, error)
 	Start(force bool, reason string) error
 	Status() (bool, string)
 	LastReport(context.Context) (*themedownload.Report, error)
 }
 
 type ThemeSongDownloadConfig struct {
-	Enabled     bool `json:"enabled" doc:"Download theme songs for series without one in their folder."`
-	RecheckDays int  `json:"recheck_days" minimum:"1" maximum:"365" doc:"Days before a theme the source lacked is asked for again."`
+	Enabled       bool `json:"enabled" doc:"Download theme songs for series and movies without one in their folder."`
+	RecheckDays   int  `json:"recheck_days" minimum:"1" maximum:"365" doc:"Days before a theme the sources lacked is asked for again."`
+	ThemerrDB     bool `json:"themerrdb" doc:"After Plex, use ThemerrDB's community YouTube theme links (series and movies)."`
+	YouTubeSearch bool `json:"youtube_search" doc:"Last, search YouTube; each result waits for an admin to approve it."`
+}
+
+type ThemeSongCandidate struct {
+	VideoID         string    `json:"video_id"`
+	Title           string    `json:"title"`
+	Channel         string    `json:"channel"`
+	DurationSeconds int       `json:"duration_seconds"`
+	Query           string    `json:"query" doc:"What YouTube was searched for."`
+	URL             string    `json:"url" format:"uri" doc:"The video's watch page, to listen before approving."`
+	FoundAt         time.Time `json:"found_at"`
 }
 
 type ThemeSongSeries struct {
-	ID           string     `json:"id"`
-	Title        string     `json:"title"`
-	TVDBID       string     `json:"tvdb_id" doc:"TheTVDB id the theme is looked up by; empty when the series has none."`
-	State        string     `json:"state" enum:"folder,downloaded,not_available,failed,pending,skipped" doc:"folder: a theme file in the series folder is used; downloaded: Silo's stored copy is used; skipped: an admin stopped looking for one."`
-	Detail       string     `json:"detail,omitempty" doc:"Why the last download failed."`
-	CheckedAt    *time.Time `json:"checked_at,omitempty"`
-	DownloadedAt *time.Time `json:"downloaded_at,omitempty"`
+	ID           string              `json:"id"`
+	Type         string              `json:"type" enum:"series,movie"`
+	Title        string              `json:"title"`
+	Year         int                 `json:"year"`
+	TVDBID       string              `json:"tvdb_id" doc:"TheTVDB id Plex is asked by; empty when the series has none."`
+	TMDBID       string              `json:"tmdb_id" doc:"TMDB id ThemerrDB is asked by."`
+	State        string              `json:"state" enum:"folder,downloaded,not_available,failed,pending,skipped,review" doc:"folder: a theme file in the title's folder is used; downloaded: Silo's stored copy is used; skipped: an admin stopped looking for one; review: a YouTube search result waits for approval."`
+	Detail       string              `json:"detail,omitempty" doc:"Why the last download failed."`
+	Source       string              `json:"source,omitempty" enum:"plex,themerrdb,youtube" doc:"Where the downloaded theme came from."`
+	Candidate    *ThemeSongCandidate `json:"candidate,omitempty" doc:"The search result waiting for review."`
+	CheckedAt    *time.Time          `json:"checked_at,omitempty"`
+	DownloadedAt *time.Time          `json:"downloaded_at,omitempty"`
 }
 
 type ThemeSongCounts struct {
@@ -46,6 +65,7 @@ type ThemeSongCounts struct {
 	Failed       int `json:"failed"`
 	Pending      int `json:"pending"`
 	Skipped      int `json:"skipped"`
+	Review       int `json:"review"`
 }
 
 type ThemeSongRunReport struct {
@@ -58,6 +78,7 @@ type ThemeSongRunReport struct {
 	Downloaded   int       `json:"downloaded"`
 	NotAvailable int       `json:"not_available"`
 	Failed       int       `json:"failed"`
+	Review       int       `json:"review"`
 	Skipped      int       `json:"skipped"`
 	Failures     []string  `json:"failures,omitempty"`
 }
@@ -85,13 +106,19 @@ type AdminThemeSongsConfigInput struct {
 }
 
 type AdminThemeSongSeriesInput struct {
-	ID string `path:"id" doc:"Series id."`
+	ID string `path:"id" doc:"Series or movie id."`
 }
 
 type AdminThemeSongSeriesOutput struct{ Body ThemeSongSeries }
 
 func themeSongSeries(s themedownload.Series) ThemeSongSeries {
-	return ThemeSongSeries{ID: s.ID, Title: s.Title, TVDBID: s.TVDBID, State: s.State, Detail: s.Detail, CheckedAt: s.CheckedAt, DownloadedAt: s.DownloadedAt}
+	out := ThemeSongSeries{ID: s.ID, Type: s.Type, Title: s.Title, Year: s.Year, TVDBID: s.TVDBID, TMDBID: s.TMDBID,
+		State: s.State, Detail: s.Detail, Source: s.Source, CheckedAt: s.CheckedAt, DownloadedAt: s.DownloadedAt}
+	if c := s.Candidate; c != nil {
+		out.Candidate = &ThemeSongCandidate{VideoID: c.VideoID, Title: c.Title, Channel: c.Channel,
+			DurationSeconds: c.DurationSeconds, Query: c.Query, URL: c.URL(), FoundAt: c.FoundAt}
+	}
+	return out
 }
 
 func (reg *Registry) adminThemeSongs() (AdminThemeSongsService, *Problem) {
@@ -133,6 +160,8 @@ func (reg *Registry) themeSongsOverview(ctx context.Context, svc AdminThemeSongs
 			out.Counts.Failed++
 		case themedownload.StateSkipped:
 			out.Counts.Skipped++
+		case themedownload.StateReview:
+			out.Counts.Review++
 		default:
 			out.Counts.Pending++
 		}
@@ -151,7 +180,10 @@ func (reg *Registry) themeSongsOverview(ctx context.Context, svc AdminThemeSongs
 
 func themeSongSeriesProblem(err error) error {
 	if errors.Is(err, themesongs.ErrNotFound) {
-		return NewProblem(TypeNotFound, "No TV series with files has this id.")
+		return NewProblem(TypeNotFound, "No TV series or movie with files has this id.")
+	}
+	if errors.Is(err, themedownload.ErrNoCandidate) {
+		return NewProblem(TypeConflict, "No search result is waiting for review.")
 	}
 	return serviceProblem(err)
 }
@@ -223,6 +255,34 @@ func registerAdminThemeSongs(reg *Registry) {
 			}
 			return &AdminThemeSongSeriesOutput{Body: themeSongSeries(s)}, nil
 		})
+
+	approve := themeSongsOperation(http.MethodPost, "/series/{id}/approve", "approveAdminThemeSong", "Download the YouTube search result waiting for a title and keep it as its theme.")
+	approve.Errors = []int{http.StatusConflict}
+	Register(reg, approve, func(ctx context.Context, in *AdminThemeSongSeriesInput) (*AdminThemeSongSeriesOutput, error) {
+		svc, p := reg.adminThemeSongs()
+		if p != nil {
+			return nil, p
+		}
+		s, err := svc.Approve(ctx, in.ID)
+		if err != nil {
+			return nil, themeSongSeriesProblem(err)
+		}
+		return &AdminThemeSongSeriesOutput{Body: themeSongSeries(s)}, nil
+	})
+
+	reject := themeSongsOperation(http.MethodPost, "/series/{id}/reject", "rejectAdminThemeSong", "Turn down the search result waiting for a title and search again, skipping every result rejected for it.")
+	reject.Errors = []int{http.StatusConflict}
+	Register(reg, reject, func(ctx context.Context, in *AdminThemeSongSeriesInput) (*AdminThemeSongSeriesOutput, error) {
+		svc, p := reg.adminThemeSongs()
+		if p != nil {
+			return nil, p
+		}
+		s, err := svc.Reject(ctx, in.ID)
+		if err != nil {
+			return nil, themeSongSeriesProblem(err)
+		}
+		return &AdminThemeSongSeriesOutput{Body: themeSongSeries(s)}, nil
+	})
 
 	Register(reg, themeSongsOperation(http.MethodDelete, "/series/{id}", "deleteAdminThemeSong", "Delete one series' downloaded theme. The next run downloads it again."),
 		func(ctx context.Context, in *AdminThemeSongSeriesInput) (*AdminThemeSongSeriesOutput, error) {

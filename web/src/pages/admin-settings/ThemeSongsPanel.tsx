@@ -25,8 +25,10 @@ function pluginStatus(s: Series) {
       return "skipped";
     case "failed":
       return "error";
+    case "review":
+      return "review";
     default:
-      if (!s.tvdb_id) return "no_tvdb";
+      if (s.type === "series" && !s.tvdb_id && !s.tmdb_id) return "no_tvdb";
       return s.state === "pending" ? "pending" : "missing";
   }
 }
@@ -34,8 +36,12 @@ function pluginStatus(s: Series) {
 function pluginShow(s: Series) {
   return {
     i: s.id,
+    t: s.type,
     n: s.title,
+    y: s.year || "",
     v: s.tvdb_id,
+    src: s.source ?? "",
+    r: s.candidate ?? null,
     s: pluginStatus(s),
     c: s.downloaded_at ?? s.checked_at ?? "",
     d: s.detail ?? "",
@@ -94,17 +100,25 @@ export default function ThemeSongsPanel() {
       if (path === "settings") {
         return pluginState(
           await v2("PUT /api/v2/admin/theme-songs/settings", {
-            body: { enabled: !!body?.enabled, recheck_days: Number(body?.recheck_days) },
+            body: {
+              enabled: !!body?.enabled,
+              recheck_days: Number(body?.recheck_days),
+              themerrdb: !!body?.themerrdb,
+              youtube_search: !!body?.youtube_search,
+            },
           }),
         );
       }
-      const show = /^shows\/([^/]+)\/(retry|skip)$/.exec(path);
+      const show = /^shows\/([^/]+)\/(retry|skip|approve|reject)$/.exec(path);
       if (show?.[1]) {
         const id = decodeURIComponent(show[1]);
-        const updated =
-          show[2] === "retry"
-            ? await v2("POST /api/v2/admin/theme-songs/series/{id}/retry", { path: { id } })
-            : await v2("POST /api/v2/admin/theme-songs/series/{id}/skip", { path: { id } });
+        const updated = await (show[2] === "retry"
+          ? v2("POST /api/v2/admin/theme-songs/series/{id}/retry", { path: { id } })
+          : show[2] === "approve"
+            ? v2("POST /api/v2/admin/theme-songs/series/{id}/approve", { path: { id } })
+            : show[2] === "reject"
+              ? v2("POST /api/v2/admin/theme-songs/series/{id}/reject", { path: { id } })
+              : v2("POST /api/v2/admin/theme-songs/series/{id}/skip", { path: { id } }));
         return pluginShow(updated);
       }
       throw new Error(`Unknown request ${opts.method ?? "GET"} ${path}`);

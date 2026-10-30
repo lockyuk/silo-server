@@ -16,6 +16,7 @@ import (
 
 const (
 	ownerSeries = "series"
+	ownerMovie  = "movie"
 	ownerSeason = "season"
 )
 
@@ -163,10 +164,11 @@ func (r *Repository) Resolve(ctx context.Context, id string, inherit bool, filte
 			return candidate.id, files, nil
 		}
 	}
-	// No folder theme anywhere in the chain: fall back to the series' download.
+	// No folder theme anywhere in the chain: fall back to the series' or
+	// the movie's download.
 	if d := downloads.Load(); d != nil {
 		for _, candidate := range owners {
-			if candidate.kind != ownerSeries {
+			if candidate.kind != ownerSeries && candidate.kind != ownerMovie {
 				continue
 			}
 			files, err := d.forSeries(ctx, candidate.id)
@@ -174,7 +176,7 @@ func (r *Repository) Resolve(ctx context.Context, id string, inherit bool, filte
 				return "", nil, err
 			}
 			if len(files) > 0 {
-				files[0].OwnerType = ownerSeries
+				files[0].OwnerType = candidate.kind
 				return candidate.id, files, nil
 			}
 		}
@@ -182,10 +184,14 @@ func (r *Repository) Resolve(ctx context.Context, id string, inherit bool, filte
 	return id, []File{}, nil
 }
 
-// HasFolderTheme reports whether a series has a theme file of its own, in its
-// folder, regardless of who may see it. Downloaded themes do not count.
-func (r *Repository) HasFolderTheme(ctx context.Context, seriesID string) (bool, error) {
-	files, err := r.files(ctx, owner{seriesID, ownerSeries, seriesID, 0}, catalog.AccessFilter{})
+// HasFolderTheme reports whether a series or a movie ([kind] "series" or
+// "movie") has a theme file of its own, in its folder, regardless of who may
+// see it. Downloaded themes do not count.
+func (r *Repository) HasFolderTheme(ctx context.Context, itemID, kind string) (bool, error) {
+	if kind != ownerMovie {
+		kind = ownerSeries
+	}
+	files, err := r.files(ctx, owner{itemID, kind, itemID, 0}, catalog.AccessFilter{})
 	return len(files) > 0, err
 }
 

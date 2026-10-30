@@ -3206,6 +3206,7 @@ func main() {
 				metadata.NewArtworkRevisionGarbageCollector(deps.DB, deps.Blobs.Assets),
 			))
 			themeDownloads := themedownload.New(deps.DB, deps.Blobs.Assets, settingsRepo, scanner.FFprobePathFromFFmpeg(cfg.Playback.FFmpegPath))
+			themeDownloads.UseYouTube(os.Getenv("SILO_YTDLP_PATH"), cfg.Playback.FFmpegPath)
 			themesongs.UseDownloads(deps.DB, func(ctx context.Context, key string) (io.ReadCloser, error) {
 				body, _, err := deps.Blobs.Assets.Get(ctx, key)
 				return body, err

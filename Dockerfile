@@ -95,6 +95,21 @@ RUN if [ "${TARGETARCH}" = "amd64" ]; then \
       cd / && \
       rm -rf "${runtime_dir}" /var/lib/apt/lists/*; \
     fi
+# yt-dlp fetches theme songs that ThemerrDB or a YouTube search point at.
+# The standalone build needs no Python; the checksum pins the exact binary.
+ARG YTDLP_VERSION=2026.10.26
+ARG YTDLP_SHA256_AMD64=767ba9dce7052aa196f8b12652f433d76de128ba168966fa84b6394d5e6c6795
+ARG YTDLP_SHA256_ARM64=e87e9533e89fe5889abaa21f5114dfe7756d6aa6219b83551add04d48b18e483
+RUN case "${TARGETARCH}" in \
+      amd64) asset=yt-dlp_linux; sum="${YTDLP_SHA256_AMD64}" ;; \
+      arm64) asset=yt-dlp_linux_aarch64; sum="${YTDLP_SHA256_ARM64}" ;; \
+      *) asset=""; sum="" ;; \
+    esac && \
+    if [ -n "${asset}" ]; then \
+      curl -fsSL -o /usr/local/bin/yt-dlp "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/${asset}" && \
+      echo "${sum}  /usr/local/bin/yt-dlp" | sha256sum -c - && \
+      chmod 0755 /usr/local/bin/yt-dlp; \
+    fi
 RUN mkdir -p /tmp/silo-transcode /var/lib/silo/artwork /var/lib/silo/compat/jellyfin-web
 COPY --from=jellyfin_web_node /usr/local/bin/node /usr/local/bin/node
 COPY --from=jellyfin_web_node /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm

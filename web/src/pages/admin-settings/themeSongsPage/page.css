@@ -49,3 +49,11 @@ th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spa
 .toast.bad { background: var(--bad); color: #fff; }
 .check { display: flex; gap: 8px; align-items: center; }
 .pill.info { color: var(--accent); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 6px 12px; background: var(--panel-2); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; margin-right: 6px; vertical-align: 1px; }
+.review { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.review:last-child { border-bottom: 0; }
+.review .what { flex: 1 1 320px; min-width: 0; }
+.review a { color: var(--accent); }

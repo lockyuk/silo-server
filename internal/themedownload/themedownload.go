@@ -1,6 +1,8 @@
-// Package themedownload fetches TV theme songs from Plex's public theme
-// library into Silo's blob storage. It never writes to a media folder: a
-// theme placed in a series folder is used instead, and the series is skipped.
+// Package themedownload fetches theme songs for TV series and movies into
+// Silo's blob storage: from Plex's public TV theme library, then ThemerrDB's
+// community YouTube links, then (when switched on) a YouTube search whose
+// result an admin approves. It never writes to a media folder: a theme placed
+// in a series or movie folder is used instead, and the title is skipped.
 package themedownload
 
 import (
@@ -41,8 +43,17 @@ const (
 	// DefaultRecheckDays applies when SettingRecheckDays is unset.
 	DefaultRecheckDays = 14
 
+	// SettingThemerrDB switches the ThemerrDB source; on unless set "false".
+	SettingThemerrDB = "theme_songs.themerrdb_enabled"
+	// SettingYouTubeSearch switches the YouTube search source; off by default.
+	SettingYouTubeSearch = "theme_songs.youtube_search_enabled"
+
 	// SourcePlex is Plex's public TV theme library, keyed by TheTVDB id.
 	SourcePlex = "plex"
+
+	// TypeSeries and TypeMovie are the media types that get themes.
+	TypeSeries = "series"
+	TypeMovie  = "movie"
 
 	// KeyRoot is the blob namespace downloaded themes are stored under.
 	KeyRoot = "theme-songs/"
@@ -75,9 +86,12 @@ type Service struct {
 	settings  Settings
 	ffprobe   string
 	themes    *themesongs.Repository
-	client    *http.Client
-	sourceURL string
-	gap       time.Duration
+	client     *http.Client
+	sourceURL  string
+	themerrURL string
+	gap        time.Duration
+	// ytdlp and ffmpeg fetch YouTube audio; empty ytdlp disables those sources.
+	ytdlp, ffmpeg string
 	now       func() time.Time
 
 	mu       sync.Mutex
@@ -93,8 +107,9 @@ func New(pool *pgxpool.Pool, blobs Blobs, settings Settings, ffprobe string) *Se
 		pool: pool, blobs: blobs, settings: settings, ffprobe: ffprobe,
 		themes:    themesongs.NewRepository(pool),
 		client:    &http.Client{Timeout: 60 * time.Second},
-		sourceURL: defaultSourceURL,
-		gap:       requestGap,
+		sourceURL:  defaultSourceURL,
+		themerrURL: defaultThemerrURL,
+		gap:        requestGap,
 		now:       time.Now,
 	}
 	s.probeAudio = s.probe
@@ -103,8 +118,10 @@ func New(pool *pgxpool.Pool, blobs Blobs, settings Settings, ffprobe string) *Se
 
 // Config is the admin-editable configuration.
 type Config struct {
-	Enabled     bool `json:"enabled"`
-	RecheckDays int  `json:"recheck_days"`
+	Enabled       bool `json:"enabled"`
+	RecheckDays   int  `json:"recheck_days"`
+	ThemerrDB     bool `json:"themerrdb"`
+	YouTubeSearch bool `json:"youtube_search"`
 }
 
 // Config returns the saved configuration.
@@ -117,7 +134,15 @@ func (s *Service) Config(ctx context.Context) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	cfg := Config{Enabled: enabled == "true", RecheckDays: DefaultRecheckDays}
+	themerr, err := s.settings.Get(ctx, SettingThemerrDB)
+	if err != nil {
+		return Config{}, err
+	}
+	search, err := s.settings.Get(ctx, SettingYouTubeSearch)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg := Config{Enabled: enabled == "true", RecheckDays: DefaultRecheckDays, ThemerrDB: themerr != "false", YouTubeSearch: search == "true"}
 	if n, err := strconv.Atoi(days); err == nil && n > 0 {
 		cfg.RecheckDays = n
 	}
@@ -135,6 +160,12 @@ func (s *Service) SaveConfig(ctx context.Context, cfg Config) (Config, error) {
 	if err := s.settings.Set(ctx, SettingRecheckDays, strconv.Itoa(cfg.RecheckDays)); err != nil {
 		return Config{}, err
 	}
+	if err := s.settings.Set(ctx, SettingThemerrDB, strconv.FormatBool(cfg.ThemerrDB)); err != nil {
+		return Config{}, err
+	}
+	if err := s.settings.Set(ctx, SettingYouTubeSearch, strconv.FormatBool(cfg.YouTubeSearch)); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
 }
 
@@ -144,13 +175,18 @@ func (s *Service) Enabled(ctx context.Context) (bool, error) {
 	return cfg.Enabled, err
 }
 
-// Series is one TV series and where its theme comes from.
+// Series is one TV series or movie and where its theme comes from.
 type Series struct {
 	ID           string     `json:"id"`
+	Type         string     `json:"type"`
 	Title        string     `json:"title"`
+	Year         int        `json:"year"`
 	TVDBID       string     `json:"tvdb_id"`
-	State        string     `json:"state" enum:"folder,downloaded,not_available,failed,pending"`
+	TMDBID       string     `json:"tmdb_id"`
+	State        string     `json:"state" enum:"folder,downloaded,not_available,failed,pending,skipped,review"`
 	Detail       string     `json:"detail,omitempty"`
+	Source       string     `json:"source,omitempty"`
+	Candidate    *Candidate `json:"candidate,omitempty"`
 	CheckedAt    *time.Time `json:"checked_at,omitempty"`
 	DownloadedAt *time.Time `json:"downloaded_at,omitempty"`
 }
@@ -164,20 +200,29 @@ const (
 	StatePending      = "pending"
 	// StateSkipped is a series an admin chose never to download a theme for.
 	StateSkipped = "skipped"
+	// StateReview is a YouTube search result waiting for an admin.
+	StateReview = "review"
 )
 
-// List returns every TV series with files, and its theme state.
+// List returns every TV series and movie with files, and its theme state.
 func (s *Service) List(ctx context.Context) ([]Series, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT mi.content_id, mi.title, mi.tvdb_id, dt.downloaded_at, c.outcome, c.detail, c.checked_at
+		SELECT mi.content_id, mi.type, mi.title, COALESCE(mi.year, 0), COALESCE(mi.tvdb_id, ''), COALESCE(mi.tmdb_id, ''),
+			dt.downloaded_at, COALESCE(dt.source, ''), c.outcome, c.detail, c.checked_at,
+			tc.video_id, tc.video_title, tc.channel, tc.duration_seconds, tc.query, tc.found_at
 		FROM media_items mi
 		LEFT JOIN downloaded_theme_songs dt ON dt.series_id = mi.content_id
 		LEFT JOIN theme_song_checks c ON c.series_id = mi.content_id
-		WHERE mi.type = 'series' AND EXISTS (
+		LEFT JOIN theme_song_candidates tc ON tc.item_id = mi.content_id
+		WHERE (mi.type = 'series' AND EXISTS (
 			SELECT 1 FROM episodes e
 			JOIN media_files mf ON mf.episode_id = e.content_id
 			JOIN media_folders f ON f.id = mf.media_folder_id
-			WHERE e.series_id = mi.content_id AND mf.missing_since IS NULL AND f.enabled)
+			WHERE e.series_id = mi.content_id AND mf.missing_since IS NULL AND f.enabled))
+		OR (mi.type = 'movie' AND EXISTS (
+			SELECT 1 FROM media_files mf
+			JOIN media_folders f ON f.id = mf.media_folder_id
+			WHERE mf.content_id = mi.content_id AND mf.extra_id IS NULL AND mf.missing_since IS NULL AND f.enabled))
 		ORDER BY lower(mi.title), mi.content_id`)
 	if err != nil {
 		return nil, err
@@ -186,13 +231,28 @@ func (s *Service) List(ctx context.Context) ([]Series, error) {
 	for rows.Next() {
 		var sr Series
 		var outcome, detail *string
-		if err := rows.Scan(&sr.ID, &sr.Title, &sr.TVDBID, &sr.DownloadedAt, &outcome, &detail, &sr.CheckedAt); err != nil {
+		var videoID, videoTitle, channel, query *string
+		var duration *int
+		var foundAt *time.Time
+		if err := rows.Scan(&sr.ID, &sr.Type, &sr.Title, &sr.Year, &sr.TVDBID, &sr.TMDBID, &sr.DownloadedAt, &sr.Source,
+			&outcome, &detail, &sr.CheckedAt, &videoID, &videoTitle, &channel, &duration, &query, &foundAt); err != nil {
 			rows.Close()
 			return nil, err
+		}
+		if videoID != nil {
+			sr.Candidate = &Candidate{VideoID: *videoID, Title: deref(videoTitle), Channel: deref(channel), Query: deref(query)}
+			if duration != nil {
+				sr.Candidate.DurationSeconds = *duration
+			}
+			if foundAt != nil {
+				sr.Candidate.FoundAt = *foundAt
+			}
 		}
 		switch {
 		case sr.DownloadedAt != nil:
 			sr.State = StateDownloaded
+		case sr.Candidate != nil:
+			sr.State = StateReview
 		case outcome != nil && *outcome == "not_available":
 			sr.State = StateNotAvailable
 		case outcome != nil && *outcome == "skipped":
@@ -210,15 +270,22 @@ func (s *Service) List(ctx context.Context) ([]Series, error) {
 	}
 	// A folder theme overrides whatever was downloaded.
 	for i := range out {
-		local, err := s.themes.HasFolderTheme(ctx, out[i].ID)
+		local, err := s.themes.HasFolderTheme(ctx, out[i].ID, out[i].Type)
 		if err != nil {
 			return nil, err
 		}
 		if local {
-			out[i].State, out[i].Detail = StateFolder, ""
+			out[i].State, out[i].Detail, out[i].Source, out[i].Candidate = StateFolder, "", "", nil
 		}
 	}
 	return out, nil
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 // Report summarizes one run.
@@ -232,7 +299,8 @@ type Report struct {
 	Downloaded   int       `json:"downloaded"`
 	NotAvailable int       `json:"not_available"`
 	Failed       int       `json:"failed"`
-	Skipped      int       `json:"skipped" doc:"Series with a folder theme, a download, or a recent miss."`
+	Review       int       `json:"review" doc:"Search results now waiting for an admin."`
+	Skipped      int       `json:"skipped" doc:"Titles with a folder theme, a download, a search result to review, or a recent miss."`
 	Failures     []string  `json:"failures,omitempty"`
 }
 
@@ -344,7 +412,7 @@ func (s *Service) run(ctx context.Context, force bool, progress func(percent flo
 	var due []Series
 	for _, sr := range all {
 		switch {
-		case sr.State == StateFolder || sr.State == StateDownloaded || sr.State == StateSkipped:
+		case sr.State == StateFolder || sr.State == StateDownloaded || sr.State == StateSkipped || sr.State == StateReview:
 			report.Skipped++
 		case sr.State == StateNotAvailable && !force && sr.CheckedAt != nil && s.now().Sub(*sr.CheckedAt) < recheck:
 			report.Skipped++
@@ -368,11 +436,14 @@ func (s *Service) run(ctx context.Context, force bool, progress func(percent flo
 		}
 		report.Checked++
 		outcome, detail := "downloaded", ""
-		if err := s.fetch(ctx, sr); err != nil {
+		if err := s.fetch(ctx, sr, cfg); err != nil {
 			if ctx.Err() != nil {
 				return report, ctx.Err()
 			}
-			if errors.Is(err, errNotAvailable) {
+			if errors.Is(err, errReview) {
+				outcome = "review"
+				report.Review++
+			} else if errors.Is(err, errNotAvailable) {
 				outcome = "not_available"
 				report.NotAvailable++
 			} else {
@@ -391,7 +462,7 @@ func (s *Service) run(ctx context.Context, force bool, progress func(percent flo
 		}
 	}
 	if progress != nil {
-		progress(100, fmt.Sprintf("Downloaded %d, not available %d, failed %d", report.Downloaded, report.NotAvailable, report.Failed))
+		progress(100, fmt.Sprintf("Downloaded %d, to review %d, not available %d, failed %d", report.Downloaded, report.Review, report.NotAvailable, report.Failed))
 	}
 	return report, nil
 }
@@ -409,15 +480,14 @@ func (s *Service) Retry(ctx context.Context, seriesID string) (Series, error) {
 		if sr.State == StateFolder {
 			return sr, nil
 		}
-		outcome, detail := "downloaded", ""
-		if err := s.fetch(ctx, sr); errors.Is(err, errNotAvailable) {
-			outcome = "not_available"
-		} else if err != nil {
-			outcome, detail = "failed", err.Error()
+		cfg, err := s.Config(ctx)
+		if err != nil {
+			return Series{}, err
 		}
-		if _, err := s.pool.Exec(ctx, `INSERT INTO theme_song_checks (series_id, checked_at, outcome, detail) VALUES ($1, $2, $3, $4)
-			ON CONFLICT (series_id) DO UPDATE SET checked_at = EXCLUDED.checked_at, outcome = EXCLUDED.outcome, detail = EXCLUDED.detail`,
-			sr.ID, s.now(), outcome, detail); err != nil {
+		if err := s.dropCandidate(ctx, sr.ID); err != nil {
+			return Series{}, err
+		}
+		if err := s.record(ctx, sr.ID, s.fetch(ctx, sr, cfg)); err != nil {
 			return Series{}, err
 		}
 		return s.one(ctx, seriesID)
@@ -432,6 +502,9 @@ func (s *Service) Skip(ctx context.Context, seriesID string) (Series, error) {
 		return Series{}, err
 	}
 	if err := s.deleteDownload(ctx, seriesID); err != nil {
+		return Series{}, err
+	}
+	if err := s.dropCandidate(ctx, seriesID); err != nil {
 		return Series{}, err
 	}
 	if _, err := s.pool.Exec(ctx, `INSERT INTO theme_song_checks (series_id, checked_at, outcome, detail) VALUES ($1, $2, 'skipped', '')
@@ -463,6 +536,9 @@ func (s *Service) Remove(ctx context.Context, seriesID string) (Series, error) {
 	if err := s.deleteDownload(ctx, seriesID); err != nil {
 		return Series{}, err
 	}
+	if err := s.dropCandidate(ctx, seriesID); err != nil {
+		return Series{}, err
+	}
 	if _, err := s.pool.Exec(ctx, `DELETE FROM theme_song_checks WHERE series_id = $1`, seriesID); err != nil {
 		return Series{}, err
 	}
@@ -482,8 +558,54 @@ func (s *Service) one(ctx context.Context, seriesID string) (Series, error) {
 	return Series{}, themesongs.ErrNotFound
 }
 
-// fetch downloads, checks and stores one series' theme.
-func (s *Service) fetch(ctx context.Context, sr Series) error {
+// fetch finds, checks and stores one title's theme: Plex for a series with a
+// TVDB id, then ThemerrDB, then a YouTube search, which stores a candidate
+// for review (errReview) rather than a theme. It returns errNotAvailable when
+// no source has one.
+func (s *Service) fetch(ctx context.Context, sr Series, cfg Config) error {
+	var failures []string
+	if sr.Type != TypeMovie {
+		err := s.fetchPlex(ctx, sr)
+		if err == nil || !errors.Is(err, errNotAvailable) {
+			return err
+		}
+	}
+	if cfg.ThemerrDB {
+		url, err := s.themerrLookup(ctx, sr)
+		if err == nil {
+			data, dlErr := s.youtubeAudio(ctx, url)
+			if dlErr == nil {
+				return s.store(ctx, sr, SourceThemerrDB, url, data)
+			}
+			failures = append(failures, "ThemerrDB: "+dlErr.Error())
+		} else if !errors.Is(err, errNotAvailable) {
+			failures = append(failures, err.Error())
+		}
+	}
+	if cfg.YouTubeSearch {
+		rejected, err := s.rejections(ctx, sr.ID)
+		if err != nil {
+			return err
+		}
+		c, err := s.search(ctx, sr, rejected)
+		if err == nil {
+			if err := s.saveCandidate(ctx, sr.ID, c); err != nil {
+				return err
+			}
+			return errReview
+		}
+		if !errors.Is(err, errNotAvailable) {
+			failures = append(failures, err.Error())
+		}
+	}
+	if len(failures) > 0 {
+		return errors.New(strings.Join(failures, "; "))
+	}
+	return errNotAvailable
+}
+
+// fetchPlex downloads a series' theme from Plex's TV theme library.
+func (s *Service) fetchPlex(ctx context.Context, sr Series) error {
 	tvdb := strings.TrimSpace(sr.TVDBID)
 	if tvdb == "" {
 		return errNotAvailable
@@ -495,6 +617,11 @@ func (s *Service) fetch(ctx context.Context, sr Series) error {
 	if err != nil {
 		return err
 	}
+	return s.store(ctx, sr, SourcePlex, tvdb, data)
+}
+
+// store checks a theme's audio and keeps it as the title's downloaded theme.
+func (s *Service) store(ctx context.Context, sr Series, source, ref string, data []byte) error {
 	sum := sha256.Sum256(data)
 	hash := hex.EncodeToString(sum[:])
 	file, err := s.probeAudio(ctx, data)
@@ -516,7 +643,7 @@ func (s *Service) fetch(ctx context.Context, sr Series) error {
 			audio_codec = EXCLUDED.audio_codec, audio_channels = EXCLUDED.audio_channels, bitrate_kbps = EXCLUDED.bitrate_kbps,
 			sample_rate = EXCLUDED.sample_rate, file_size = EXCLUDED.file_size, downloaded_at = EXCLUDED.downloaded_at
 		RETURNING COALESCE((SELECT blob_key FROM previous), '')`,
-		sr.ID, SourcePlex, tvdb, key, hash, file.DurationSeconds, file.AudioCodec, file.AudioChannels, file.BitrateKbps,
+		sr.ID, source, ref, key, hash, file.DurationSeconds, file.AudioCodec, file.AudioChannels, file.BitrateKbps,
 		file.SampleRate, int64(len(data)), s.now().Truncate(time.Microsecond)).Scan(&old)
 	if err != nil {
 		return err
@@ -525,6 +652,121 @@ func (s *Service) fetch(ctx context.Context, sr Series) error {
 		_, _ = s.blobs.Delete(ctx, []string{old})
 	}
 	return nil
+}
+
+// record stores the outcome of a fetch for one title.
+func (s *Service) record(ctx context.Context, id string, fetchErr error) error {
+	outcome, detail := "downloaded", ""
+	switch {
+	case fetchErr == nil:
+	case errors.Is(fetchErr, errReview):
+		outcome = "review"
+	case errors.Is(fetchErr, errNotAvailable):
+		outcome = "not_available"
+	default:
+		outcome, detail = "failed", fetchErr.Error()
+	}
+	_, err := s.pool.Exec(ctx, `INSERT INTO theme_song_checks (series_id, checked_at, outcome, detail) VALUES ($1, $2, $3, $4)
+		ON CONFLICT (series_id) DO UPDATE SET checked_at = EXCLUDED.checked_at, outcome = EXCLUDED.outcome, detail = EXCLUDED.detail`,
+		id, s.now(), outcome, detail)
+	return err
+}
+
+func (s *Service) saveCandidate(ctx context.Context, id string, c Candidate) error {
+	_, err := s.pool.Exec(ctx, `INSERT INTO theme_song_candidates (item_id, video_id, video_title, channel, duration_seconds, query, found_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (item_id) DO UPDATE SET video_id = EXCLUDED.video_id, video_title = EXCLUDED.video_title,
+			channel = EXCLUDED.channel, duration_seconds = EXCLUDED.duration_seconds, query = EXCLUDED.query, found_at = EXCLUDED.found_at`,
+		id, c.VideoID, c.Title, c.Channel, c.DurationSeconds, c.Query, c.FoundAt)
+	return err
+}
+
+func (s *Service) dropCandidate(ctx context.Context, id string) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM theme_song_candidates WHERE item_id = $1`, id)
+	return err
+}
+
+func (s *Service) rejections(ctx context.Context, id string) (map[string]bool, error) {
+	rows, err := s.pool.Query(ctx, `SELECT video_id FROM theme_song_rejections WHERE item_id = $1`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil, err
+		}
+		out[v] = true
+	}
+	return out, rows.Err()
+}
+
+// ErrNoCandidate means a title has no search result waiting for review.
+var ErrNoCandidate = errors.New("no search result is waiting for review")
+
+// Approve downloads the search result waiting for a title and keeps it as the
+// title's theme.
+func (s *Service) Approve(ctx context.Context, id string) (Series, error) {
+	sr, err := s.one(ctx, id)
+	if err != nil {
+		return Series{}, err
+	}
+	if sr.Candidate == nil {
+		return Series{}, ErrNoCandidate
+	}
+	data, err := s.youtubeAudio(ctx, sr.Candidate.URL())
+	if err == nil {
+		err = s.store(ctx, sr, SourceYouTube, sr.Candidate.VideoID, data)
+	}
+	if err != nil {
+		// The candidate stays, so the admin can try again or reject it.
+		return Series{}, err
+	}
+	if err := s.dropCandidate(ctx, id); err != nil {
+		return Series{}, err
+	}
+	if err := s.record(ctx, id, nil); err != nil {
+		return Series{}, err
+	}
+	return s.one(ctx, id)
+}
+
+// Reject turns down the search result waiting for a title and searches again,
+// skipping every result rejected for it so far.
+func (s *Service) Reject(ctx context.Context, id string) (Series, error) {
+	sr, err := s.one(ctx, id)
+	if err != nil {
+		return Series{}, err
+	}
+	if sr.Candidate == nil {
+		return Series{}, ErrNoCandidate
+	}
+	if _, err := s.pool.Exec(ctx, `INSERT INTO theme_song_rejections (item_id, video_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+		id, sr.Candidate.VideoID); err != nil {
+		return Series{}, err
+	}
+	if err := s.dropCandidate(ctx, id); err != nil {
+		return Series{}, err
+	}
+	rejected, err := s.rejections(ctx, id)
+	if err != nil {
+		return Series{}, err
+	}
+	next := errNotAvailable
+	if c, searchErr := s.search(ctx, sr, rejected); searchErr == nil {
+		if err := s.saveCandidate(ctx, id, c); err != nil {
+			return Series{}, err
+		}
+		next = errReview
+	} else if !errors.Is(searchErr, errNotAvailable) {
+		next = searchErr
+	}
+	if err := s.record(ctx, id, next); err != nil {
+		return Series{}, err
+	}
+	return s.one(ctx, id)
 }
 
 func (s *Service) download(ctx context.Context, tvdb string) ([]byte, error) {

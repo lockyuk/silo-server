@@ -2,11 +2,11 @@
   <div class="row" style="margin-bottom:18px">
     <div>
       <h1>Theme songs</h1>
-      <div class="sub">TV show themes from Plex's public theme collection, kept in Silo's own storage. Your media folders are never written to.</div>
+      <div class="sub">Themes for TV shows and films from Plex's public TV theme collection, then ThemerrDB's community YouTube links, then (if you switch it on) a YouTube search you approve. Kept in Silo's own storage; your media folders are never written to.</div>
     </div>
     <div class="spacer"></div>
     <button class="primary" id="sync">Download missing themes</button>
-    <button id="recheck" title="Look again now for shows that had no theme available">Recheck shows without a theme</button>
+    <button id="recheck" title="Look again now for titles that had no theme available">Recheck titles without a theme</button>
   </div>
 
   <div id="problems"></div>
@@ -14,16 +14,25 @@
 
   <div class="grid" id="tiles"></div>
 
+  <div class="panel" id="review-panel" hidden>
+    <h2>Waiting for your review</h2>
+    <p class="hint" style="margin-top:-4px">YouTube search results. Listen first, then keep the theme or reject it; rejecting searches again for the next result.</p>
+    <div id="review"></div>
+  </div>
+
   <div class="panel">
     <div class="row" style="margin-bottom:10px">
-      <input type="search" id="q" placeholder="Search shows" aria-label="Search shows">
+      <input type="search" id="q" placeholder="Search titles" aria-label="Search titles">
+      <div class="seg" id="types" role="group" aria-label="Type">
+        <button data-type="" aria-pressed="true">All</button><button data-type="series" aria-pressed="false">TV</button><button data-type="movie" aria-pressed="false">Films</button>
+      </div>
       <span class="muted" id="shown"></span>
       <div class="spacer"></div>
       <span class="hint" id="last"></span>
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Show</th><th>Status</th><th>Checked</th><th></th></tr></thead>
+        <thead><tr><th>Title</th><th>Status</th><th>Checked</th><th></th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
@@ -36,8 +45,10 @@
       <input type="number" id="recheck-days" min="1" max="365"> <span>days</span>
     </div>
     <label class="check"><input type="checkbox" id="enabled"> Download missing themes automatically every day (Admin → Tasks → Download TV Theme Songs sets the time)</label>
+    <label class="check"><input type="checkbox" id="themerrdb"> Use ThemerrDB after Plex (community-picked YouTube themes for shows and films)</label>
+    <label class="check"><input type="checkbox" id="youtube-search"> Search YouTube for anything still missing (each result waits for your approval)</label>
     <div class="row" style="margin-top:12px"><button id="save-settings">Save settings</button></div>
-    <p class="hint">Shows that already have a <span class="mono">theme.*</span> file or a <span class="mono">theme-music</span> folder use it, and nothing is downloaded for them. "Remove and skip" deletes only themes Silo downloaded.</p>
+    <p class="hint">Titles that already have a <span class="mono">theme.*</span> file or a <span class="mono">theme-music</span> folder use it, and nothing is downloaded for them. "Remove and skip" deletes only themes Silo downloaded.</p>
   </div>
 </div>
 </div>

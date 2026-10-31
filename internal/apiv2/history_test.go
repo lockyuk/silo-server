@@ -60,6 +60,14 @@ func (f *fakeHistory) HistoryPage(_ context.Context, _ int, profileID string, af
 	return rows, nil
 }
 
+func (f *fakeHistory) HistoryWatchViews(_ context.Context, _ handlers.SectionViewer, entries []userstore.WatchHistoryEntry) ([]handlers.HistoryWatchView, error) {
+	views := make([]handlers.HistoryWatchView, 0, len(entries))
+	for _, e := range entries {
+		views = append(views, handlers.HistoryWatchView{Entry: e, ContentID: e.MediaItemID, Type: "episode", Title: e.MediaItemID})
+	}
+	return views, nil
+}
+
 func (f *fakeHistory) HistoryPageCards(_ context.Context, _ handlers.SectionViewer, entries []userstore.WatchHistoryEntry) ([]handlers.HistoryCardView, error) {
 	latest := make(map[string]userstore.WatchHistoryEntry)
 	for _, e := range f.entries {

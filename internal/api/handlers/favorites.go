@@ -741,6 +741,81 @@ func (h *PersonalDataHandler) HistoryPageCards(ctx context.Context, viewer Secti
 	return h.historyDisplayCards(ctx, viewer, latest)
 }
 
+// HistoryWatchView is one watch as the viewer sees it in a watch list: the
+// item actually watched (an episode stays an episode) with its show.
+type HistoryWatchView struct {
+	Entry         userstore.WatchHistoryEntry
+	ContentID     string
+	Type          string
+	Title         string
+	SeriesID      string
+	SeriesTitle   string
+	SeasonNumber  *int
+	EpisodeNumber *int
+	PosterURL     string
+}
+
+// HistoryWatchViews resolves raw history rows to watch-list rows, one per
+// watch, dropping any the viewer can no longer see.
+func (h *PersonalDataHandler) HistoryWatchViews(ctx context.Context, viewer SectionViewer, entries []userstore.WatchHistoryEntry) ([]HistoryWatchView, error) {
+	listViewer := PersonalListViewer{UserID: apimw.GetUserID(ctx), ProfileID: apimw.GetProfileID(ctx), Access: viewer.Access, ImageSize: viewer.ImageSize, ImageWidths: viewer.ImageWidths}
+	seen := make(map[string]bool, len(entries))
+	ids := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if !seen[e.MediaItemID] {
+			seen[e.MediaItemID] = true
+			ids = append(ids, e.MediaItemID)
+		}
+	}
+	items, err := resolveItemsByIDs(h, ctx, listViewer, ids)
+	if err != nil {
+		return nil, apiError(http.StatusInternalServerError, "internal_error", "Failed to resolve history items")
+	}
+	byID := make(map[string]itemListResponse, len(items))
+	var seriesIDs []string
+	seenSeries := map[string]bool{}
+	for _, item := range items {
+		byID[item.ContentID] = item
+		if item.SeriesID != "" && !seenSeries[item.SeriesID] {
+			seenSeries[item.SeriesID] = true
+			seriesIDs = append(seriesIDs, item.SeriesID)
+		}
+	}
+	// The show's own title and poster: an episode's poster is often a still.
+	seriesByID := map[string]itemListResponse{}
+	if len(seriesIDs) > 0 {
+		series, err := resolveItemsByIDs(h, ctx, listViewer, seriesIDs)
+		if err != nil {
+			return nil, apiError(http.StatusInternalServerError, "internal_error", "Failed to resolve history series")
+		}
+		for _, s := range series {
+			seriesByID[s.ContentID] = s
+		}
+	}
+	views := make([]HistoryWatchView, 0, len(entries))
+	for _, e := range entries {
+		item, ok := byID[e.MediaItemID]
+		if !ok {
+			continue
+		}
+		v := HistoryWatchView{
+			Entry: e, ContentID: item.ContentID, Type: item.Type, Title: item.Title,
+			SeriesID: item.SeriesID, SeriesTitle: item.SeriesTitle,
+			SeasonNumber: item.SeasonNumber, EpisodeNumber: item.EpisodeNumber, PosterURL: item.PosterURL,
+		}
+		if s, ok := seriesByID[item.SeriesID]; ok {
+			if v.SeriesTitle == "" {
+				v.SeriesTitle = s.Title
+			}
+			if s.PosterURL != "" {
+				v.PosterURL = s.PosterURL
+			}
+		}
+		views = append(views, v)
+	}
+	return views, nil
+}
+
 func (h *PersonalDataHandler) historyDisplayCards(ctx context.Context, viewer SectionViewer, display []catalog.HistoryDisplayEntry) ([]HistoryCardView, error) {
 	ids := make([]string, 0, len(display))
 	for _, d := range display {

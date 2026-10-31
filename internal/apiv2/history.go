@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/Silo-Server/silo-server/internal/api/handlers"
 	catalogpkg "github.com/Silo-Server/silo-server/internal/catalog"
@@ -82,6 +83,13 @@ func registerHistory(reg *Registry) {
 	}, func(ctx context.Context, in *HistoryListInput) (*HistoryCollectionOutput, error) {
 		return reg.listHistory(ctx, cursors, in)
 	})
+
+	Register(reg, Operation{
+		Operation: humaOp(http.MethodGet, Prefix+"/history/watches", "listHistoryWatches", "history",
+			"List each watch from the last few days, most recent first: the episode or film watched, its show, and when."),
+		Class:         ClassProfileScoped,
+		ServiceBacked: true,
+	}, reg.listHistoryWatches)
 
 	remove := humaOp(http.MethodPost, Prefix+"/history/remove", "removeHistoryEntries", "history",
 		"Hide the targets' watches from the acting profile's history; the server chooses the cutoff when this request runs.")
@@ -200,5 +208,93 @@ func fieldProblem(err error) *Problem {
 type HistoryService interface {
 	HistoryPage(ctx context.Context, userID int, profileID string, after *userstore.HistoryKey, limit int) ([]userstore.WatchHistoryEntry, error)
 	HistoryPageCards(ctx context.Context, viewer handlers.SectionViewer, entries []userstore.WatchHistoryEntry) ([]handlers.HistoryCardView, error)
+	HistoryWatchViews(ctx context.Context, viewer handlers.SectionViewer, entries []userstore.WatchHistoryEntry) ([]handlers.HistoryWatchView, error)
 	RemoveHistory(ctx context.Context, userID int, profileID string, filter catalogpkg.AccessFilter, targets []handlers.HistoryRemovalTarget) error
+}
+
+// HistoryWatchesInput is the listHistoryWatches query.
+type HistoryWatchesInput struct {
+	ArtworkQuery
+	Days int `query:"days" minimum:"1" maximum:"90" default:"7" doc:"How many days back to list" example:"7"`
+}
+
+// HistoryWatchRow is one watch in a watch list.
+type HistoryWatchRow struct {
+	ContentID     ID      `json:"content_id" doc:"The episode or film watched" example:"episode:heat-s01e01"`
+	Type          string  `json:"type" doc:"episode or movie" example:"episode"`
+	Title         string  `json:"title" doc:"Episode or film title" example:"Pilot"`
+	SeriesID      ID      `json:"series_id,omitempty" doc:"The episode's series" example:"series:heat"`
+	SeriesTitle   string  `json:"series_title,omitempty" doc:"The episode's show" example:"Heat"`
+	SeasonNumber  *int    `json:"season_number,omitempty" example:"1"`
+	EpisodeNumber *int    `json:"episode_number,omitempty" example:"1"`
+	PosterURL     string  `json:"poster_url,omitempty" doc:"The show's (or film's) poster"`
+	WatchedAt     Instant `json:"watched_at" doc:"When the watch was recorded" example:"2026-01-02T03:04:05.000Z"`
+	Completed     bool    `json:"completed" doc:"Whether it was watched to the end" example:"true"`
+}
+
+// HistoryWatchesOutput is the listHistoryWatches response.
+type HistoryWatchesOutput struct {
+	Body struct {
+		Items []HistoryWatchRow `json:"items"`
+	}
+}
+
+// maxHistoryWatchRows bounds one watch list (about 90 days of heavy viewing).
+const maxHistoryWatchRows = 1000
+
+// listHistoryWatches pages history newest first until the window closes.
+func (reg *Registry) listHistoryWatches(ctx context.Context, in *HistoryWatchesInput) (*HistoryWatchesOutput, error) {
+	if reg.deps.History == nil {
+		return nil, unavailable("history")
+	}
+	userID, profileID, p := viewerIdentity(ctx)
+	if p != nil {
+		return nil, p
+	}
+	days := in.Days
+	if days <= 0 {
+		days = 7
+	}
+	cutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
+	var entries []userstore.WatchHistoryEntry
+	var after *userstore.HistoryKey
+	for len(entries) < maxHistoryWatchRows {
+		page, err := reg.deps.History.HistoryPage(ctx, userID, profileID, after, 200)
+		if err != nil {
+			return nil, serviceProblem(err)
+		}
+		done := len(page) < 200
+		for _, e := range page {
+			at, perr := time.Parse(time.RFC3339Nano, e.WatchedAt)
+			if perr == nil && at.Before(cutoff) {
+				done = true
+				break
+			}
+			entries = append(entries, e)
+		}
+		if done || len(page) == 0 {
+			break
+		}
+		last := page[len(page)-1]
+		after = &userstore.HistoryKey{WatchedAt: last.WatchedAt, ID: last.ID}
+	}
+	views, err := reg.deps.History.HistoryWatchViews(ctx, sectionViewer(ctx, in.Artwork()), entries)
+	if err != nil {
+		return nil, serviceProblem(err)
+	}
+	out := &HistoryWatchesOutput{}
+	out.Body.Items = make([]HistoryWatchRow, 0, len(views))
+	for _, v := range views {
+		watched, p := storeInstant(v.Entry.WatchedAt)
+		if p != nil {
+			return nil, p
+		}
+		out.Body.Items = append(out.Body.Items, HistoryWatchRow{
+			ContentID: ID(v.ContentID), Type: v.Type, Title: v.Title,
+			SeriesID: ID(v.SeriesID), SeriesTitle: v.SeriesTitle,
+			SeasonNumber: v.SeasonNumber, EpisodeNumber: v.EpisodeNumber,
+			PosterURL: v.PosterURL, WatchedAt: watched, Completed: v.Entry.Completed,
+		})
+	}
+	return out, nil
 }

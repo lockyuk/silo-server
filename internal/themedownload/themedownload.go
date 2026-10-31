@@ -81,18 +81,18 @@ type Blobs interface {
 
 // Service downloads themes and reports on them.
 type Service struct {
-	pool      *pgxpool.Pool
-	blobs     Blobs
-	settings  Settings
-	ffprobe   string
-	themes    *themesongs.Repository
+	pool       *pgxpool.Pool
+	blobs      Blobs
+	settings   Settings
+	ffprobe    string
+	themes     *themesongs.Repository
 	client     *http.Client
 	sourceURL  string
 	themerrURL string
 	gap        time.Duration
 	// ytdlp and ffmpeg fetch YouTube audio; empty ytdlp disables those sources.
 	ytdlp, ffmpeg string
-	now       func() time.Time
+	now           func() time.Time
 
 	mu       sync.Mutex
 	running  bool
@@ -105,12 +105,12 @@ type Service struct {
 func New(pool *pgxpool.Pool, blobs Blobs, settings Settings, ffprobe string) *Service {
 	s := &Service{
 		pool: pool, blobs: blobs, settings: settings, ffprobe: ffprobe,
-		themes:    themesongs.NewRepository(pool),
-		client:    &http.Client{Timeout: 60 * time.Second},
+		themes:     themesongs.NewRepository(pool),
+		client:     &http.Client{Timeout: 60 * time.Second},
 		sourceURL:  defaultSourceURL,
 		themerrURL: defaultThemerrURL,
 		gap:        requestGap,
-		now:       time.Now,
+		now:        time.Now,
 	}
 	s.probeAudio = s.probe
 	return s
@@ -719,6 +719,11 @@ func (s *Service) Approve(ctx context.Context, id string) (Series, error) {
 	data, err := s.youtubeAudio(ctx, sr.Candidate.URL())
 	if err == nil {
 		err = s.store(ctx, sr, SourceYouTube, sr.Candidate.VideoID, data)
+	}
+	if errors.Is(err, ErrVideoUnavailable) {
+		// Nothing to try again: turn it down and look for the next result,
+		// which waits for review like the first.
+		return s.Reject(ctx, id)
 	}
 	if err != nil {
 		// The candidate stays, so the admin can try again or reject it.

@@ -14,13 +14,8 @@
 
   <div class="grid" id="tiles"></div>
 
-  <div class="panel" id="review-panel" hidden>
-    <h2>Waiting for your review</h2>
-    <p class="hint" style="margin-top:-4px">YouTube search results. Listen first, then keep the theme or reject it; rejecting searches again for the next result.</p>
-    <div id="review"></div>
-  </div>
-
-  <div class="panel">
+  <div class="panel" id="list">
+    <p class="hint" id="review-hint" hidden>"To review" holds YouTube search results. Listen first, then keep the theme or reject it; rejecting searches again for the next result.</p>
     <div class="row" style="margin-bottom:10px">
       <input type="search" id="q" placeholder="Search titles" aria-label="Search titles">
       <div class="seg" id="types" role="group" aria-label="Type">
@@ -35,6 +30,16 @@
         <thead><tr><th>Title</th><th>Status</th><th>Checked</th><th></th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
+    </div>
+    <div class="row pager" style="margin-top:12px">
+      <label for="per-page">Per page</label>
+      <select id="per-page" aria-label="Titles per page">
+        <option value="25">25</option><option value="50" selected>50</option><option value="100">100</option><option value="0">All</option>
+      </select>
+      <div class="spacer"></div>
+      <button class="small" id="prev" aria-label="Previous page">‹ Previous</button>
+      <span class="muted" id="page-label"></span>
+      <button class="small" id="next" aria-label="Next page">Next ›</button>
     </div>
   </div>
 

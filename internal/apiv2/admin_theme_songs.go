@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Silo-Server/silo-server/internal/themedownload"
@@ -184,6 +185,11 @@ func themeSongSeriesProblem(err error) error {
 	}
 	if errors.Is(err, themedownload.ErrNoCandidate) {
 		return NewProblem(TypeConflict, "No search result is waiting for review.")
+	}
+	// A download or conversion that failed is the admin's to see, not a
+	// server fault: say what YouTube or ffmpeg said.
+	if msg := err.Error(); strings.Contains(msg, "YouTube") || strings.Contains(msg, "converting theme") {
+		return NewProblem(TypeConflict, msg)
 	}
 	return serviceProblem(err)
 }

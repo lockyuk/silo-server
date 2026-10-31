@@ -11,7 +11,9 @@ export function mountThemeSongsPage(root, api) {
   };
   const ORDER = ["review", "downloaded", "present", "missing", "pending", "skipped", "no_tvdb", "error"];
   const SOURCE = { plex: "Plex", themerrdb: "ThemerrDB", youtube: "YouTube search" };
-  let state = null, filter = "", type = "", poll = 0, gone = false;
+  let state = null, filter = "", type = "", poll = 0, gone = false, page = 0;
+  let perPage = 50;
+  try { perPage = Number(localStorage.getItem("silo.themeSongs.perPage") ?? 50); } catch { /* storage blocked */ }
   const dur = (n) => n ? `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}` : "";
 
   function toast(msg, bad = false) {
@@ -39,15 +41,6 @@ export function mountThemeSongsPage(root, api) {
     $("#progress").textContent = state.running ? "Working… " + (state.progress || "") : "";
     $("#sync").disabled = $("#recheck").disabled = state.running;
 
-    const reviews = state.shows.filter((s) => s.s === "review" && s.r);
-    $("#review-panel").hidden = !reviews.length;
-    $("#review").innerHTML = reviews.map((s) => `<div class="review">
-        <div class="what"><b>${esc(s.n)}</b>${s.y ? ` <span class="muted">(${esc(s.y)})</span>` : ""}
-          <div><a href="${esc(s.r.url)}" target="_blank" rel="noopener noreferrer">${esc(s.r.title)}</a></div>
-          <div class="hint">${esc([s.r.channel, dur(s.r.duration_seconds)].filter(Boolean).join(" · "))}</div></div>
-        <div class="row"><button class="small primary" data-act="approve" data-id="${esc(s.i)}">Keep this theme</button>
-          <button class="small" data-act="reject" data-id="${esc(s.i)}">Reject, find another</button></div></div>`).join("");
-
     const typed = state.shows.filter((s) => !type || s.t === type);
     const total = typed.length;
     const counts = {};
@@ -58,7 +51,15 @@ export function mountThemeSongsPage(root, api) {
     const q = $("#q").value.trim().toLowerCase();
     const rows = typed.filter((s) => (!filter || s.s === filter) && (!q || s.n.toLowerCase().includes(q)));
     $("#shown").textContent = rows.length === total ? "" : `${rows.length} of ${total}`;
-    $("#rows").innerHTML = rows.map((s) => {
+    $("#review-hint").hidden = filter !== "review";
+    const pages = perPage ? Math.max(1, Math.ceil(rows.length / perPage)) : 1;
+    page = Math.min(page, pages - 1);
+    const shown = perPage ? rows.slice(page * perPage, (page + 1) * perPage) : rows;
+    $("#page-label").textContent = `Page ${page + 1} of ${pages}`;
+    $("#prev").disabled = page === 0;
+    $("#next").disabled = page >= pages - 1;
+    $("#per-page").value = String(perPage);
+    $("#rows").innerHTML = shown.map((s) => {
       const [label, cls] = STATUS[s.s] || [s.s, ""];
       const actions = [];
       if (s.s === "downloaded") actions.push(`<button class="small danger" data-act="skip" data-id="${esc(s.i)}" title="Delete this theme and never download it again">Remove and skip</button>`);
@@ -67,7 +68,7 @@ export function mountThemeSongsPage(root, api) {
       if (s.s === "missing" || s.s === "pending") actions.push(`<button class="small" data-act="skip" data-id="${esc(s.i)}" title="Stop looking for this show">Skip</button>`);
       return `<tr>
         <td><span class="tag">${s.t === "movie" ? "FILM" : "TV"}</span><b>${esc(s.n)}</b>${s.y ? ` <span class="muted">(${esc(s.y)})</span>` : ""}${s.v ? `<div class="mono hint">TVDB ${esc(s.v)}</div>` : ""}</td>
-        <td><span class="pill ${cls}">${esc(label)}</span>${s.src && s.s === "downloaded" ? `<div class="hint">from ${esc(SOURCE[s.src] || s.src)}</div>` : ""}${s.s === "review" && s.r ? `<div class="hint"><a href="${esc(s.r.url)}" target="_blank" rel="noopener noreferrer">${esc(s.r.title)}</a></div>` : ""}${s.d ? `<div class="hint">${esc(s.d)}</div>` : ""}</td>
+        <td><span class="pill ${cls}">${esc(label)}</span>${s.src && s.s === "downloaded" ? `<div class="hint">from ${esc(SOURCE[s.src] || s.src)}</div>` : ""}${s.s === "review" && s.r ? `<div class="hint"><a href="${esc(s.r.url)}" target="_blank" rel="noopener noreferrer">${esc(s.r.title)}</a></div><div class="hint">${esc([s.r.channel, dur(s.r.duration_seconds)].filter(Boolean).join(" · "))}</div>` : ""}${s.d ? `<div class="hint">${esc(s.d)}</div>` : ""}</td>
         <td>${esc(fmt(s.c))}</td>
         <td><div class="row" style="justify-content:flex-end">${actions.join("")}</div></td></tr>`;
     }).join("") || `<tr><td colspan="4" class="muted">${total ? "Nothing matches." : "No titles yet."}</td></tr>`;
@@ -85,14 +86,25 @@ export function mountThemeSongsPage(root, api) {
     const t = e.target.closest("[data-filter]");
     if (!t) return;
     filter = t.dataset.filter;
+    page = 0;
+    render();
+    $("#list").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  $("#q").addEventListener("input", () => { page = 0; render(); });
+  $("#per-page").addEventListener("change", (e) => {
+    perPage = Number(e.target.value);
+    try { localStorage.setItem("silo.themeSongs.perPage", String(perPage)); } catch { /* storage blocked */ }
+    page = 0;
     render();
   });
-  $("#q").addEventListener("input", render);
+  $("#prev").addEventListener("click", () => { page = Math.max(0, page - 1); render(); $("#list").scrollIntoView({ block: "start" }); });
+  $("#next").addEventListener("click", () => { page += 1; render(); $("#list").scrollIntoView({ block: "start" }); });
   $("#types").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-type]");
     if (!b) return;
     type = b.dataset.type;
     filter = "";
+    page = 0;
     render();
   });
 
@@ -113,12 +125,19 @@ export function mountThemeSongsPage(root, api) {
     if (b.dataset.act === "approve") b.textContent = "Downloading…";
     try {
       const s = await api(`shows/${encodeURIComponent(b.dataset.id)}/${b.dataset.act}`, { method: "POST" });
-      toast(`${s.n}: ${(STATUS[s.s] || [s.s])[0]}`);
+      // Keep on a video YouTube no longer serves turns it down and searches
+      // again, so the title comes back still waiting, with the next result.
+      if (b.dataset.act === "approve" && s.s !== "downloaded") {
+        toast(s.s === "review"
+          ? `${s.n}: that video isn't on YouTube any more, so here's the next result to review.`
+          : `${s.n}: that video isn't on YouTube any more, and no other result was found.`, true);
+      } else {
+        toast(`${s.n}: ${(STATUS[s.s] || [s.s])[0]}`);
+      }
       load();
     } catch (err) { toast(err.message, true); b.disabled = false; }
   }
   $("#rows").addEventListener("click", act);
-  $("#review").addEventListener("click", act);
 
   $("#save-settings").addEventListener("click", async () => {
     try {
@@ -128,7 +147,7 @@ export function mountThemeSongsPage(root, api) {
     } catch (e) { toast(e.message, true); }
   });
 
-  load().catch((e) => { $("#problems").innerHTML = `<div class="banner">Couldn't load: ${esc(e.message)}</div>`; });
+  load().catch((e) => { if (!gone) $("#problems").innerHTML = `<div class="banner">Couldn't load: ${esc(e.message)}</div>`; });
 
   return () => {
     gone = true;

@@ -17,6 +17,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { useIsActingAdmin } from "@/hooks/useIsActingAdmin";
 import AppSidebar from "@/components/AppSidebar";
+import TopMenuBar from "@/components/TopMenuBar";
 import { LocalErrorBoundary } from "@/components/LocalErrorBoundary";
 import { SiloBrand } from "@/components/SiloBrand";
 import { GlobalSearch } from "@/components/GlobalSearch";
@@ -297,6 +298,14 @@ export default function Layout({ children }: LayoutProps) {
     // gates `--app-sidebar-offset`: the sidebar only exists while this shell is
     // mounted, so out-of-tree chrome must not reserve room for it elsewhere.
     root.dataset.appShell = "true";
+    // The TV-style top bar replaces the sidebar column everywhere but Settings,
+    // so out-of-tree chrome (the impersonation banner, save bars) reserves no
+    // room at the left there.
+    if (isSettingsRoute) {
+      delete root.dataset.topMenu;
+    } else {
+      root.dataset.topMenu = "true";
+    }
     if (isHomePath) {
       root.dataset.homeRoute = "true";
     } else {
@@ -324,6 +333,7 @@ export default function Layout({ children }: LayoutProps) {
     }
     return () => {
       delete root.dataset.appShell;
+      delete root.dataset.topMenu;
       delete root.dataset.homeRoute;
       delete root.dataset.homeItemEntry;
       delete root.dataset.homeItemReturn;
@@ -333,6 +343,7 @@ export default function Layout({ children }: LayoutProps) {
   }, [
     animateHomeItemEntry,
     isHomePath,
+    isSettingsRoute,
     returnedHomeFromItem,
     targetDetailImmersion,
     visualDetailImmersion,
@@ -399,10 +410,10 @@ export default function Layout({ children }: LayoutProps) {
         {/* Desktop sidebar — hidden below lg. Its box stays 260px wide in both
           states; `collapsed` only drives the moving frame that hides everything
           past the 64px rail, so entering a detail page never resizes it. */}
-        <div className="hidden lg:block" onTransitionEnd={handleSidebarTransitionEnd}>
-          {isSettingsRoute ? (
-            // Settings take over the sidebar column rather than adding a
-            // second one beside it. The fallback holds the column's place.
+        {isSettingsRoute ? (
+          <div className="hidden lg:block" onTransitionEnd={handleSidebarTransitionEnd}>
+            {/* Settings keep their own left column, as on the TV. The fallback
+              holds the column's place. */}
             <Suspense
               fallback={
                 <div className="border-sidebar-border/70 bg-sidebar/92 fixed top-0 bottom-0 left-0 z-40 w-[260px] border-r" />
@@ -410,10 +421,11 @@ export default function Layout({ children }: LayoutProps) {
             >
               <UserSettingsSidebar backTo={settingsReturnPath} swap={sidebarSwap} />
             </Suspense>
-          ) : (
-            <AppSidebar collapsed={visualDetailImmersion} swap={sidebarSwap} />
-          )}
-        </div>
+          </div>
+        ) : (
+          // Everywhere else the desktop navigation is the TV-style top bar.
+          <TopMenuBar trailing={showAdminActivity ? <AdminActivityIndicator /> : null} />
+        )}
 
         {/* Mobile header — visible below lg. Slides up on scroll-down within
           the Calendar route to free vertical space; pulling up reveals it. */}
@@ -476,7 +488,7 @@ export default function Layout({ children }: LayoutProps) {
         </Sheet>
 
         {/* Desktop admin activity indicator (top-right, hidden on mobile) */}
-        {showAdminActivity && (
+        {showAdminActivity && isSettingsRoute && (
           <div className="fixed top-6 right-5 z-40 hidden lg:block">
             <AdminActivityIndicator />
           </div>
@@ -488,7 +500,7 @@ export default function Layout({ children }: LayoutProps) {
           data-sidebar-target-collapsed={targetDetailImmersion ? "true" : undefined}
           data-sidebar-visual-collapsed={visualDetailImmersion ? "true" : undefined}
           className={`sidebar-main-stage relative min-h-screen ${
-            targetDetailImmersion ? "lg:ml-16" : "lg:ml-[260px]"
+            isSettingsRoute ? (targetDetailImmersion ? "lg:ml-16" : "lg:ml-[260px]") : "lg:ml-0"
           } ${hasBackgroundBar ? "pb-32 sm:pb-36" : ""}`}
           style={{ viewTransitionName: "main-content" }}
         >
@@ -497,7 +509,11 @@ export default function Layout({ children }: LayoutProps) {
           ) : (
             // `--page-gutter` is published so fixed page chrome (the collection
             // editor's save bar) can line up with this content column.
-            <div className="relative z-10 px-(--page-gutter) py-4 [--page-gutter:1rem] sm:[--page-gutter:1.5rem] lg:py-8 lg:[--page-gutter:2.5rem] xl:[--page-gutter:3rem]">
+            <div
+              className={`relative z-10 px-(--page-gutter) py-4 [--page-gutter:1rem] sm:[--page-gutter:1.5rem] lg:py-8 lg:[--page-gutter:2.5rem] xl:[--page-gutter:3rem] ${
+                isSettingsRoute ? "" : "lg:pt-28"
+              }`}
+            >
               {children}
             </div>
           )}

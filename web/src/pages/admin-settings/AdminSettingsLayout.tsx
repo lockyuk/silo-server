@@ -17,6 +17,7 @@ import SecurityAccessSettings from "./SecurityAccessSettings";
 import SignInSettings from "./SignInSettings";
 import LibraryMetadataSettings from "./LibraryMetadataSettings";
 import AutoscanSettings from "./AutoscanSettings";
+import ThemeSongsPanel from "./ThemeSongsPanel";
 import PlaybackSettings from "./PlaybackSettings";
 import DownloadsSettings from "./DownloadsSettings";
 import RequestsSettings from "./RequestsSettings";
@@ -41,6 +42,7 @@ const SETTINGS_COMPONENTS: Record<string, ComponentType> = {
   security: SecurityAccessSettings,
   "sign-in": SignInSettings,
   library: LibraryMetadataSettings,
+  "theme-songs": ThemeSongsPanel,
   autoscan: AutoscanSettings,
   playback: PlaybackSettings,
   downloads: DownloadsSettings,

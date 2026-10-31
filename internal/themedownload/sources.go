@@ -160,6 +160,17 @@ func (s *Service) search(ctx context.Context, sr Series, rejected map[string]boo
 	return Candidate{}, errNotAvailable
 }
 
+// ErrVideoUnavailable means YouTube no longer serves a video here: removed,
+// private, blocked in this country or age-restricted.
+var ErrVideoUnavailable = errors.New("this video is not available on YouTube")
+
+func videoGone(msg string) bool {
+	return containsAny(strings.ToLower(msg), []string{
+		"not available", "unavailable", "private video", "has been removed",
+		"blocked", "sign in to confirm your age", "copyright",
+	})
+}
+
 func containsAny(s string, words []string) bool {
 	for _, w := range words {
 		if strings.Contains(s, w) {
@@ -188,7 +199,11 @@ func (s *Service) youtubeAudio(ctx context.Context, url string) ([]byte, error) 
 	dl := exec.CommandContext(ctx, s.ytdlp, "--no-playlist", "--no-warnings", "--ignore-config", "--quiet",
 		"-f", "bestaudio/best", "--max-filesize", "60M", "-o", filepath.Join(dir, "source.%(ext)s"), url)
 	if out, err := dl.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("downloading from YouTube: %s", firstLine(string(out), err))
+		msg := firstLine(string(out), err)
+		if videoGone(msg) {
+			return nil, fmt.Errorf("%w: %s", ErrVideoUnavailable, msg)
+		}
+		return nil, fmt.Errorf("downloading from YouTube: %s", msg)
 	}
 	matches, _ := filepath.Glob(filepath.Join(dir, "source.*"))
 	if len(matches) == 0 {

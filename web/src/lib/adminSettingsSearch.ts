@@ -1,5 +1,6 @@
 import {
   Bell,
+  Music,
   Blocks,
   Database,
   Download,
@@ -377,6 +378,15 @@ export const ADMIN_SETTINGS_NAV: AdminSettingsSearchItem[] = [
       "Search status",
     ),
     icon: Search,
+  },
+  {
+    id: "theme-songs",
+    label: "Theme Songs",
+    description:
+      "Theme music downloads for shows and films, and the YouTube matches waiting for your review.",
+    keywords: ["theme", "theme songs", "theme music", "youtube", "review", "approve", "themerrdb", "plex"],
+    settings: settingIndex("To review", "Keep", "Reject", "Per page", "Settings"),
+    icon: Music,
   },
   {
     id: "autoscan",

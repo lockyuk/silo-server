@@ -340,6 +340,7 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
           PAGES.collections,
           { ...PAGES.sections, label: "Home Sections" },
           PAGES.subtitleFiles,
+          settingsPage("theme-songs", "Theme Songs"),
           settingsPage("library", "Settings"),
         ],
       },

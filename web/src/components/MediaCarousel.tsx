@@ -200,7 +200,7 @@ export default function MediaCarousel({
   const containerPadX = edgePadding ? " pl-4 sm:pl-6 lg:pl-10 xl:pl-12" : "";
   const titleClass = compact
     ? "text-muted-foreground text-[0.6875rem] font-semibold tracking-[0.18em] uppercase"
-    : "text-foreground text-xl font-semibold tracking-tight";
+    : "text-foreground text-2xl font-bold tracking-tight";
   const headerGap = compact ? "mb-2" : "mb-5";
   const slideGap = compact ? "gap-3" : "gap-4 lg:gap-5";
   const listClassName = `embla__container flex cursor-grab list-none ${slideGap}${containerPadX}`;

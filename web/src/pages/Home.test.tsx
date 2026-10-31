@@ -48,7 +48,7 @@ vi.mock("@/components/TasteSeedBanner", () => ({
   default: () => <div data-kind="taste-seed" />,
 }));
 
-vi.mock("@/components/HeroBanner", () => ({
+vi.mock("@/components/HomeHero", () => ({
   default: () => <div data-kind="hero" />,
 }));
 

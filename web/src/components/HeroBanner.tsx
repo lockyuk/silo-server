@@ -72,13 +72,13 @@ interface HeroBannerProps {
  * `prefers-reduced-motion`, which is what keeps this accessible.
  */
 const KEN_BURNS_ANIMATIONS = ["var(--animate-ken-burns-a)", "var(--animate-ken-burns-b)"] as const;
-const HERO_BACKDROP_FADE_MS = 1000;
+export const HERO_BACKDROP_FADE_MS = 1000;
 
 function shouldKeepOutgoingBackdropMotion(): boolean {
   return !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-const HeroBackdropSlide = memo(function HeroBackdropSlide({
+export const HeroBackdropSlide = memo(function HeroBackdropSlide({
   slide,
   index,
   isActive,

@@ -2646,3 +2646,60 @@ html[data-navigation-direction]::view-transition-new(main-content) {
     padding-block: 1.75rem;
   }
 }
+
+/* ================================================================
+   Home hero (TV-style): copy fade-in and the timer dots
+   ================================================================ */
+@keyframes home-hero-copy-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes home-hero-dot-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.home-hero-enter {
+  animation: home-hero-copy-in 700ms cubic-bezier(0.42, 0, 0.58, 1) both;
+}
+.home-hero-dot {
+  position: relative;
+  height: 6px;
+  width: 6px;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.38);
+  transition: width 300ms cubic-bezier(0.42, 0, 0.58, 1);
+}
+.home-hero-dot[data-active="true"] {
+  width: 30px;
+}
+.home-hero-dot[data-active="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  background: var(--accent-theme-indicator, #ffffff);
+  animation: home-hero-dot-fill 8s linear forwards;
+}
+.home-hero-dot[data-active="true"][data-paused="true"]::after {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-hero-enter {
+    animation: none;
+  }
+  .home-hero-dot[data-active="true"]::after {
+    animation: none;
+    transform: none;
+  }
+}

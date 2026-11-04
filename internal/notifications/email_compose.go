@@ -120,15 +120,15 @@ func collateEmailItems(rows []DeliveryRow) emailItems {
 	return items
 }
 
-// episodeCode renders "S02E03"; empty when numbering is unknown.
+// episodeCode renders "Season 2 · Episode 3"; empty when numbering is unknown.
 func episodeCode(row DeliveryRow) string {
 	if row.SeasonNumber == nil || row.EpisodeNumber == nil {
 		return ""
 	}
-	return fmt.Sprintf("S%02dE%02d", *row.SeasonNumber, *row.EpisodeNumber)
+	return fmt.Sprintf("Season %d · Episode %d", *row.SeasonNumber, *row.EpisodeNumber)
 }
 
-// episodeLine renders one episode entry: "S02E03 — Title", degrading to
+// episodeLine renders one episode entry: "Season 2 · Episode 3 — Title", degrading to
 // whichever part exists.
 func episodeLine(row DeliveryRow) string {
 	code := episodeCode(row)

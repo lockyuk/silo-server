@@ -576,7 +576,7 @@ func truncate(s string, limit int) string {
 }
 
 func episodeCode(season, episode int) string {
-	return fmt.Sprintf("S%02dE%02d", season, episode)
+	return fmt.Sprintf("Season %d · Episode %d", season, episode)
 }
 
 func seasonLabel(season int) string {

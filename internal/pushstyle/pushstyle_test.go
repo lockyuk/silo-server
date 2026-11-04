@@ -13,7 +13,7 @@ func TestDefaultsRenderBuiltInText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Title != "Severance" || got.Body != "New episode · S02E01 · Hello, Ms. Cobel" || got.Synopsis == "" {
+	if got.Title != "Severance" || got.Body != "New episode · Season 2 · Episode 1 · Hello, Ms. Cobel" || got.Synopsis == "" {
 		t.Fatalf("episode = %+v", got)
 	}
 	got, _ = Render(s, Sample(KindMovie))
@@ -21,7 +21,7 @@ func TestDefaultsRenderBuiltInText(t *testing.T) {
 		t.Fatalf("movie = %+v", got)
 	}
 	got, _ = Render(s, Sample(KindGroup))
-	if got.Body != "3 new episodes · S02E05–E07" || got.Synopsis != "" {
+	if got.Body != "3 new episodes · Season 2 · Episode 5–7" || got.Synopsis != "" {
 		t.Fatalf("group = %+v", got)
 	}
 }
@@ -97,14 +97,18 @@ func TestTruncate(t *testing.T) {
 }
 
 func TestJoinCodes(t *testing.T) {
-	for in, want := range map[string]string{
-		"S01E01":               "S01E01",
-		"S01E01,S01E02":        "S01E01, S01E02",
-		"S01E01,S01E02,S01E05": "S01E01–E05",
-		"S01E09,S01E10,S02E01": "S01E09 … S02E01",
+	ep := func(season, number int) Episode { return Episode{Season: &season, Number: &number} }
+	for name, tc := range map[string]struct {
+		in   []Episode
+		want string
+	}{
+		"one":         {[]Episode{ep(1, 1)}, "Season 1 · Episode 1"},
+		"two":         {[]Episode{ep(1, 1), ep(1, 2)}, "Season 1 · Episode 1, Season 1 · Episode 2"},
+		"run":         {[]Episode{ep(1, 1), ep(1, 2), ep(1, 5)}, "Season 1 · Episode 1–5"},
+		"two seasons": {[]Episode{ep(1, 9), ep(1, 10), ep(2, 1)}, "Season 1 · Episode 9 … Season 2 · Episode 1"},
 	} {
-		if got := joinCodes(strings.Split(in, ",")); got != want {
-			t.Errorf("%s = %q, want %q", in, got, want)
+		if got := joinCodes(tc.in); got != tc.want {
+			t.Errorf("%s = %q, want %q", name, got, tc.want)
 		}
 	}
 }

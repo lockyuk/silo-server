@@ -175,7 +175,7 @@ func episodeDisplayTitle(row DeliveryRow) string {
 	return "New episode available"
 }
 
-// episodeDisplayBody reads "New episode · S02E01 · Hello, Ms. Cobel", dropping
+// episodeDisplayBody reads "New episode · Season 2 · Episode 1 · Hello, Ms. Cobel", dropping
 // the parts that are missing. A placeholder title such as "TBA" says nothing
 // the episode code doesn't, so it is left out.
 func episodeDisplayBody(row DeliveryRow) string {
@@ -194,7 +194,7 @@ func episodeDisplayBody(row DeliveryRow) string {
 
 func episodeDisplayCode(row DeliveryRow) string {
 	if row.SeasonNumber != nil && row.EpisodeNumber != nil {
-		return fmt.Sprintf("S%02dE%02d", *row.SeasonNumber, *row.EpisodeNumber)
+		return fmt.Sprintf("Season %d · Episode %d", *row.SeasonNumber, *row.EpisodeNumber)
 	}
 	return ""
 }

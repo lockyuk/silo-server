@@ -216,12 +216,12 @@ type Episode struct {
 	Year        int
 }
 
-// Code is the S01E02 tag, or empty without numbers.
+// Code is the "Season 1 · Episode 2" tag, or empty without numbers.
 func (e Episode) Code() string {
 	if e.Season == nil || e.Number == nil {
 		return ""
 	}
-	return fmt.Sprintf("S%02dE%02d", *e.Season, *e.Number)
+	return fmt.Sprintf("Season %d · Episode %d", *e.Season, *e.Number)
 }
 
 // Item is what one push is about: an episode, a movie, or several episodes
@@ -252,17 +252,13 @@ func Vars(item Item) map[string]any {
 	eps := append([]Episode(nil), item.Episodes...)
 	sort.SliceStable(eps, func(i, j int) bool { return episodeOrder(eps[i]) < episodeOrder(eps[j]) })
 	list := make([]map[string]any, 0, len(eps))
-	codes := make([]string, 0, len(eps))
 	for _, e := range eps {
 		code := e.Code()
-		if code != "" {
-			codes = append(codes, code)
-		}
 		list = append(list, map[string]any{"code": code, "episode_title": e.Title, "season": intString(e.Season), "episode": intString(e.Number)})
 	}
 	vars["episodes"] = list
 	vars["count"] = strconv.Itoa(len(eps))
-	vars["codes"] = joinCodes(codes)
+	vars["codes"] = joinCodes(eps)
 	if len(eps) > 0 {
 		first := eps[0]
 		vars["code"] = first.Code()
@@ -281,17 +277,25 @@ func episodeOrder(e Episode) int {
 	return *e.Season*10000 + *e.Number
 }
 
-// joinCodes lists codes, shortening a run inside one season to its ends:
-// "S01E03–E05, S02E01".
-func joinCodes(codes []string) string {
+// joinCodes lists the episodes' codes, shortening a run inside one season to
+// its ends: "Season 1 · Episode 3–5, Season 2 · Episode 1".
+func joinCodes(eps []Episode) string {
+	var codes []string
+	var withNumbers []Episode
+	for _, e := range eps {
+		if c := e.Code(); c != "" {
+			codes = append(codes, c)
+			withNumbers = append(withNumbers, e)
+		}
+	}
 	if len(codes) <= 2 {
 		return strings.Join(codes, ", ")
 	}
-	first, last := codes[0], codes[len(codes)-1]
-	if first[:3] == last[:3] {
-		return first + "–" + last[3:]
+	first, last := withNumbers[0], withNumbers[len(withNumbers)-1]
+	if *first.Season == *last.Season {
+		return fmt.Sprintf("Season %d · Episode %d–%d", *first.Season, *first.Number, *last.Number)
 	}
-	return first + " … " + last
+	return codes[0] + " … " + codes[len(codes)-1]
 }
 
 func yearString(y int) string {

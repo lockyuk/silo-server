@@ -11,7 +11,7 @@ func TestBuildNotificationDisplay(t *testing.T) {
 		display := BuildNotificationDisplay(webhookTestRow())
 		if display.DeliveryID != "01DELIVERY" ||
 			display.Title != "Severance" ||
-			display.Body != "New episode · S02E01 · Hello, Ms. Cobel" ||
+			display.Body != "New episode · Season 2 · Episode 1 · Hello, Ms. Cobel" ||
 			display.ThreadID != "series:series-123" ||
 			display.Category != "episode_available" ||
 			display.URL != "/item/episode-456" {

@@ -28,6 +28,9 @@ const (
 	// DeliveryTypeRequestDeclined notifies the requesting profile that an
 	// admin declined their request.
 	DeliveryTypeRequestDeclined = "request.declined"
+	// DeliveryTypeRequestSubmitted tells each administrator profile that a
+	// request is waiting for approval. Auto-approved requests do not send it.
+	DeliveryTypeRequestSubmitted = "request.submitted"
 )
 
 // followedTitleAvailable heads a request.fulfilled copy sent to a follower.
@@ -50,6 +53,8 @@ type RequestFlags struct {
 	// the title rather than requested it, so the copy does not say "your
 	// request".
 	Follower bool `json:"follower,omitempty"`
+	// Requester is who asked, on a request.submitted copy sent to an admin.
+	Requester string `json:"requester,omitempty"`
 }
 
 // parseRequestFlags decodes a request.* delivery's reason_flags; other types
@@ -66,7 +71,8 @@ func parseRequestFlags(raw []byte) RequestFlags {
 // notice rendered from RequestFlags alone (no catalog join exists yet).
 func isRequestLifecycleType(deliveryType string) bool {
 	return deliveryType == DeliveryTypeRequestApproved ||
-		deliveryType == DeliveryTypeRequestDeclined
+		deliveryType == DeliveryTypeRequestDeclined ||
+		deliveryType == DeliveryTypeRequestSubmitted
 }
 
 // RequestFulfillmentNotifier adapts the notification system to
@@ -191,6 +197,7 @@ const requestLifecycleDispatchTimeout = 30 * time.Second
 // the only production implementation.
 type requestLifecycleBackend interface {
 	dispatchRequestLifecycleDetached(ctx context.Context, req requests.Request, deliveryType string)
+	dispatchRequestSubmittedDetached(ctx context.Context, req requests.Request)
 }
 
 // RequestLifecycleNotifier adapts request lifecycle transitions (submitted,
@@ -216,10 +223,14 @@ func NewRequestLifecycleNotifier(system *System) *RequestLifecycleNotifier {
 	return &RequestLifecycleNotifier{backend: system, logger: system.logger}
 }
 
-// RequestSubmitted implements requests.LifecycleNotifier. Submission posts to
-// server channels only: the requester performed the action themselves, so a
-// personal confirmation would be noise.
+// RequestSubmitted implements requests.LifecycleNotifier. The requester
+// performed the action themselves, so only administrators hear about it, and
+// only when the request is waiting for approval.
 func (n *RequestLifecycleNotifier) RequestSubmitted(ctx context.Context, req requests.Request) {
+	if req.Status != requests.StatusPending {
+		return
+	}
+	n.backend.dispatchRequestSubmittedDetached(ctx, req)
 }
 
 // RequestApproved implements requests.LifecycleNotifier. Every approval is
@@ -304,4 +315,94 @@ func (s *System) dispatchRequestLifecycle(ctx context.Context, req requests.Requ
 		WebhookFilter: func(hook Webhook) bool { return hook.NotifyRequests },
 	})
 	return err
+}
+
+// dispatchRequestSubmittedDetached tells every administrator profile about a
+// request awaiting approval, off the caller's goroutine.
+func (s *System) dispatchRequestSubmittedDetached(ctx context.Context, req requests.Request) {
+	dispatchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), requestLifecycleDispatchTimeout)
+	go func() {
+		defer cancel()
+		if err := s.dispatchRequestSubmitted(dispatchCtx, req); err != nil {
+			s.logger.WarnContext(ctx, "request submitted delivery failed",
+				"request_id", req.ID, "error", err)
+		}
+	}()
+}
+
+// adminProfiles lists every profile of every enabled administrator account.
+func (s *System) adminProfiles(ctx context.Context) ([]requests.Follower, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT p.user_id, p.id
+		FROM user_profiles p
+		JOIN users u ON u.id = p.user_id
+		WHERE u.role = 'admin' AND u.enabled
+		ORDER BY p.user_id, p.id`)
+	if err != nil {
+		return nil, fmt.Errorf("list admin profiles: %w", err)
+	}
+	defer rows.Close()
+	var out []requests.Follower
+	for rows.Next() {
+		var f requests.Follower
+		if err := rows.Scan(&f.UserID, &f.ProfileID); err != nil {
+			return nil, fmt.Errorf("scan admin profile: %w", err)
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// dispatchRequestSubmitted creates one durable request.submitted delivery per
+// administrator profile whose notifications are on, across all channels.
+// Idempotent per (profile, request, type) via the partial unique index.
+func (s *System) dispatchRequestSubmitted(ctx context.Context, req requests.Request) error {
+	if s.pool == nil {
+		return nil
+	}
+	admins, err := s.adminProfiles(ctx)
+	if err != nil {
+		return err
+	}
+	flags := RequestFlags{
+		RequestID:  req.ID,
+		TMDBID:     req.TMDBID,
+		MediaType:  string(req.MediaType),
+		Title:      req.Title,
+		PosterPath: req.PosterPath,
+		Requester:  req.RequesterUsername,
+	}
+	if req.Year != nil {
+		flags.Year = *req.Year
+	}
+	encoded, err := json.Marshal(flags)
+	if err != nil {
+		return fmt.Errorf("marshal request submitted flags: %w", err)
+	}
+	var firstErr error
+	for _, admin := range admins {
+		prefs, err := s.Preferences.Get(ctx, admin.UserID, admin.ProfileID)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if !prefs.Enabled {
+			continue
+		}
+		delivery := Delivery{
+			ID:          ulid.Make().String(),
+			UserID:      admin.UserID,
+			ProfileID:   admin.ProfileID,
+			Type:        DeliveryTypeRequestSubmitted,
+			ReasonFlags: encoded,
+		}
+		if _, err := s.DispatchOperational(ctx, delivery, OperationalDispatch{
+			WebhookFilter: func(hook Webhook) bool { return hook.NotifyRequests },
+		}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
 }

@@ -3022,6 +3022,8 @@ export interface NotificationReasonFlags {
   reason?: string;
   /** request.fulfilled sent to a profile that followed the title, not requested it. */
   follower?: boolean;
+  /** request.submitted: who asked, shown to the administrator. */
+  requester?: string;
 }
 
 export interface AppNotification {

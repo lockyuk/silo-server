@@ -150,6 +150,21 @@ func BuildNotificationDisplay(row DeliveryRow) NotificationDisplay {
 			display.Body = "Reason: " + truncateDisplayText(flags.Reason, displayBodyMaxLen)
 		}
 		display.ThreadID = requestThreadID(flags)
+	case DeliveryTypeRequestSubmitted:
+		flags := parseRequestFlags(row.ReasonFlags)
+		display.Category = "request_submitted"
+		display.Title = "New request awaiting approval"
+		if flags.Title != "" {
+			display.Title = flags.Title + " needs approval"
+		}
+		display.Body = "A new media request is waiting for you."
+		if flags.Requester != "" {
+			display.Body = "Requested by " + truncateDisplayText(flags.Requester, displayBodyMaxLen)
+		}
+		display.ThreadID = requestThreadID(flags)
+		if flags.RequestID != "" {
+			display.URL = "/admin/requests?request=" + flags.RequestID
+		}
 	case DeliveryTypeWebhookAutoDisabled:
 		display.Category = "webhook_auto_disabled"
 		display.Title = "A webhook stopped working"

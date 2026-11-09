@@ -97,7 +97,11 @@ function notificationTitle(notification: AppNotification): string {
   if (notification.type === "request.fulfilled") {
     return notification.series_title || "Request available";
   }
-  if (notification.type === "request.approved" || notification.type === "request.declined") {
+  if (
+    notification.type === "request.approved" ||
+    notification.type === "request.declined" ||
+    notification.type === "request.submitted"
+  ) {
     return notification.reason_flags?.title || "Media request";
   }
   // Unknown types render with a generic fallback by design — the type
@@ -130,6 +134,10 @@ function notificationDescription(notification: AppNotification): string {
         ? "Your requested series is now available"
         : "Your request is now available";
   }
+  if (notification.type === "request.submitted") {
+    const requester = notification.reason_flags?.requester;
+    return requester ? `${requester} requested this — awaiting approval` : "Awaiting your approval";
+  }
   if (notification.type === "request.approved") {
     return "Your request was approved";
   }
@@ -148,6 +156,7 @@ function notificationDescription(notification: AppNotification): string {
 function notificationHref(notification: AppNotification): string | null {
   if (notification.episode_id) return `/item/${notification.episode_id}`;
   if (notification.series_id) return `/item/${notification.series_id}`;
+  if (notification.type === "request.submitted") return "/admin/requests";
   if (notification.type === "request.approved" || notification.type === "request.declined") {
     const { media_type: mediaType, tmdb_id: tmdbID } = notification.reason_flags ?? {};
     if ((mediaType === "movie" || mediaType === "series") && tmdbID && tmdbID > 0) {

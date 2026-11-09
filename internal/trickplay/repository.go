@@ -105,7 +105,7 @@ func (r *Repository) claim(ctx context.Context, owner string, lease time.Duratio
 			  AND f.trickplay_enabled AND f.enabled IS NOT FALSE AND lower(btrim(f.type)) = ANY($5::text[])
 			  AND mf.missing_since IS NULL AND mf.probe_updated_at IS NOT NULL AND mf.duration > 0
 			  AND jsonb_typeof(mf.video_tracks) = 'array' AND jsonb_array_length(mf.video_tracks) > 0
-			ORDER BY t.available_at, t.media_file_id
+			ORDER BY t.available_at DESC, t.media_file_id DESC
 			LIMIT 1
 			FOR UPDATE OF t SKIP LOCKED
 		)

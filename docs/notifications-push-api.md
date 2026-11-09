@@ -180,8 +180,7 @@ the same way.
 `ordered_android_v1` registration contract and whether local registration storage
 is configured. It requires the acting login/profile. `registration_available`
 is independent of relay delivery availability; use notification capabilities
-for delivery configuration. Apple registration and browser web push remain
-separate contracts.
+for delivery configuration. Apple registration remains a separate contract.
 
 `POST /api/v2/notifications/push/devices` takes `device_id`, `platform: "android"`,
 `token`, and optional `push_mode` (`private_push` by default, `in_app_only`, or
@@ -274,26 +273,6 @@ installation's stored account/profile:
 
 The server keeps the key hash and owner. To receive pushes again, register
 through `registerPushDevice` with the same key and a higher generation.
-
-### Remove a browser subscription by row ID
-
-`DELETE /api/v2/notifications/web-push/subscriptions/{id}` (`deleteNotificationWebPushSubscription`) requires authenticated profile authority and removes only the matching profile's server registration. It returns bodyless `204`, including for absent or foreign-profile IDs. Repeating deletion naturally converges; a concurrent subscription is an opposing write, with no generation-order guarantee. Missing web-push storage returns `503`.
-
-The settings list action captures account/profile/PIN authority, sends once without authentication replay, and refreshes only its exact scoped cache after a successful current-authority response. It does not call browser unsubscribe, revoke permission, or cancel a provider call already in flight. Browser subscription creation and endpoint unsubscribe retain their separate lifecycle; Android installation credentials and Apple display credentials do not apply to this operation.
-
-### Unsubscribe this browser by endpoint
-
-`POST /api/v2/notifications/web-push/unsubscribe` (`unsubscribeNotificationWebPush`) takes `{ "endpoint": "<browser endpoint>" }` under authenticated profile authority and returns bodyless `204`. Removal uses the account and endpoint, including a subscription reassigned to a sibling profile; it cannot remove another account's registration. An absent endpoint row returns `204`, invalid input `422`, and unavailable storage `503`.
-
-This operation is **non-retryable**: a delayed repeat can remove a newer registration for the same endpoint. It has no generation/tombstone protocol. The browser captures authority before discovery, sends once without authentication replay, and waits for successful server removal before invoking local unsubscribe. HTTP failure or uncertainty leaves the local subscription discoverable; no automatic retry or reconciliation is claimed. An explicit later disable is a new user decision against current state. Authority replacement prevents subsequent local unsubscribe and scoped UI publication. Browser-side failure after server success is surfaced; already-running browser/provider operations cannot be cancelled by this authority check. Server removal does not revoke browser permission or cancel an external provider send already in flight.
-
-### Register this browser
-
-`POST /api/v2/notifications/web-push/subscriptions` (`subscribeNotificationWebPush`) takes the browser's `endpoint`, `keys.p256dh`, `keys.auth`, and optional `device_name`. Authenticated profile authority is required. The existing service validates a public HTTPS endpoint and registers or reassigns it to the current profile. `201` returns the subscription view used by the list; encryption keys remain write-only. Invalid input returns `422`, unavailable storage `503`. The request body is bounded to 16 KiB.
-
-Registration is **non-retryable**. The existing endpoint upsert may re-enable delivery or replace a newer profile/token intent; it is not an ordered installation protocol. Existing provider callbacks and registration identity behavior remain unchanged, including the absence of generation-based late-callback isolation. The response describes stored registration state, not successful delivery. Android installation keys/generations and Apple display-token renewal do not apply.
-
-The browser captures authority before permission and checks it after each service-worker/subscription await and HTTP response. It sends once without authentication replay and publishes only under the captured authority. An already-issued browser or server operation cannot be undone by these checks. Failure or uncertainty does not trigger automatic retry, local unsubscribe, or compensating server removal; such compensation could remove a newer intent. Browser permission and local subscription may therefore remain after a failed registration.
 
 ## Legacy mobile registration ownership
 

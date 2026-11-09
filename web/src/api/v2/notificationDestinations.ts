@@ -27,22 +27,8 @@ async function destinationPages<T>(
   throw new Error("Too many notification destinations to display. Reload the list.");
 }
 
-type WebPush = V2Result<"GET /api/v2/notifications/web-push/subscriptions">["items"][number];
 type Webhook = V2Result<"GET /api/v2/notifications/webhooks">["items"][number];
-type ServerChannel = V2Result<"GET /api/v2/admin/notifications/server-channels">["items"][number];
 
-export function listNotificationWebPushSubscriptions(
-  profileContext: ProfileRequestContextSnapshot,
-) {
-  return destinationPages<WebPush>(
-    (cursor) =>
-      v2("GET /api/v2/notifications/web-push/subscriptions", {
-        profileContext,
-        query: { cursor, limit: 100 },
-      }),
-    profileContext,
-  );
-}
 export function listNotificationWebhooks(profileContext: ProfileRequestContextSnapshot) {
   return destinationPages<Webhook>(
     (cursor) =>
@@ -50,30 +36,6 @@ export function listNotificationWebhooks(profileContext: ProfileRequestContextSn
     profileContext,
   );
 }
-export function listNotificationServerChannels(profileContext: ProfileRequestContextSnapshot) {
-  return destinationPages<ServerChannel>(
-    (cursor) =>
-      v2("GET /api/v2/admin/notifications/server-channels", {
-        profileContext,
-        query: { cursor, limit: 100 },
-      }),
-    profileContext,
-  );
-}
-
-export async function deleteNotificationWebPushSubscription(
-  id: string,
-  profileContext: ProfileRequestContextSnapshot,
-) {
-  requireNotificationAuthority(profileContext);
-  await v2("DELETE /api/v2/notifications/web-push/subscriptions/{id}", {
-    path: { id },
-    profileContext,
-    retryAuthentication: false,
-  });
-  requireNotificationAuthority(profileContext);
-}
-
 export async function deleteNotificationWebhook(
   intent: { id: string; etag: string },
   profileContext: ProfileRequestContextSnapshot,
@@ -82,19 +44,6 @@ export async function deleteNotificationWebhook(
   await v2("DELETE /api/v2/notifications/webhooks/{id}", {
     path: { id: intent.id },
     headers: { "If-Match": intent.etag },
-    profileContext,
-    retryAuthentication: false,
-  });
-  requireNotificationAuthority(profileContext);
-}
-
-export async function deleteNotificationServerChannel(
-  id: string,
-  profileContext: ProfileRequestContextSnapshot,
-) {
-  requireNotificationAuthority(profileContext);
-  await v2("DELETE /api/v2/admin/notifications/server-channels/{id}", {
-    path: { id },
     profileContext,
     retryAuthentication: false,
   });

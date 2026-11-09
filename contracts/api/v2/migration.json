@@ -10,7 +10,7 @@
   "consumer_method": "Client call sites were extracted by scripts/apiv2-ledger/extract_consumers.py from web/src (this repo) and the origin/main trees of silo-apple and silo-android at the commits pinned in source_trees (re-resolve a sibling site with git show <sha>:<file> in that repo, never against a moving branch): path literals and templates passed to HTTP/WebSocket calls, plus paths built by helper functions that return a template, templates rooted at the API base URL, Kotlin buildString/const val builders, and Swift let/static let path bindings, with interpolations normalized to a wildcard and matched against inventory paths by method (scripts/apiv2-ledger/match_consumers.py). scripts/apiv2-ledger/sweep_uncredited.py then greps the last two static segments of every inventory path across all three trees and every hit not within four lines of a credited site was resolved by hand. Server-internal and compat consumers are Go URL builders and callers in this repo. Sites marked match=manual were resolved by hand where the path is assembled from variables the scripts cannot follow. Call-site files are repository-root-relative for their repo (web: src/... under web/; apple: iosApp/...; android: shared/, android-shared/, androidApp/, androidTvApp/; server: this repository root). Absence of a first-party consumer is not proof of disuse.",
   "field_reference": "internal/contractledger validates this file against migration.schema.json and reconciles it against the route inventory: listener, namespace, method, path, registration_index, handler, handler_kind, source_file, route_group, middleware_chain, auth_class, auth_traits, conditional, conditions, delegates_to (inventory empty string is null here), request_kind, response_media_kind, streams, and upgrades_websocket are copied from the inventory row and must match it, except that dynamic_plugin_proxy rows record both media kinds as dynamic_proxy; profile_required and admin_required are derived from auth_traits. Every other field is curated by hand and preserved when scripts/apiv2-ledger/build_ledger.py merges a regenerated inventory into this file.",
   "totals": {
-    "entries": 789
+    "entries": 776
   },
   "entries": [
     {
@@ -10353,68 +10353,6 @@
       "listener": "api",
       "namespace": "api_v1",
       "method": "POST",
-      "path": "/api/v1/admin/notifications/discord/test",
-      "registration_index": 0,
-      "handler": "(*internal/api/handlers.DiscordNotificationsHandler).HandleAdminTest",
-      "handler_kind": "method",
-      "source_file": "internal/api/router.go",
-      "route_group": "/api/v1/admin",
-      "middleware_chain": 10,
-      "auth_class": "acting_admin",
-      "auth_traits": [
-        "acting_admin",
-        "authenticated",
-        "demo_guarded",
-        "rate_limited",
-        "viewer_access"
-      ],
-      "profile_required": false,
-      "admin_required": true,
-      "conditional": true,
-      "conditions": [
-        "authMiddleware != nil",
-        "adminHandler != nil",
-        "discordNotificationsHandler != nil"
-      ],
-      "delegates_to": null,
-      "request_kind": "unknown",
-      "response_media_kind": "json",
-      "streams": false,
-      "upgrades_websocket": false,
-      "capability_endpoint": null,
-      "consumers": [
-        "web"
-      ],
-      "consumer_call_sites": [
-        {
-          "repo": "web",
-          "file": "src/api/v2/notificationDiscord.ts",
-          "line": 7,
-          "types": [],
-          "match": "mechanical"
-        }
-      ],
-      "section": "admin-notifications",
-      "release_flow": "other_admin",
-      "tier": 2,
-      "disposition": "ported",
-      "disposition_rule": "default_ported",
-      "disposition_rationale": "No exclusion, removal, or ratified redesign applies; port to v2 in its section PR.",
-      "owner": null,
-      "review_state": "ratified",
-      "v2": {
-        "method": "POST",
-        "path": "/api/v2/admin/notifications/discord/test",
-        "operation_id": "testAdminDiscordNotification"
-      },
-      "notes": "Bot identity verification and existing captured-authority web test button independently reviewed. No message send or link mutation; v2 provider failures are generic. No native caller or Jellyfin counterpart.",
-      "retry_safety": "non_retryable",
-      "retry_safety_note": "Each request verifies the stored bot credential once through the existing provider identity lookup. There is no durable receipt; web prevents overlapping requests and disables authentication replay."
-    },
-    {
-      "listener": "api",
-      "namespace": "api_v1",
-      "method": "POST",
       "path": "/api/v1/admin/notifications/push/apple/test",
       "registration_index": 0,
       "handler": "(*internal/api/handlers.AdminApplePushHandler).HandleTest",
@@ -10646,367 +10584,6 @@
       "notes": "Shared relay service and existing web controls independently reviewed. Origin allowlisting, credential secrecy, explicit re-registration and Retry-After preserved. Web captures authority and disables automatic retry and authentication replay. A duplicate can rotate again; no generation-safe retry claim.",
       "retry_safety": "non_retryable",
       "retry_safety_note": "A duplicate can rotate again. Web captures authority and disables automatic retry and authentication replay. No generation-safe retry guarantee."
-    },
-    {
-      "listener": "api",
-      "namespace": "api_v1",
-      "method": "GET",
-      "path": "/api/v1/admin/notifications/server-channels/",
-      "registration_index": 0,
-      "handler": "(*internal/api/handlers.AdminServerChannelsHandler).HandleList",
-      "handler_kind": "method",
-      "source_file": "internal/api/router.go",
-      "route_group": "/api/v1/admin/notifications/server-channels",
-      "middleware_chain": 10,
-      "auth_class": "acting_admin",
-      "auth_traits": [
-        "acting_admin",
-        "authenticated",
-        "demo_guarded",
-        "rate_limited",
-        "viewer_access"
-      ],
-      "profile_required": false,
-      "admin_required": true,
-      "conditional": true,
-      "conditions": [
-        "authMiddleware != nil",
-        "adminHandler != nil",
-        "deps.Notifications != nil && deps.Notifications.ServerChannels != nil"
-      ],
-      "delegates_to": null,
-      "request_kind": "none",
-      "response_media_kind": "json",
-      "streams": false,
-      "upgrades_websocket": false,
-      "capability_endpoint": null,
-      "consumers": [
-        "web"
-      ],
-      "consumer_call_sites": [
-        {
-          "repo": "web",
-          "file": "src/api/v2/notificationDestinations.ts",
-          "line": 56,
-          "types": [],
-          "match": "mechanical"
-        }
-      ],
-      "section": "admin-notifications",
-      "release_flow": "other_admin",
-      "tier": 2,
-      "disposition": "ported",
-      "disposition_rule": "default_ported",
-      "disposition_rationale": "No exclusion, removal, or ratified redesign applies; port to v2 in its section PR.",
-      "owner": null,
-      "review_state": "ratified",
-      "v2": {
-        "method": "GET",
-        "path": "/api/v2/admin/notifications/server-channels",
-        "operation_id": "listAdminNotificationServerChannels"
-      },
-      "notes": "Bounded signed creation/ID keyset reads and existing web consumers independently reviewed. Profile and actor scope retained; credential ciphertext and signing secrets excluded. No native destination-management callers. Mutable destination and registration migration remains separate."
-    },
-    {
-      "listener": "api",
-      "namespace": "api_v1",
-      "method": "POST",
-      "path": "/api/v1/admin/notifications/server-channels/",
-      "registration_index": 0,
-      "handler": "(*internal/api/handlers.AdminServerChannelsHandler).HandleCreate",
-      "handler_kind": "method",
-      "source_file": "internal/api/router.go",
-      "route_group": "/api/v1/admin/notifications/server-channels",
-      "middleware_chain": 10,
-      "auth_class": "acting_admin",
-      "auth_traits": [
-        "acting_admin",
-        "authenticated",
-        "demo_guarded",
-        "rate_limited",
-        "viewer_access"
-      ],
-      "profile_required": false,
-      "admin_required": true,
-      "conditional": true,
-      "conditions": [
-        "authMiddleware != nil",
-        "adminHandler != nil",
-        "deps.Notifications != nil && deps.Notifications.ServerChannels != nil"
-      ],
-      "delegates_to": null,
-      "request_kind": "json",
-      "response_media_kind": "json",
-      "streams": false,
-      "upgrades_websocket": false,
-      "capability_endpoint": null,
-      "consumers": [
-        "web"
-      ],
-      "consumer_call_sites": [
-        {
-          "repo": "web",
-          "file": "src/hooks/queries/admin/serverNotificationChannels.ts",
-          "line": 39,
-          "types": [],
-          "match": "mechanical"
-        }
-      ],
-      "section": "admin-notifications",
-      "release_flow": "other_admin",
-      "tier": 2,
-      "disposition": "ported",
-      "disposition_rule": "default_ported",
-      "disposition_rationale": "No exclusion, removal, or ratified redesign applies; port to v2 in its section PR.",
-      "owner": null,
-      "review_state": "ratified",
-      "v2": {
-        "method": "POST",
-        "path": "/api/v2/admin/notifications/server-channels",
-        "operation_id": "createAdminNotificationServerChannel"
-      },
-      "notes": "Existing service creation and captured-authority web forms independently reviewed. Personal-disabled/admin-configuration behavior, encryption and quotas retained. No native or Jellyfin management caller.",
-      "retry_safety": "non_retryable",
-      "retry_safety_note": "Creation returns a signing secret once and has no durable replay receipt. A lost response requires inspecting the destination list and explicit management or rotation; the web does not automatically replay creation."
-    },
-    {
-      "listener": "api",
-      "namespace": "api_v1",
-      "method": "DELETE",
-      "path": "/api/v1/admin/notifications/server-channels/{id}",
-      "registration_index": 0,
-      "handler": "(*internal/api/handlers.AdminServerChannelsHandler).HandleDelete",
-      "handler_kind": "method",
-      "source_file": "internal/api/router.go",
-      "route_group": "/api/v1/admin/notifications/server-channels",
-      "middleware_chain": 10,
-      "auth_class": "acting_admin",
-      "auth_traits": [
-        "acting_admin",
-        "authenticated",
-        "demo_guarded",
-        "rate_limited",
-        "viewer_access"
-      ],
-      "profile_required": false,
-      "admin_required": true,
-      "conditional": true,
-      "conditions": [
-        "authMiddleware != nil",
-        "adminHandler != nil",
-        "deps.Notifications != nil && deps.Notifications.ServerChannels != nil"
-      ],
-      "delegates_to": null,
-      "request_kind": "unknown",
-      "response_media_kind": "json",
-      "streams": false,
-      "upgrades_websocket": false,
-      "capability_endpoint": null,
-      "consumers": [
-        "web"
-      ],
-      "consumer_call_sites": [
-        {
-          "repo": "web",
-          "file": "src/api/v2/notificationDestinations.ts",
-          "line": 96,
-          "types": [],
-          "match": "mechanical"
-        }
-      ],
-      "section": "admin-notifications",
-      "release_flow": "other_admin",
-      "tier": 2,
-      "disposition": "ported",
-      "disposition_rule": "default_ported",
-      "disposition_rationale": "No exclusion, removal, or ratified redesign applies; port to v2 in its section PR.",
-      "owner": null,
-      "review_state": "ratified",
-      "v2": {
-        "method": "DELETE",
-        "path": "/api/v2/admin/notifications/server-channels/{id}",
-        "operation_id": "deleteAdminNotificationServerChannel"
-      },
-      "notes": "Inventory media kind is heuristic and unresolved for this row; confirm in the section PR. Conditionally registered: authMiddleware != nil; adminHandler != nil; deps.Notifications != nil && deps.Notifications.ServerChannels != nil. v2 registers the operation unconditionally and reports capability state instead.",
-      "retry_safety": "natural_idempotent"
-    },
-    {
-      "listener": "api",
-      "namespace": "api_v1",
-      "method": "PUT",
-      "path": "/api/v1/admin/notifications/server-channels/{id}",
-      "registration_index": 0,
-      "handler": "(*internal/api/handlers.AdminServerChannelsHandler).HandleUpdate",
-      "handler_kind": "method",
-      "source_file": "internal/api/router.go",
-      "route_group": "/api/v1/admin/notifications/server-channels",
-      "middleware_chain": 10,
-      "auth_class": "acting_admin",
-      "auth_traits": [
-        "acting_admin",
-        "authenticated",
-        "demo_guarded",
-        "rate_limited",
-        "viewer_access"
-      ],
-      "profile_required": false,
-      "admin_required": true,
-      "conditional": true,
-      "conditions": [
-        "authMiddleware != nil",
-        "adminHandler != nil",
-        "deps.Notifications != nil && deps.Notifications.ServerChannels != nil"
-      ],
-      "delegates_to": null,
-      "request_kind": "json",
-      "response_media_kind": "json",
-      "streams": false,
-      "upgrades_websocket": false,
-      "capability_endpoint": null,
-      "consumers": [
-        "web"
-      ],
-      "consumer_call_sites": [
-        {
-          "repo": "web",
-          "file": "src/hooks/queries/admin/serverNotificationChannels.ts",
-          "line": 71,
-          "types": [],
-          "match": "mechanical"
-        }
-      ],
-      "section": "admin-notifications",
-      "release_flow": "other_admin",
-      "tier": 2,
-      "disposition": "ported",
-      "disposition_rule": "default_ported",
-      "disposition_rationale": "No exclusion, removal, or ratified redesign applies; port to v2 in its section PR.",
-      "owner": null,
-      "review_state": "ratified",
-      "v2": {
-        "method": "PUT",
-        "path": "/api/v2/admin/notifications/server-channels/{id}",
-        "operation_id": "updateAdminNotificationServerChannel"
-      },
-      "notes": "Conditionally registered: authMiddleware != nil; adminHandler != nil; deps.Notifications != nil && deps.Notifications.ServerChannels != nil. v2 registers the operation unconditionally and reports capability state instead.",
-      "retry_safety": "non_retryable",
-      "retry_safety_note": "URL replacement resets delivery state and advances the content watermark on each accepted update. Replay can skip intervening events or overwrite newer configuration; send once without automatic retry."
-    },
-    {
-      "listener": "api",
-      "namespace": "api_v1",
-      "method": "POST",
-      "path": "/api/v1/admin/notifications/server-channels/{id}/rotate-secret",
-      "registration_index": 0,
-      "handler": "(*internal/api/handlers.AdminServerChannelsHandler).HandleRotateSecret",
-      "handler_kind": "method",
-      "source_file": "internal/api/router.go",
-      "route_group": "/api/v1/admin/notifications/server-channels",
-      "middleware_chain": 10,
-      "auth_class": "acting_admin",
-      "auth_traits": [
-        "acting_admin",
-        "authenticated",
-        "demo_guarded",
-        "rate_limited",
-        "viewer_access"
-      ],
-      "profile_required": false,
-      "admin_required": true,
-      "conditional": true,
-      "conditions": [
-        "authMiddleware != nil",
-        "adminHandler != nil",
-        "deps.Notifications != nil && deps.Notifications.ServerChannels != nil"
-      ],
-      "delegates_to": null,
-      "request_kind": "unknown",
-      "response_media_kind": "json",
-      "streams": false,
-      "upgrades_websocket": false,
-      "capability_endpoint": null,
-      "consumers": [
-        "web"
-      ],
-      "consumer_call_sites": [
-        {
-          "repo": "web",
-          "file": "src/hooks/queries/admin/serverNotificationChannels.ts",
-          "line": 177,
-          "types": [],
-          "match": "mechanical"
-        }
-      ],
-      "section": "admin-notifications",
-      "release_flow": "other_admin",
-      "tier": 2,
-      "disposition": "ported",
-      "disposition_rule": "default_ported",
-      "disposition_rationale": "No exclusion, removal, or ratified redesign applies; port to v2 in its section PR.",
-      "owner": null,
-      "review_state": "ratified",
-      "v2": {
-        "method": "POST",
-        "path": "/api/v2/admin/notifications/server-channels/{id}/rotate-secret",
-        "operation_id": "rotateAdminNotificationServerChannelSecret"
-      },
-      "notes": "Inventory media kind is heuristic and unresolved for this row; confirm in the section PR. Conditionally registered: authMiddleware != nil; adminHandler != nil; deps.Notifications != nil && deps.Notifications.ServerChannels != nil. v2 registers the operation unconditionally and reports capability state instead.",
-      "retry_safety": "non_retryable",
-      "retry_safety_note": "Each accepted rotation replaces the signing secret and returns it once; replay rotates again, may supersede newer intent, and cannot recover an uncertain receipt. Send once without automatic retry."
-    },
-    {
-      "listener": "api",
-      "namespace": "api_v1",
-      "method": "POST",
-      "path": "/api/v1/admin/notifications/server-channels/{id}/test",
-      "registration_index": 0,
-      "handler": "(*internal/api/handlers.AdminServerChannelsHandler).HandleTest",
-      "handler_kind": "method",
-      "source_file": "internal/api/router.go",
-      "route_group": "/api/v1/admin/notifications/server-channels",
-      "middleware_chain": 10,
-      "auth_class": "acting_admin",
-      "auth_traits": [
-        "acting_admin",
-        "authenticated",
-        "demo_guarded",
-        "rate_limited",
-        "viewer_access"
-      ],
-      "profile_required": false,
-      "admin_required": true,
-      "conditional": true,
-      "conditions": [
-        "authMiddleware != nil",
-        "adminHandler != nil",
-        "deps.Notifications != nil && deps.Notifications.ServerChannels != nil"
-      ],
-      "delegates_to": null,
-      "request_kind": "unknown",
-      "response_media_kind": "json",
-      "streams": false,
-      "upgrades_websocket": false,
-      "capability_endpoint": null,
-      "consumers": [
-        "unused"
-      ],
-      "consumer_call_sites": [],
-      "section": "admin-notifications",
-      "release_flow": "other_admin",
-      "tier": 2,
-      "disposition": "ported",
-      "disposition_rule": "default_ported",
-      "disposition_rationale": "No exclusion, removal, or ratified redesign applies; port to v2 in its section PR.",
-      "owner": null,
-      "review_state": "ratified",
-      "v2": {
-        "method": "POST",
-        "path": "/api/v2/admin/notifications/server-channels/{id}/test",
-        "operation_id": "testAdminNotificationServerChannel"
-      },
-      "notes": "Transport and actual consumers independently reviewed. Existing service behavior preserved; test sends keep synchronous outcomes without retry/counter writes, and tokenized email links retain standalone HTML. No native in-app caller. Registration and guarded configuration mutations remain separate.",
-      "retry_safety": "non_retryable",
-      "retry_safety_note": "Existing synchronous sample send runs once without changing counters or watermarks. Web disables retry and auth replay."
     },
     {
       "listener": "api",
@@ -31016,301 +30593,6 @@
     {
       "listener": "api",
       "namespace": "api_v1",
-      "method": "DELETE",
-      "path": "/api/v1/notifications/discord-link",
-      "registration_index": 0,
-      "handler": "(*internal/api/handlers.DiscordNotificationsHandler).HandleUnlink",
-      "handler_kind": "method",
-      "source_file": "internal/api/router.go",
-      "route_group": "/api/v1",
-      "middleware_chain": 5,
-      "auth_class": "profile_scoped",
-      "auth_traits": [
-        "authenticated",
-        "demo_guarded",
-        "rate_limited",
-        "viewer_access"
-      ],
-      "profile_required": false,
-      "admin_required": false,
-      "conditional": true,
-      "conditions": [
-        "authMiddleware != nil",
-        "deps.Notifications != nil",
-        "discordNotificationsHandler != nil"
-      ],
-      "delegates_to": null,
-      "request_kind": "unknown",
-      "response_media_kind": "json",
-      "streams": false,
-      "upgrades_websocket": false,
-      "capability_endpoint": "GET /api/v1/notifications/capability",
-      "consumers": [
-        "web"
-      ],
-      "consumer_call_sites": [
-        {
-          "repo": "web",
-          "file": "src/api/v2/notificationDiscord.ts",
-          "line": 27,
-          "types": [],
-          "match": "mechanical"
-        }
-      ],
-      "section": "notifications",
-      "release_flow": "notifications",
-      "tier": 1,
-      "disposition": "ported",
-      "disposition_rule": "default_ported",
-      "disposition_rationale": "No exclusion, removal, or ratified redesign applies; port to v2 in its section PR.",
-      "owner": null,
-      "review_state": "ratified",
-      "v2": {
-        "method": "DELETE",
-        "path": "/api/v2/notifications/discord-link",
-        "operation_id": "unlinkNotificationDiscord"
-      },
-      "notes": "Inventory media kind is heuristic and unresolved for this row; confirm in the section PR. Conditionally registered: authMiddleware != nil; deps.Notifications != nil; discordNotificationsHandler != nil. v2 registers the operation unconditionally and reports capability state instead.",
-      "retry_safety": "non_retryable",
-      "retry_safety_note": "Stale retry hazard: a delayed retry clears a Discord identity linked after the first success (ClearIdentity is unconditional per user). The notifications section adds a link-generation precondition before clients may retry."
-    },
-    {
-      "listener": "api",
-      "namespace": "api_v1",
-      "method": "GET",
-      "path": "/api/v1/notifications/discord-preferences",
-      "registration_index": 0,
-      "handler": "(*internal/api/handlers.DiscordNotificationsHandler).HandleGetPreferences",
-      "handler_kind": "method",
-      "source_file": "internal/api/router.go",
-      "route_group": "/api/v1",
-      "middleware_chain": 5,
-      "auth_class": "profile_scoped",
-      "auth_traits": [
-        "authenticated",
-        "demo_guarded",
-        "rate_limited",
-        "viewer_access"
-      ],
-      "profile_required": false,
-      "admin_required": false,
-      "conditional": true,
-      "conditions": [
-        "authMiddleware != nil",
-        "deps.Notifications != nil",
-        "discordNotificationsHandler != nil"
-      ],
-      "delegates_to": null,
-      "request_kind": "none",
-      "response_media_kind": "json",
-      "streams": false,
-      "upgrades_websocket": false,
-      "capability_endpoint": "GET /api/v1/notifications/capability",
-      "consumers": [
-        "web"
-      ],
-      "consumer_call_sites": [
-        {
-          "repo": "web",
-          "file": "src/api/v2/notificationChannels.ts",
-          "line": 30,
-          "types": [],
-          "match": "mechanical"
-        }
-      ],
-      "section": "notifications",
-      "release_flow": "notifications",
-      "tier": 1,
-      "disposition": "ported",
-      "disposition_rule": "default_ported",
-      "disposition_rationale": "No exclusion, removal, or ratified redesign applies; port to v2 in its section PR.",
-      "owner": null,
-      "review_state": "ratified",
-      "v2": {
-        "method": "GET",
-        "path": "/api/v2/notifications/discord-preferences",
-        "operation_id": "getNotificationDiscordPreferences"
-      },
-      "notes": "Preference transport and existing web consumers independently reviewed. Email is profile-scoped; Discord is account-scoped with optional declared-profile validation. Mode setters retain backoff/watermark effects and are non-retryable. No native preference callers. Address/link/callback migration remains separate."
-    },
-    {
-      "listener": "api",
-      "namespace": "api_v1",
-      "method": "PUT",
-      "path": "/api/v1/notifications/discord-preferences",
-      "registration_index": 0,
-      "handler": "(*internal/api/handlers.DiscordNotificationsHandler).HandleUpdatePreferences",
-      "handler_kind": "method",
-      "source_file": "internal/api/router.go",
-      "route_group": "/api/v1",
-      "middleware_chain": 5,
-      "auth_class": "profile_scoped",
-      "auth_traits": [
-        "authenticated",
-        "demo_guarded",
-        "rate_limited",
-        "viewer_access"
-      ],
-      "profile_required": false,
-      "admin_required": false,
-      "conditional": true,
-      "conditions": [
-        "authMiddleware != nil",
-        "deps.Notifications != nil",
-        "discordNotificationsHandler != nil"
-      ],
-      "delegates_to": null,
-      "request_kind": "json",
-      "response_media_kind": "json",
-      "streams": false,
-      "upgrades_websocket": false,
-      "capability_endpoint": "GET /api/v1/notifications/capability",
-      "consumers": [
-        "web"
-      ],
-      "consumer_call_sites": [
-        {
-          "repo": "web",
-          "file": "src/api/v2/notificationChannels.ts",
-          "line": 39,
-          "types": [],
-          "match": "mechanical"
-        }
-      ],
-      "section": "notifications",
-      "release_flow": "notifications",
-      "tier": 1,
-      "disposition": "ported",
-      "disposition_rule": "default_ported",
-      "disposition_rationale": "No exclusion, removal, or ratified redesign applies; port to v2 in its section PR.",
-      "owner": null,
-      "review_state": "ratified",
-      "v2": {
-        "method": "PUT",
-        "path": "/api/v2/notifications/discord-preferences",
-        "operation_id": "updateNotificationDiscordPreferences"
-      },
-      "notes": "Preference transport and existing web consumers independently reviewed. Email is profile-scoped; Discord is account-scoped with optional declared-profile validation. Mode setters retain backoff/watermark effects and are non-retryable. No native preference callers. Address/link/callback migration remains separate.",
-      "retry_safety": "non_retryable",
-      "retry_safety_note": "Existing mode setters reset delivery backoff and can advance watermarks. The v2 adapter invokes the unchanged setter once; web disables automatic retry and authentication replay."
-    },
-    {
-      "listener": "api",
-      "namespace": "api_v1",
-      "method": "GET",
-      "path": "/api/v1/notifications/discord/link/callback",
-      "registration_index": 0,
-      "handler": "(*internal/api/handlers.DiscordNotificationsHandler).HandleLinkCallback",
-      "handler_kind": "method",
-      "source_file": "internal/api/router.go",
-      "route_group": "/api/v1",
-      "middleware_chain": 1,
-      "auth_class": "public",
-      "auth_traits": [],
-      "profile_required": false,
-      "admin_required": false,
-      "conditional": true,
-      "conditions": [
-        "deps.Notifications != nil"
-      ],
-      "delegates_to": null,
-      "request_kind": "none",
-      "response_media_kind": "redirect",
-      "streams": false,
-      "upgrades_websocket": false,
-      "capability_endpoint": "GET /api/v1/notifications/capability",
-      "consumers": [
-        "external_unknown",
-        "internal"
-      ],
-      "consumer_call_sites": [
-        {
-          "repo": "server",
-          "file": "internal/api/handlers/notifications_discord.go",
-          "line": 40,
-          "types": [],
-          "match": "manual"
-        }
-      ],
-      "section": "notifications",
-      "release_flow": "notifications",
-      "tier": 1,
-      "disposition": "ported",
-      "disposition_rule": "default_ported",
-      "disposition_rationale": "No exclusion, removal, or ratified redesign applies; port to v2 in its section PR.",
-      "owner": null,
-      "review_state": "ratified",
-      "v2": {
-        "method": "GET",
-        "path": "/api/v2/notifications/discord/link/callback",
-        "operation_id": "completeNotificationDiscordLink"
-      },
-      "notes": "Shared bridge/v2 consent and callback with version-specific redirect URI independently reviewed. Existing web consumer captures authority; no native caller. External Discord application must register the v2 callback URI. Overlapping consent and unlink generation semantics remain unchanged."
-    },
-    {
-      "listener": "api",
-      "namespace": "api_v1",
-      "method": "POST",
-      "path": "/api/v1/notifications/discord/link/init",
-      "registration_index": 0,
-      "handler": "(*internal/api/handlers.DiscordNotificationsHandler).HandleLinkInit",
-      "handler_kind": "method",
-      "source_file": "internal/api/router.go",
-      "route_group": "/api/v1",
-      "middleware_chain": 5,
-      "auth_class": "profile_scoped",
-      "auth_traits": [
-        "authenticated",
-        "demo_guarded",
-        "rate_limited",
-        "viewer_access"
-      ],
-      "profile_required": false,
-      "admin_required": false,
-      "conditional": true,
-      "conditions": [
-        "authMiddleware != nil",
-        "deps.Notifications != nil",
-        "discordNotificationsHandler != nil"
-      ],
-      "delegates_to": null,
-      "request_kind": "unknown",
-      "response_media_kind": "json",
-      "streams": false,
-      "upgrades_websocket": false,
-      "capability_endpoint": "GET /api/v1/notifications/capability",
-      "consumers": [
-        "web"
-      ],
-      "consumer_call_sites": [
-        {
-          "repo": "web",
-          "file": "src/api/v2/notificationDiscord.ts",
-          "line": 17,
-          "types": [],
-          "match": "mechanical"
-        }
-      ],
-      "section": "notifications",
-      "release_flow": "notifications",
-      "tier": 1,
-      "disposition": "ported",
-      "disposition_rule": "default_ported",
-      "disposition_rationale": "No exclusion, removal, or ratified redesign applies; port to v2 in its section PR.",
-      "owner": null,
-      "review_state": "ratified",
-      "v2": {
-        "method": "POST",
-        "path": "/api/v2/notifications/discord/link/init",
-        "operation_id": "beginNotificationDiscordLink"
-      },
-      "notes": "Shared bridge/v2 consent and callback with version-specific redirect URI independently reviewed. Existing web consumer captures authority; no native caller. External Discord application must register the v2 callback URI. Overlapping consent and unlink generation semantics remain unchanged.",
-      "retry_safety": "non_retryable",
-      "retry_safety_note": "Initiation creates a new expiring OAuth state and consent URL. Clients do not automatically replay initiation; overlapping consent and unlink ordering are not generation guarded."
-    },
-    {
-      "listener": "api",
-      "namespace": "api_v1",
       "method": "GET",
       "path": "/api/v1/notifications/email-preferences",
       "registration_index": 0,
@@ -31549,6 +30831,141 @@
       "notes": "Conditionally registered: authMiddleware != nil; deps.Notifications != nil. v2 registers the operation unconditionally and reports capability state instead.",
       "retry_safety": "durable_dispatch",
       "retry_safety_note": "v2 admits a client-retained verification_id into an encrypted outbox; exact replay returns the same receipt, no new message. Policy: an uncertain provider hand-off is retried once with the same message and link, so a duplicate email is possible after a crash. Success is admission, not delivery."
+    },
+    {
+      "listener": "api",
+      "namespace": "api_v1",
+      "method": "GET",
+      "path": "/api/v1/notifications/email/manage",
+      "registration_index": 0,
+      "handler": "(*internal/api/handlers.EmailAlertLinksHandler).HandleManage",
+      "handler_kind": "method",
+      "source_file": "internal/api/router.go",
+      "route_group": "/api/v1",
+      "middleware_chain": 1,
+      "auth_class": "public",
+      "auth_traits": [],
+      "profile_required": false,
+      "admin_required": false,
+      "conditional": true,
+      "conditions": [
+        "deps.Notifications != nil",
+        "deps.Notifications.EmailAlerts != nil"
+      ],
+      "delegates_to": null,
+      "request_kind": "form",
+      "response_media_kind": "html",
+      "streams": false,
+      "upgrades_websocket": false,
+      "capability_endpoint": "GET /api/v1/notifications/capability",
+      "consumers": [
+        "external_unknown"
+      ],
+      "consumer_call_sites": [],
+      "section": "notifications",
+      "release_flow": "notifications",
+      "tier": 2,
+      "disposition": "documented_exclusion",
+      "disposition_rule": "maintainer_decision",
+      "disposition_rationale": "Tokenized email link (open tracking redirect or manage-preferences page) served as standalone HTML to a mail client, not a native API operation. No ratified document names this exclusion, so it is a judgment call for maintainer review.",
+      "owner": null,
+      "review_state": "ratified",
+      "v2": {
+        "method": null,
+        "path": null,
+        "operation_id": null
+      },
+      "notes": "Added by the notifications rework; reached only from links inside alert emails."
+    },
+    {
+      "listener": "api",
+      "namespace": "api_v1",
+      "method": "POST",
+      "path": "/api/v1/notifications/email/manage",
+      "registration_index": 0,
+      "handler": "(*internal/api/handlers.EmailAlertLinksHandler).HandleManage",
+      "handler_kind": "method",
+      "source_file": "internal/api/router.go",
+      "route_group": "/api/v1",
+      "middleware_chain": 1,
+      "auth_class": "public",
+      "auth_traits": [],
+      "profile_required": false,
+      "admin_required": false,
+      "conditional": true,
+      "conditions": [
+        "deps.Notifications != nil",
+        "deps.Notifications.EmailAlerts != nil"
+      ],
+      "delegates_to": null,
+      "request_kind": "form",
+      "response_media_kind": "html",
+      "streams": false,
+      "upgrades_websocket": false,
+      "capability_endpoint": "GET /api/v1/notifications/capability",
+      "consumers": [
+        "external_unknown"
+      ],
+      "consumer_call_sites": [],
+      "section": "notifications",
+      "release_flow": "notifications",
+      "tier": 2,
+      "disposition": "documented_exclusion",
+      "disposition_rule": "maintainer_decision",
+      "disposition_rationale": "Tokenized email link (open tracking redirect or manage-preferences page) served as standalone HTML to a mail client, not a native API operation. No ratified document names this exclusion, so it is a judgment call for maintainer review.",
+      "owner": null,
+      "review_state": "ratified",
+      "v2": {
+        "method": null,
+        "path": null,
+        "operation_id": null
+      },
+      "notes": "Added by the notifications rework; reached only from links inside alert emails."
+    },
+    {
+      "listener": "api",
+      "namespace": "api_v1",
+      "method": "GET",
+      "path": "/api/v1/notifications/email/open",
+      "registration_index": 0,
+      "handler": "(*internal/api/handlers.EmailAlertLinksHandler).HandleOpen",
+      "handler_kind": "method",
+      "source_file": "internal/api/router.go",
+      "route_group": "/api/v1",
+      "middleware_chain": 1,
+      "auth_class": "public",
+      "auth_traits": [],
+      "profile_required": false,
+      "admin_required": false,
+      "conditional": true,
+      "conditions": [
+        "deps.Notifications != nil",
+        "deps.Notifications.EmailAlerts != nil"
+      ],
+      "delegates_to": null,
+      "request_kind": "none",
+      "response_media_kind": "html",
+      "streams": false,
+      "upgrades_websocket": false,
+      "capability_endpoint": "GET /api/v1/notifications/capability",
+      "consumers": [
+        "external_unknown"
+      ],
+      "consumer_call_sites": [],
+      "section": "notifications",
+      "release_flow": "notifications",
+      "tier": 2,
+      "disposition": "documented_exclusion",
+      "disposition_rule": "maintainer_decision",
+      "disposition_rationale": "Tokenized email link (open tracking redirect or manage-preferences page) served as standalone HTML to a mail client, not a native API operation. No ratified document names this exclusion, so it is a judgment call for maintainer review.",
+      "owner": null,
+      "review_state": "ratified",
+      "v2": {
+        "method": null,
+        "path": null,
+        "operation_id": null
+      },
+      "notes": "Added by the notifications rework; reached only from links inside alert emails."
     },
     {
       "listener": "api",
@@ -32237,247 +31654,6 @@
         "operation_id": "getNotificationUnreadCount"
       },
       "notes": "Inbox backend and web independently reviewed; per-profile commit ordering correction accepted. Apple signed-cursor sync and Android inbox/cutoff consumers independently reviewed. Captured authority, stable sync checkpoints, and frozen read-all boundaries retained. No live push or device end-to-end acceptance claimed."
-    },
-    {
-      "listener": "api",
-      "namespace": "api_v1",
-      "method": "GET",
-      "path": "/api/v1/notifications/web-push/subscriptions",
-      "registration_index": 0,
-      "handler": "(*internal/api/handlers.NotificationsHandler).HandleWebPushList",
-      "handler_kind": "method",
-      "source_file": "internal/api/router.go",
-      "route_group": "/api/v1/notifications/web-push",
-      "middleware_chain": 6,
-      "auth_class": "profile_scoped",
-      "auth_traits": [
-        "authenticated",
-        "demo_guarded",
-        "profile_required",
-        "rate_limited",
-        "viewer_access"
-      ],
-      "profile_required": true,
-      "admin_required": false,
-      "conditional": true,
-      "conditions": [
-        "authMiddleware != nil",
-        "deps.Notifications != nil"
-      ],
-      "delegates_to": null,
-      "request_kind": "none",
-      "response_media_kind": "json",
-      "streams": false,
-      "upgrades_websocket": false,
-      "capability_endpoint": "GET /api/v1/notifications/capability",
-      "consumers": [
-        "web"
-      ],
-      "consumer_call_sites": [
-        {
-          "repo": "web",
-          "file": "src/api/v2/notificationDestinations.ts",
-          "line": 39,
-          "types": [],
-          "match": "mechanical"
-        }
-      ],
-      "section": "notifications",
-      "release_flow": "notifications",
-      "tier": 1,
-      "disposition": "ported",
-      "disposition_rule": "default_ported",
-      "disposition_rationale": "No exclusion, removal, or ratified redesign applies; port to v2 in its section PR.",
-      "owner": null,
-      "review_state": "ratified",
-      "v2": {
-        "method": "GET",
-        "path": "/api/v2/notifications/web-push/subscriptions",
-        "operation_id": "listNotificationWebPushSubscriptions"
-      },
-      "notes": "Bounded signed creation/ID keyset reads and existing web consumers independently reviewed. Profile and actor scope retained; credential ciphertext and signing secrets excluded. No native destination-management callers. Mutable destination and registration migration remains separate."
-    },
-    {
-      "listener": "api",
-      "namespace": "api_v1",
-      "method": "POST",
-      "path": "/api/v1/notifications/web-push/subscriptions",
-      "registration_index": 0,
-      "handler": "(*internal/api/handlers.NotificationsHandler).HandleWebPushSubscribe",
-      "handler_kind": "method",
-      "source_file": "internal/api/router.go",
-      "route_group": "/api/v1/notifications/web-push",
-      "middleware_chain": 6,
-      "auth_class": "profile_scoped",
-      "auth_traits": [
-        "authenticated",
-        "demo_guarded",
-        "profile_required",
-        "rate_limited",
-        "viewer_access"
-      ],
-      "profile_required": true,
-      "admin_required": false,
-      "conditional": true,
-      "conditions": [
-        "authMiddleware != nil",
-        "deps.Notifications != nil"
-      ],
-      "delegates_to": null,
-      "request_kind": "json",
-      "response_media_kind": "json",
-      "streams": false,
-      "upgrades_websocket": false,
-      "capability_endpoint": "GET /api/v1/notifications/capability",
-      "consumers": [
-        "web"
-      ],
-      "consumer_call_sites": [
-        {
-          "repo": "web",
-          "file": "src/lib/webPush.ts",
-          "line": 106,
-          "types": [],
-          "match": "mechanical"
-        }
-      ],
-      "section": "notifications",
-      "release_flow": "notifications",
-      "tier": 1,
-      "disposition": "ported",
-      "disposition_rule": "default_ported",
-      "disposition_rationale": "No exclusion, removal, or ratified redesign applies; port to v2 in its section PR.",
-      "owner": null,
-      "review_state": "ratified",
-      "v2": {
-        "method": "POST",
-        "path": "/api/v2/notifications/web-push/subscriptions",
-        "operation_id": "subscribeNotificationWebPush"
-      },
-      "notes": "Conditionally registered: authMiddleware != nil; deps.Notifications != nil. v2 registers the operation unconditionally and reports capability state instead.",
-      "retry_safety": "non_retryable",
-      "retry_safety_note": "DEFECT: a stale retry after endpoint reassignment deletes the newer profile's pending deliveries and restores the old profile and keys. Endpoint uniqueness does not protect those effects. The notifications section must bind registration to a generation before retries are safe."
-    },
-    {
-      "listener": "api",
-      "namespace": "api_v1",
-      "method": "DELETE",
-      "path": "/api/v1/notifications/web-push/subscriptions/{id}",
-      "registration_index": 0,
-      "handler": "(*internal/api/handlers.NotificationsHandler).HandleWebPushDelete",
-      "handler_kind": "method",
-      "source_file": "internal/api/router.go",
-      "route_group": "/api/v1/notifications/web-push",
-      "middleware_chain": 6,
-      "auth_class": "profile_scoped",
-      "auth_traits": [
-        "authenticated",
-        "demo_guarded",
-        "profile_required",
-        "rate_limited",
-        "viewer_access"
-      ],
-      "profile_required": true,
-      "admin_required": false,
-      "conditional": true,
-      "conditions": [
-        "authMiddleware != nil",
-        "deps.Notifications != nil"
-      ],
-      "delegates_to": null,
-      "request_kind": "unknown",
-      "response_media_kind": "json",
-      "streams": false,
-      "upgrades_websocket": false,
-      "capability_endpoint": "GET /api/v1/notifications/capability",
-      "consumers": [
-        "web"
-      ],
-      "consumer_call_sites": [
-        {
-          "repo": "web",
-          "file": "src/api/v2/notificationDestinations.ts",
-          "line": 69,
-          "types": [],
-          "match": "mechanical"
-        }
-      ],
-      "section": "notifications",
-      "release_flow": "notifications",
-      "tier": 1,
-      "disposition": "ported",
-      "disposition_rule": "default_ported",
-      "disposition_rationale": "No exclusion, removal, or ratified redesign applies; port to v2 in its section PR.",
-      "owner": null,
-      "review_state": "ratified",
-      "v2": {
-        "method": "DELETE",
-        "path": "/api/v2/notifications/web-push/subscriptions/{id}",
-        "operation_id": "deleteNotificationWebPushSubscription"
-      },
-      "notes": "Inventory media kind is heuristic and unresolved for this row; confirm in the section PR. Conditionally registered: authMiddleware != nil; deps.Notifications != nil. v2 registers the operation unconditionally and reports capability state instead.",
-      "retry_safety": "natural_idempotent"
-    },
-    {
-      "listener": "api",
-      "namespace": "api_v1",
-      "method": "POST",
-      "path": "/api/v1/notifications/web-push/unsubscribe",
-      "registration_index": 0,
-      "handler": "(*internal/api/handlers.NotificationsHandler).HandleWebPushUnsubscribe",
-      "handler_kind": "method",
-      "source_file": "internal/api/router.go",
-      "route_group": "/api/v1/notifications/web-push",
-      "middleware_chain": 6,
-      "auth_class": "profile_scoped",
-      "auth_traits": [
-        "authenticated",
-        "demo_guarded",
-        "profile_required",
-        "rate_limited",
-        "viewer_access"
-      ],
-      "profile_required": true,
-      "admin_required": false,
-      "conditional": true,
-      "conditions": [
-        "authMiddleware != nil",
-        "deps.Notifications != nil"
-      ],
-      "delegates_to": null,
-      "request_kind": "json",
-      "response_media_kind": "json",
-      "streams": false,
-      "upgrades_websocket": false,
-      "capability_endpoint": "GET /api/v1/notifications/capability",
-      "consumers": [
-        "web"
-      ],
-      "consumer_call_sites": [
-        {
-          "repo": "web",
-          "file": "src/lib/webPush.ts",
-          "line": 127,
-          "types": [],
-          "match": "mechanical"
-        }
-      ],
-      "section": "notifications",
-      "release_flow": "notifications",
-      "tier": 1,
-      "disposition": "ported",
-      "disposition_rule": "default_ported",
-      "disposition_rationale": "No exclusion, removal, or ratified redesign applies; port to v2 in its section PR.",
-      "owner": null,
-      "review_state": "ratified",
-      "v2": {
-        "method": "POST",
-        "path": "/api/v2/notifications/web-push/unsubscribe",
-        "operation_id": "unsubscribeNotificationWebPush"
-      },
-      "notes": "Conditionally registered: authMiddleware != nil; deps.Notifications != nil. v2 registers the operation unconditionally and reports capability state instead.",
-      "retry_safety": "non_retryable",
-      "retry_safety_note": "Stale retry hazard: unsubscribe resolves the current user/endpoint registration, which can be re-created or reassigned to another profile after the first delete. The notifications section must bind removal to a subscription identity and generation before clients may retry."
     },
     {
       "listener": "api",

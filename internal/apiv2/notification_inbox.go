@@ -29,6 +29,8 @@ type NotificationInboxService interface {
 	ListNotifiedSeries(context.Context, int, string) ([]notifications.NotifiedSeries, error)
 	MuteNotificationSeries(context.Context, int, string, string) error
 	UnmuteNotificationSeries(context.Context, int, string, string) error
+	FollowNotificationSeries(context.Context, int, string, string) error
+	UnfollowNotificationSeries(context.Context, int, string, string) error
 }
 
 // NotificationItem preserves event-specific reason data while normalizing IDs
@@ -191,33 +193,25 @@ type NotificationCapabilitiesOutput struct {
 	Body         NotificationCapabilities
 }
 type NotificationPreferences struct {
-	ProfileID              ID    `json:"profile_id"`
-	Enabled                bool  `json:"enabled"`
-	NotifyFavorites        bool  `json:"notify_favorites"`
-	NotifyWatchlist        bool  `json:"notify_watchlist"`
-	NotifyContinueWatching bool  `json:"notify_continue_watching"`
-	NotifyNextUp           bool  `json:"notify_next_up"`
-	NotifyNewEpisodes      bool  `json:"notify_new_episodes" doc:"Every new episode the profile can open, followed or not."`
-	NotifyNewMovies        bool  `json:"notify_new_movies" doc:"Every new movie the profile can open."`
-	PushEnabled            bool  `json:"push_enabled" doc:"Instant phone push. Off keeps notifications in the inbox only; email follows its own setting."`
-	PushLibraryIDs         []int `json:"push_library_ids" doc:"Libraries push covers; empty covers every library."`
+	ProfileID         ID    `json:"profile_id"`
+	Enabled           bool  `json:"enabled"`
+	NotifyNewEpisodes bool  `json:"notify_new_episodes" doc:"Every new episode the profile can open, followed or not."`
+	NotifyNewMovies   bool  `json:"notify_new_movies" doc:"Every new movie the profile can open."`
+	PushEnabled       bool  `json:"push_enabled" doc:"Instant phone push. Off keeps notifications in the inbox only; email follows its own setting."`
+	PushLibraryIDs    []int `json:"push_library_ids" doc:"Libraries push covers; empty covers every library."`
 }
 
 func notificationPreferencesOf(p notifications.Preferences) NotificationPreferences {
-	return NotificationPreferences{ProfileID: ID(p.ProfileID), Enabled: p.Enabled, NotifyFavorites: p.NotifyFavorites, NotifyWatchlist: p.NotifyWatchlist, NotifyContinueWatching: p.NotifyContinueWatching, NotifyNextUp: p.NotifyNextUp, NotifyNewEpisodes: p.NotifyNewEpisodes, NotifyNewMovies: p.NotifyNewMovies, PushEnabled: p.PushEnabled, PushLibraryIDs: NonNil(p.PushLibraryIDs)}
+	return NotificationPreferences{ProfileID: ID(p.ProfileID), Enabled: p.Enabled, NotifyNewEpisodes: p.NotifyNewEpisodes, NotifyNewMovies: p.NotifyNewMovies, PushEnabled: p.PushEnabled, PushLibraryIDs: NonNil(p.PushLibraryIDs)}
 }
 
 type NotificationPreferencesOutput struct{ Body NotificationPreferences }
 type NotificationPreferencesPatch struct {
-	Enabled                *bool  `json:"enabled,omitempty"`
-	NotifyFavorites        *bool  `json:"notify_favorites,omitempty"`
-	NotifyWatchlist        *bool  `json:"notify_watchlist,omitempty"`
-	NotifyContinueWatching *bool  `json:"notify_continue_watching,omitempty"`
-	NotifyNextUp           *bool  `json:"notify_next_up,omitempty"`
-	NotifyNewEpisodes      *bool  `json:"notify_new_episodes,omitempty"`
-	NotifyNewMovies        *bool  `json:"notify_new_movies,omitempty"`
-	PushEnabled            *bool  `json:"push_enabled,omitempty"`
-	PushLibraryIDs         *[]int `json:"push_library_ids,omitempty"`
+	Enabled           *bool  `json:"enabled,omitempty"`
+	NotifyNewEpisodes *bool  `json:"notify_new_episodes,omitempty"`
+	NotifyNewMovies   *bool  `json:"notify_new_movies,omitempty"`
+	PushEnabled       *bool  `json:"push_enabled,omitempty"`
+	PushLibraryIDs    *[]int `json:"push_library_ids,omitempty"`
 }
 type NotificationPreferencesInput struct {
 	RawBody []byte
@@ -473,7 +467,7 @@ func registerNotificationInbox(reg *Registry) {
 			}
 		}
 		b := in.Body
-		prefs, err := svc.PatchNotificationPreferences(ctx, claimsFrom(ctx).UserID, profileFrom(ctx), notifications.PreferencePatch{Enabled: b.Enabled, NotifyFavorites: b.NotifyFavorites, NotifyWatchlist: b.NotifyWatchlist, NotifyContinueWatching: b.NotifyContinueWatching, NotifyNextUp: b.NotifyNextUp, NotifyNewEpisodes: b.NotifyNewEpisodes, NotifyNewMovies: b.NotifyNewMovies, PushEnabled: b.PushEnabled, PushLibraryIDs: b.PushLibraryIDs})
+		prefs, err := svc.PatchNotificationPreferences(ctx, claimsFrom(ctx).UserID, profileFrom(ctx), notifications.PreferencePatch{Enabled: b.Enabled, NotifyNewEpisodes: b.NotifyNewEpisodes, NotifyNewMovies: b.NotifyNewMovies, PushEnabled: b.PushEnabled, PushLibraryIDs: b.PushLibraryIDs})
 		if err != nil {
 			return nil, serviceProblem(err)
 		}
@@ -512,10 +506,8 @@ type NotificationCapabilities struct {
 	InApp       NotificationInAppCapability          `json:"in_app"`
 	ApplePush   NotificationPushCapability           `json:"apple_push"`
 	AndroidPush NotificationPushCapability           `json:"android_push"`
-	WebPush     NotificationWebPushCapability        `json:"web_push"`
 	Webhooks    NotificationWebhookCapability        `json:"webhooks"`
 	Email       NotificationAccountChannelCapability `json:"email"`
-	Discord     NotificationAccountChannelCapability `json:"discord"`
 	Series      NotificationSeriesCapability         `json:"series"`
 }
 
@@ -534,10 +526,6 @@ type NotificationPushCapability struct {
 	SupportedModes []string `json:"supported_modes"`
 	DisplayToken   bool     `json:"display_token,omitempty"`
 }
-type NotificationWebPushCapability struct {
-	Available bool   `json:"available"`
-	PublicKey string `json:"public_key,omitempty"`
-}
 type NotificationWebhookCapability struct {
 	Available      bool     `json:"available"`
 	MaxPerProfile  int      `json:"max_per_profile"`
@@ -555,12 +543,10 @@ func notificationCapabilitiesOf(v handlers.NotificationCapabilitiesView) Notific
 		InApp:       NotificationInAppCapability{Enabled: v.InApp.Enabled},
 		ApplePush:   NotificationPushCapability{Available: v.ApplePush.Available, Provider: v.ApplePush.Provider, SupportedModes: NonNil(v.ApplePush.SupportedModes), DisplayToken: v.ApplePush.DisplayToken},
 		AndroidPush: NotificationPushCapability{Available: v.AndroidPush.Available, Provider: v.AndroidPush.Provider, SupportedModes: NonNil(v.AndroidPush.SupportedModes), DisplayToken: v.AndroidPush.DisplayToken},
-		WebPush:     NotificationWebPushCapability{Available: v.WebPush.Available, PublicKey: v.WebPush.PublicKey},
 		Webhooks:    NotificationWebhookCapability{Available: v.Webhooks.Available, MaxPerProfile: v.Webhooks.MaxPerProfile, SupportedTypes: NonNil(v.Webhooks.SupportedTypes)},
 		Email:       NotificationAccountChannelCapability{Available: v.Email.Available, Modes: NonNil(v.Email.Modes), DigestHour: v.Email.DigestHour, DigestWeekday: v.Email.DigestWeekday},
-		Discord:     NotificationAccountChannelCapability{Available: v.Discord.Available, Modes: NonNil(v.Discord.Modes), DigestHour: v.Discord.DigestHour, DigestWeekday: v.Discord.DigestWeekday},
 	}
 }
 func (c NotificationCapabilities) capabilityState() string {
-	return enabledCapabilityState(c.InApp.Enabled || c.ApplePush.Available || c.AndroidPush.Available || c.WebPush.Available || c.Webhooks.Available || c.Email.Available || c.Discord.Available)
+	return enabledCapabilityState(c.InApp.Enabled || c.ApplePush.Available || c.AndroidPush.Available || c.Webhooks.Available || c.Email.Available)
 }

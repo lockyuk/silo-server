@@ -8,14 +8,8 @@ import (
 	"unicode/utf8"
 )
 
-// Discord embed accent colors per reason (decimal RGB), in reason precedence
-// order: favorite, watchlist, continue_watching, next_up.
-const (
-	discordColorFavorite         = 5814783
-	discordColorWatchlist        = 3066993
-	discordColorContinueWatching = 15844367
-	discordColorNextUp           = 15158332
-)
+// Discord embed accent color (decimal RGB).
+const discordColorFavorite = 5814783
 
 // Discord embed limits (enforced by the builder).
 const (
@@ -217,9 +211,9 @@ func buildDiscordDigestEntry(row DeliveryRow, test bool) discordDigestEntry {
 	color := discordEmbedColor(flags)
 	switch row.Type {
 	case DeliveryTypeRequestApproved:
-		color = serverChannelColorApproved
+		color = webhookColorApproved
 	case DeliveryTypeRequestDeclined:
-		color = serverChannelColorDeclined
+		color = webhookColorDeclined
 	}
 	embed := discordEmbed{
 		Title:  title,
@@ -283,19 +277,8 @@ func discordEmbedTitle(row DeliveryRow) string {
 	}
 }
 
-func discordEmbedColor(flags ReasonFlags) int {
-	switch {
-	case flags.Favorite:
-		return discordColorFavorite
-	case flags.Watchlist:
-		return discordColorWatchlist
-	case flags.ContinueWatching:
-		return discordColorContinueWatching
-	case flags.NextUp:
-		return discordColorNextUp
-	default:
-		return discordColorFavorite
-	}
+func discordEmbedColor(ReasonFlags) int {
+	return discordColorFavorite
 }
 
 // discordEmbedLen sums length over the embed text Discord's 6,000-character
@@ -459,4 +442,25 @@ func truncateWithEllipsis(value string, limit int) string {
 		cut--
 	}
 	return value[:cut] + ellipsis
+}
+
+// siloSenderName labels Discord webhook posts and embed footers.
+const siloSenderName = "Silo"
+
+// Embed colours for request lifecycle webhook posts.
+const (
+	webhookColorApproved = 3066993  // green — request approved
+	webhookColorDeclined = 15158332 // red — request declined
+)
+
+// mediaTypeLabel renders a request media type as a display label.
+func mediaTypeLabel(mediaType string) string {
+	switch mediaType {
+	case mediaTypeMovie:
+		return "Movie"
+	case mediaTypeSeries:
+		return "Series"
+	default:
+		return ""
+	}
 }

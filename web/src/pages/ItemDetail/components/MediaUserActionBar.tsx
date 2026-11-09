@@ -3,6 +3,11 @@ import type { ItemDetail } from "@/api/types";
 import { useToggleFavorite } from "@/hooks/queries/favorites";
 import { useDeleteRating, useSetRating } from "@/hooks/queries/ratings";
 import { useToggleWatchlist } from "@/hooks/queries/watchlist";
+import { useNotificationCapability } from "@/hooks/queries/notificationWebhooks";
+import {
+  useFollowedSeriesIds,
+  useSetNotificationSeriesFollowed,
+} from "@/hooks/queries/notifications";
 import { canMarkNotInterested, useToggleNotInterested } from "@/hooks/queries/notInterested";
 import ActionBar, { type ActionBarProps } from "./ActionBar";
 import { useDetailWatchedActions } from "./useDetailWatchedActions";
@@ -17,6 +22,8 @@ type UserActionProps =
   | "isFavorite"
   | "onToggleWatchlist"
   | "inWatchlist"
+  | "onToggleFollow"
+  | "isFollowing"
   | "onToggleNotInterested"
   | "notInterested"
   | "rating"
@@ -41,6 +48,17 @@ export default function MediaUserActionBar({ item, ...props }: MediaUserActionBa
   const { mutate: toggleNotInterested } = useToggleNotInterested(item.content_id);
   const { mutate: setRating } = useSetRating(item.content_id);
   const { mutate: deleteRating } = useDeleteRating(item.content_id);
+  // Following a series asks for a notification per new episode, so the choice
+  // only appears where the server delivers notifications.
+  const notificationCapability = useNotificationCapability();
+  const canFollow = item.type === "series" && (notificationCapability.data?.in_app?.enabled ?? false);
+  const followed = useFollowedSeriesIds(canFollow);
+  const { mutate: setFollowed } = useSetNotificationSeriesFollowed();
+  const isFollowing = followed.ids.has(item.content_id);
+  const handleToggleFollow = useCallback(
+    () => setFollowed({ seriesId: item.content_id, title: item.title, followed: !isFollowing }),
+    [isFollowing, item.content_id, item.title, setFollowed],
+  );
   const handleToggleFavorite = useCallback(
     () => toggleFavorite(isFavorite),
     [isFavorite, toggleFavorite],
@@ -73,6 +91,8 @@ export default function MediaUserActionBar({ item, ...props }: MediaUserActionBa
       isFavorite={isFavorite}
       onToggleWatchlist={handleToggleWatchlist}
       inWatchlist={inWatchlist}
+      onToggleFollow={canFollow && !followed.isLoading ? handleToggleFollow : undefined}
+      isFollowing={isFollowing}
       onToggleNotInterested={
         canMarkNotInterested(item.type) && item.user_state ? handleToggleNotInterested : undefined
       }

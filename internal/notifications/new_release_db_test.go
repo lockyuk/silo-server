@@ -78,7 +78,7 @@ func TestFanoutNewReleasePreferences(t *testing.T) {
 		WHERE release_event_id = 'event-1' AND profile_id = 'everything'`).Scan(&everythingReasons); err != nil {
 		t.Fatalf("read episode delivery: %v", err)
 	}
-	if err := json.Unmarshal(everythingReasons, &reasons); err != nil || !reasons.NewRelease || reasons.Favorite {
+	if err := json.Unmarshal(everythingReasons, &reasons); err != nil || !reasons.NewRelease || reasons.Followed {
 		t.Fatalf("episode reasons = %+v (%v), want new_release only", reasons, err)
 	}
 

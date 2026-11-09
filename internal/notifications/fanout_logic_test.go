@@ -26,8 +26,8 @@ func TestEpisodeKey(t *testing.T) {
 }
 
 func TestEvaluateRecipientReasons(t *testing.T) {
-	// These cases cover the follow-based reasons, so "every new episode"
-	// (on by default) is switched off.
+	// These cases cover the follow list, so "every new episode" (on by
+	// default) is switched off.
 	prefs := DefaultPreferences(1, "p1")
 	prefs.NotifyNewEpisodes = false
 	episodeKey := EpisodeKey(2, 5)
@@ -35,95 +35,53 @@ func TestEvaluateRecipientReasons(t *testing.T) {
 	t.Run("every new episode reaches back past the last notified", func(t *testing.T) {
 		everything := DefaultPreferences(1, "p1")
 		last := EpisodeKey(6, 13)
-		flags, ok := EvaluateRecipient(SeriesInterest{ContinueWatching: true, LastNotifiedEpisodeKey: &last}, everything, EpisodeKey(4, 2))
+		flags, ok := EvaluateRecipient(FanoutCandidate{Followed: true, LastNotifiedEpisodeKey: &last}, everything, EpisodeKey(4, 2))
 		if !ok || !flags.NewRelease {
 			t.Fatalf("an older newly added episode was suppressed: %+v ok=%v", flags, ok)
 		}
 	})
 
-	t.Run("favorite matches", func(t *testing.T) {
-		flags, ok := EvaluateRecipient(SeriesInterest{Favorite: true}, prefs, episodeKey)
-		if !ok || !flags.Favorite || flags.Watchlist || flags.NextUp {
+	t.Run("a follower matches", func(t *testing.T) {
+		flags, ok := EvaluateRecipient(FanoutCandidate{Followed: true}, prefs, episodeKey)
+		if !ok || !flags.Followed || flags.NewRelease {
 			t.Fatalf("unexpected flags %+v ok=%v", flags, ok)
 		}
 	})
 
-	t.Run("multiple reasons merge", func(t *testing.T) {
-		interest := SeriesInterest{
-			Favorite:               true,
-			ContinueWatching:       true,
-			NextUpCandidate:        true,
-			NextExpectedEpisodeKey: intPtr(episodeKey),
-		}
-		flags, ok := EvaluateRecipient(interest, prefs, episodeKey)
-		if !ok || !flags.Favorite || !flags.ContinueWatching || !flags.NextUp {
+	t.Run("everything new matches without a follow", func(t *testing.T) {
+		everything := DefaultPreferences(1, "p1")
+		flags, ok := EvaluateRecipient(FanoutCandidate{}, everything, episodeKey)
+		if !ok || flags.Followed || !flags.NewRelease {
 			t.Fatalf("unexpected flags %+v ok=%v", flags, ok)
 		}
 	})
 
-	t.Run("next up gated by cursor", func(t *testing.T) {
-		interest := SeriesInterest{
-			NextUpCandidate:        true,
-			NextExpectedEpisodeKey: intPtr(episodeKey + 1),
-		}
-		if _, ok := EvaluateRecipient(interest, prefs, episodeKey); ok {
-			t.Fatal("episode below next_expected must not notify via next_up")
-		}
-		interest.NextExpectedEpisodeKey = intPtr(episodeKey)
-		if _, ok := EvaluateRecipient(interest, prefs, episodeKey); !ok {
-			t.Fatal("episode at next_expected must notify via next_up")
+	t.Run("neither follow nor everything new does not match", func(t *testing.T) {
+		if _, ok := EvaluateRecipient(FanoutCandidate{}, prefs, episodeKey); ok {
+			t.Fatal("a profile that neither follows nor asked for everything must not be notified")
 		}
 	})
 
 	t.Run("last notified suppresses repeats and older keys", func(t *testing.T) {
-		interest := SeriesInterest{Favorite: true, LastNotifiedEpisodeKey: intPtr(episodeKey)}
-		if _, ok := EvaluateRecipient(interest, prefs, episodeKey); ok {
+		candidate := FanoutCandidate{Followed: true, LastNotifiedEpisodeKey: intPtr(episodeKey)}
+		if _, ok := EvaluateRecipient(candidate, prefs, episodeKey); ok {
 			t.Fatal("already-notified key must suppress")
 		}
-		if _, ok := EvaluateRecipient(interest, prefs, episodeKey-1); ok {
+		if _, ok := EvaluateRecipient(candidate, prefs, episodeKey-1); ok {
 			t.Fatal("older key must suppress")
 		}
-		if _, ok := EvaluateRecipient(interest, prefs, episodeKey+1); !ok {
+		if _, ok := EvaluateRecipient(candidate, prefs, episodeKey+1); !ok {
 			t.Fatal("newer key must notify")
 		}
 	})
 
-	t.Run("preferences are a hard gate", func(t *testing.T) {
-		disabled := DefaultPreferences(1, "p1")
-		disabled.NotifyNewEpisodes = false
-		disabled.NotifyFavorites = false
-		if _, ok := EvaluateRecipient(SeriesInterest{Favorite: true}, disabled, episodeKey); ok {
-			t.Fatal("disabled reason must not produce a delivery")
-		}
+	t.Run("the master toggle suppresses everything", func(t *testing.T) {
 		killSwitch := DefaultPreferences(1, "p1")
 		killSwitch.Enabled = false
-		interest := SeriesInterest{Favorite: true, Watchlist: true, ContinueWatching: true}
-		if _, ok := EvaluateRecipient(interest, killSwitch, episodeKey); ok {
+		if _, ok := EvaluateRecipient(FanoutCandidate{Followed: true}, killSwitch, episodeKey); ok {
 			t.Fatal("master toggle must suppress everything")
 		}
 	})
-}
-
-// ActiveReasons is the event-independent half of EvaluateRecipient: the
-// reasons preferences let notify, with Next Up needing a known episode.
-func TestActiveReasons(t *testing.T) {
-	key := EpisodeKey(1, 4)
-	all := SeriesInterest{Favorite: true, Watchlist: true, ContinueWatching: true, NextUpCandidate: true, NextExpectedEpisodeKey: &key}
-	prefs := DefaultPreferences(1, "p")
-	if got := ActiveReasons(all, prefs); got != (ReasonFlags{Favorite: true, Watchlist: true, ContinueWatching: true, NextUp: true}) {
-		t.Errorf("all enabled = %+v", got)
-	}
-	prefs.NotifyWatchlist = false
-	if got := ActiveReasons(all, prefs); got.Watchlist || !got.Favorite {
-		t.Errorf("watchlist off = %+v", got)
-	}
-	if got := ActiveReasons(SeriesInterest{NextUpCandidate: true}, prefs); got.Any() {
-		t.Errorf("next up without an expected episode = %+v", got)
-	}
-	prefs.Enabled = false
-	if got := ActiveReasons(all, prefs); got.Any() {
-		t.Errorf("disabled = %+v", got)
-	}
 }
 
 func TestApplyBurstCap(t *testing.T) {

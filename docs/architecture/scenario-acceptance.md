@@ -464,23 +464,6 @@ cleanup and process exit must pass alongside `SILO_SCENARIO_REPORT`. These cases
 remain outside the frozen 598-scenario oracle. No notification sends, provider,
 creation/update/delete, concurrent snapshot or native/browser claim follows.
 
-### NEW administrator notification-channel read scenarios
-
-`make test-scenario-new-server-channels` runs four **new** scenarios through the
-real router, notification service and PostgreSQL repository. Nine GET requests
-and eight full-table snapshots check tied creation-time traversal, disabled rows,
-page-size cursor binding, acting-administrator enforcement and the empty collection.
-Failure counters/statuses, notification selections and UTC timestamps retain their
-stored meaning. Responses omit ciphertext, signing data and internal delivery
-watermarks; reads leave the complete stored rows unchanged.
-
-The fixture refuses existing channels before setup and deletes only its three
-synthetic IDs before each household reseed. No notification workers start. Opaque
-secret sentinels test omission, not encryption or delivery. Required DSN, cleanup
-and process exit must pass alongside `SILO_SCENARIO_REPORT`. These cases remain
-outside the frozen 598-scenario oracle. No sends, mutation, concurrent snapshot,
-native or browser behavior is claimed.
-
 ### NEW administrator device-read scenarios
 
 `make test-scenario-new-admin-device-reads` runs five **new** scenarios through

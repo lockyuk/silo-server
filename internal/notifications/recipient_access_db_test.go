@@ -120,7 +120,7 @@ func TestFanoutSkipsRecipientsWithoutAccess(t *testing.T) {
 		}
 		var advanced bool
 		if err := pool.QueryRow(ctx, `
-			SELECT last_notified_episode_key IS NOT DISTINCT FROM $2 FROM profile_series_interest WHERE profile_id = $1`,
+			SELECT last_notified_episode_key IS NOT DISTINCT FROM $2 FROM profile_series_follows WHERE profile_id = $1`,
 			profile, episodeKey).Scan(&advanced); err != nil {
 			t.Fatalf("read cursor for %q: %v", profile, err)
 		}
@@ -152,7 +152,7 @@ func TestFanoutSkipsSecondLibraryCopy(t *testing.T) {
 			c := seedAccessCatalog(t, pool)
 			if _, err := pool.Exec(ctx, `
 				CREATE TABLE release_events (LIKE public.release_events INCLUDING ALL);
-				CREATE TABLE profile_series_interest (LIKE public.profile_series_interest INCLUDING ALL);
+				CREATE TABLE profile_series_follows (LIKE public.profile_series_follows INCLUDING ALL);
 				CREATE TABLE profile_series_notification_mutes (LIKE public.profile_series_notification_mutes INCLUDING ALL);
 				CREATE TABLE episode_availability (LIKE public.episode_availability INCLUDING ALL);
 				CREATE TABLE episode_libraries (LIKE public.episode_libraries INCLUDING ALL);
@@ -164,10 +164,10 @@ func TestFanoutSkipsSecondLibraryCopy(t *testing.T) {
 				t.Fatalf("seed libraries: %v", err)
 			}
 			if _, err := pool.Exec(ctx, `
-				INSERT INTO profile_series_interest (user_id, profile_id, library_id, series_id, favorite)
-				VALUES (1, 'both', $1, $3, true), (1, 'both', $2, $3, true), (1, 'copy-only', $2, $3, true)`,
-				c.library, c.otherLibrary, c.series); err != nil {
-				t.Fatalf("seed interest: %v", err)
+				INSERT INTO profile_series_follows (user_id, profile_id, series_id)
+				VALUES (1, 'both', $1), (1, 'copy-only', $1)`,
+				c.series); err != nil {
+				t.Fatalf("seed follows: %v", err)
 			}
 			releases := NewReleaseRepository(pool)
 			worker := newAccessFanoutWorker(pool, scopeByProfile{
@@ -398,15 +398,15 @@ func seedFanoutEvent(t *testing.T, pool *pgxpool.Pool, c accessCatalog, profiles
 	ctx := t.Context()
 	if _, err := pool.Exec(ctx, `
 		CREATE TABLE release_events (LIKE public.release_events INCLUDING ALL);
-		CREATE TABLE profile_series_interest (LIKE public.profile_series_interest INCLUDING ALL);
+		CREATE TABLE profile_series_follows (LIKE public.profile_series_follows INCLUDING ALL);
 		CREATE TABLE profile_series_notification_mutes (LIKE public.profile_series_notification_mutes INCLUDING ALL)`); err != nil {
 		t.Fatalf("create fanout tables: %v", err)
 	}
 	for _, profile := range profiles {
 		if _, err := pool.Exec(ctx, `
-			INSERT INTO profile_series_interest (user_id, profile_id, library_id, series_id, favorite)
-			VALUES (1, $1, $2, $3, true)`, profile, c.library, c.series); err != nil {
-			t.Fatalf("seed interest: %v", err)
+			INSERT INTO profile_series_follows (user_id, profile_id, series_id)
+			VALUES (1, $1, $2)`, profile, c.series); err != nil {
+			t.Fatalf("seed follows: %v", err)
 		}
 	}
 	episodeKey := EpisodeKey(1, 2)
@@ -421,7 +421,7 @@ func seedFanoutEvent(t *testing.T, pool *pgxpool.Pool, c accessCatalog, profiles
 }
 
 func newAccessFanoutWorker(pool *pgxpool.Pool, scopes ScopeResolver) *FanoutWorker {
-	worker := NewFanoutWorker(pool, NewReleaseRepository(pool), NewInterestRepository(pool),
+	worker := NewFanoutWorker(pool, NewReleaseRepository(pool), NewFollowRepository(pool),
 		NewDeliveryRepository(pool), NewPreferencesRepository(pool),
 		NewSettings(mapSettingReader{SettingFanoutSettleSeconds: "0"}), scopes, NewMultiDispatcher())
 	worker.logger = slog.New(slog.DiscardHandler)

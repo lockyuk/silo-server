@@ -14,18 +14,9 @@ import (
 	"github.com/Silo-Server/silo-server/internal/userstore"
 )
 
-// WrapUserStoreProvider decorates the shared user-store provider so every
-// favorites, watchlist, watch-progress, and watch-history mutation —
-// regardless of which path performed it (REST handlers, jellycompat, history
-// imports, playback stop, watch sync) — queues an interest recompute. Hooking
-// the lowest shared layer keeps the seven-plus mutation call sites hook-free
-// and drift-free.
-//
-// Progress writes queue only on state *transitions* (a row appearing, the
-// in-progress flag flipping, completion crossing, rows being cleared) and on
-// the first write of a new watch session: progress sync ticks fire
-// continuously during playback on a busy server, and recomputing interest on
-// every tick would be a pointless hot write path.
+// WrapUserStoreProvider decorates the shared user-store provider so deleting a
+// profile also purges its notification state. Every other store capability is
+// forwarded unchanged.
 func WrapUserStoreProvider(inner userstore.UserStoreProvider, system *System) userstore.UserStoreProvider {
 	if inner == nil || system == nil {
 		return inner
@@ -79,7 +70,7 @@ func (p *interestTrackingProvider) ForUser(ctx context.Context, userID int) (use
 	if err != nil || store == nil {
 		return store, err
 	}
-	tracked := &interestTrackingStore{UserStore: store, userID: userID, system: p.system, updater: p.system.Interest}
+	tracked := &interestTrackingStore{UserStore: store, userID: userID, system: p.system}
 	// Preserve the interface upgrades callers probe for. These are conditional
 	// on the backing store: advertising a capability it does not have would
 	// send callers down a fast path that can only fail.
@@ -139,9 +130,8 @@ func (p *interestTrackingProvider) Close() error {
 
 type interestTrackingStore struct {
 	userstore.UserStore
-	userID  int
-	system  *System
-	updater *InterestUpdater
+	userID int
+	system *System
 }
 
 // Onboarding progress is forwarded explicitly: the decorator intercepts no
@@ -291,16 +281,6 @@ func (s *interestTrackingStore) WithPreferenceSettingsSnapshot(ctx context.Conte
 	return reader.WithPreferenceSettingsSnapshot(ctx, fn)
 }
 
-// progressState is the transition-relevant projection of a progress row.
-type progressState struct {
-	exists     bool
-	inProgress bool
-	completed  bool
-	// updatedAt is the stored row's stamp, zero when unknown. It is not part
-	// of the transition comparison.
-	updatedAt time.Time
-}
-
 // progressSessionGap separates watch sessions. A progress write that lands
 // more than this long after the stored row's stamp, by its own stamp or by
 // the clock, queues a recompute even without a state transition: resuming
@@ -308,153 +288,6 @@ type progressState struct {
 // or a Continue Watching dismissal held for the old progress stamp), while
 // playback ticks within one session stay free.
 const progressSessionGap = 10 * time.Minute
-
-func (s *interestTrackingStore) currentProgressState(ctx context.Context, profileID, mediaItemID string) progressState {
-	entry, err := s.GetProgress(ctx, profileID, mediaItemID)
-	if err != nil || entry == nil {
-		return progressState{}
-	}
-	updatedAt, _ := time.Parse(time.RFC3339, entry.UpdatedAt)
-	return progressState{
-		exists:     true,
-		inProgress: !entry.Completed && entry.PositionSeconds > 0,
-		completed:  entry.Completed,
-		updatedAt:  updatedAt,
-	}
-}
-
-func progressStateFromValues(position, duration float64, thresholds userstore.ProgressThresholds) progressState {
-	completed := duration > 0 && position/duration > userstore.WatchedFraction(thresholds.WatchedPct)
-	return progressState{
-		exists:     true,
-		inProgress: !completed && position > 0,
-		completed:  completed,
-	}
-}
-
-// queueOnTransition queues a recompute when a write changes the row's state,
-// when it starts a new watch session (see progressSessionGap), or when it is
-// the row's first write since the profile last changed Home on this node: a
-// resume right after a removal lifts it at once, before the removal's
-// deferred recompute runs. writtenAt is the stamp the write records.
-func (s *interestTrackingStore) queueOnTransition(profileID, mediaItemID string, before, after progressState, writtenAt time.Time) {
-	resumed := before.exists && !before.updatedAt.IsZero() &&
-		(writtenAt.Sub(before.updatedAt) > progressSessionGap || time.Since(before.updatedAt) > progressSessionGap ||
-			s.updater.changedHomeSince(s.userID, profileID, before.updatedAt))
-	before.updatedAt, after.updatedAt = time.Time{}, time.Time{}
-	if before != after || resumed {
-		s.updater.QueueItemMutation(s.userID, profileID, mediaItemID)
-	}
-}
-
-// --- Favorites & watchlist: a mutation that changed a row queues.
-
-func (s *interestTrackingStore) AddFavorite(ctx context.Context, profileID, mediaItemID string) (bool, error) {
-	changed, err := s.UserStore.AddFavorite(ctx, profileID, mediaItemID)
-	if err == nil && changed {
-		s.updater.QueueItemMutation(s.userID, profileID, mediaItemID)
-	}
-	return changed, err
-}
-
-func (s *interestTrackingStore) AddFavoriteAt(ctx context.Context, profileID, mediaItemID string, addedAt time.Time) (bool, error) {
-	inserted, err := s.UserStore.AddFavoriteAt(ctx, profileID, mediaItemID, addedAt)
-	if err == nil && inserted {
-		s.updater.QueueItemMutation(s.userID, profileID, mediaItemID)
-	}
-	return inserted, err
-}
-
-func (s *interestTrackingStore) RemoveFavorite(ctx context.Context, profileID, mediaItemID string) (bool, error) {
-	changed, err := s.UserStore.RemoveFavorite(ctx, profileID, mediaItemID)
-	if err == nil && changed {
-		s.updater.QueueItemMutation(s.userID, profileID, mediaItemID)
-	}
-	return changed, err
-}
-
-func (s *interestTrackingStore) AddToWatchlist(ctx context.Context, profileID, mediaItemID string) (bool, error) {
-	changed, err := s.UserStore.AddToWatchlist(ctx, profileID, mediaItemID)
-	if err == nil && changed {
-		s.updater.QueueItemMutation(s.userID, profileID, mediaItemID)
-	}
-	return changed, err
-}
-
-// AddToWatchlistAt is the add that keeps an earlier added_at: watch-provider
-// and Plex imports, and promotion of a watchlisted title that has since
-// reached the library, all write through it.
-func (s *interestTrackingStore) AddToWatchlistAt(ctx context.Context, profileID, mediaItemID string, addedAt time.Time) (bool, error) {
-	inserted, err := s.UserStore.AddToWatchlistAt(ctx, profileID, mediaItemID, addedAt)
-	if err == nil && inserted {
-		s.updater.QueueItemMutation(s.userID, profileID, mediaItemID)
-	}
-	return inserted, err
-}
-
-func (s *interestTrackingStore) RemoveFromWatchlist(ctx context.Context, profileID, mediaItemID string) (bool, error) {
-	changed, err := s.UserStore.RemoveFromWatchlist(ctx, profileID, mediaItemID)
-	if err == nil && changed {
-		s.updater.QueueItemMutation(s.userID, profileID, mediaItemID)
-	}
-	return changed, err
-}
-
-// --- Home dismissals: a card removed from Continue Watching or Next Up stops
-// that surface's interest reason (see homeHides).
-
-func (s *interestTrackingStore) UpsertHomeDismissal(ctx context.Context, dismissal userstore.HomeItemDismissal) error {
-	err := s.UserStore.UpsertHomeDismissal(ctx, dismissal)
-	if err == nil {
-		s.updater.queueHomeChange(s.userID, dismissal.ProfileID, dismissal.MediaItemID)
-	}
-	return err
-}
-
-func (s *interestTrackingStore) DeleteHomeDismissal(ctx context.Context, profileID, surface, mediaItemID string) error {
-	err := s.UserStore.DeleteHomeDismissal(ctx, profileID, surface, mediaItemID)
-	if err == nil {
-		s.updater.queueHomeChange(s.userID, profileID, mediaItemID)
-	}
-	return err
-}
-
-// --- Progress: queue on transitions and new watch sessions only.
-
-func (s *interestTrackingStore) UpdateProgress(ctx context.Context, profileID, mediaItemID string, position, duration float64, thresholds userstore.ProgressThresholds) error {
-	before := s.currentProgressState(ctx, profileID, mediaItemID)
-	err := s.UserStore.UpdateProgress(ctx, profileID, mediaItemID, position, duration, thresholds)
-	if err == nil {
-		s.queueOnTransition(profileID, mediaItemID, before, progressStateFromValues(position, duration, thresholds), time.Now())
-	}
-	return err
-}
-
-func (s *interestTrackingStore) SetProgress(ctx context.Context, profileID, mediaItemID string, position, duration float64, thresholds userstore.ProgressThresholds) error {
-	before := s.currentProgressState(ctx, profileID, mediaItemID)
-	err := s.UserStore.SetProgress(ctx, profileID, mediaItemID, position, duration, thresholds)
-	if err == nil {
-		s.queueOnTransition(profileID, mediaItemID, before, progressStateFromValues(position, duration, thresholds), time.Now())
-	}
-	return err
-}
-
-// timestampedAfter is the state a timestamped write leaves. Both stores keep
-// completion sticky on these writes, so a rewatch tick with completed=false
-// leaves a completed row completed.
-func timestampedAfter(before progressState, position float64, completed bool) progressState {
-	completed = completed || before.completed
-	return progressState{exists: true, inProgress: !completed && position > 0, completed: completed}
-}
-
-func (s *interestTrackingStore) SetProgressAt(ctx context.Context, profileID, mediaItemID string, position, duration float64, completed bool, updatedAt time.Time) error {
-	before := s.currentProgressState(ctx, profileID, mediaItemID)
-	err := s.UserStore.SetProgressAt(ctx, profileID, mediaItemID, position, duration, completed, updatedAt)
-	if err == nil {
-		s.queueOnTransition(profileID, mediaItemID, before, timestampedAfter(before, position, completed), updatedAt)
-	}
-	return err
-}
 
 func (s *interestTrackingStore) ListJellycompatProgressDates(ctx context.Context, profileID string, ids []string) (map[string]string, error) {
 	reader, ok := s.UserStore.(interface {
@@ -466,155 +299,8 @@ func (s *interestTrackingStore) ListJellycompatProgressDates(ctx context.Context
 	return reader.ListJellycompatProgressDates(ctx, profileID, ids)
 }
 
-func (s *interestTrackingStore) SetProgressIfNewer(ctx context.Context, profileID, mediaItemID string, position, duration float64, completed bool, updatedAt time.Time) (bool, error) {
-	before := s.currentProgressState(ctx, profileID, mediaItemID)
-	applied, err := s.UserStore.SetProgressIfNewer(ctx, profileID, mediaItemID, position, duration, completed, updatedAt)
-	if err == nil && applied {
-		s.queueOnTransition(profileID, mediaItemID, before, timestampedAfter(before, position, completed), updatedAt)
-	}
-	return applied, err
-}
-
-func (s *interestTrackingStore) MarkWatched(ctx context.Context, profileID, mediaItemID string, duration float64) error {
-	before := s.currentProgressState(ctx, profileID, mediaItemID)
-	err := s.UserStore.MarkWatched(ctx, profileID, mediaItemID, duration)
-	if err == nil {
-		s.queueOnTransition(profileID, mediaItemID, before, progressState{exists: true, completed: true}, time.Now())
-	}
-	return err
-}
-
-func (s *interestTrackingStore) MarkProgressBatch(ctx context.Context, profileID string, mediaItemIDs []string, updatedAt time.Time) error {
-	beforeStates, _ := s.ListProgressByMediaItems(ctx, profileID, mediaItemIDs)
-	err := s.UserStore.MarkProgressBatch(ctx, profileID, mediaItemIDs, updatedAt)
-	if err == nil {
-		for _, mediaItemID := range mediaItemIDs {
-			if entry, ok := beforeStates[mediaItemID]; ok && entry.Completed {
-				continue // already completed: no transition
-			}
-			s.updater.QueueItemMutation(s.userID, profileID, mediaItemID)
-		}
-	}
-	return err
-}
-
-func (s *interestTrackingStore) ClearProgress(ctx context.Context, profileID, mediaItemID string) error {
-	err := s.UserStore.ClearProgress(ctx, profileID, mediaItemID)
-	if err == nil {
-		s.updater.QueueItemMutation(s.userID, profileID, mediaItemID)
-	}
-	return err
-}
-
-func (s *interestTrackingStore) ClearResumePosition(ctx context.Context, profileID, mediaItemID string, at time.Time) (bool, error) {
-	cleared, err := s.UserStore.ClearResumePosition(ctx, profileID, mediaItemID, at)
-	if err == nil && cleared {
-		s.updater.QueueItemMutation(s.userID, profileID, mediaItemID)
-	}
-	return cleared, err
-}
-
-func (s *interestTrackingStore) ClearProgressBatch(ctx context.Context, profileID string, mediaItemIDs []string, updatedAt time.Time) error {
-	err := s.UserStore.ClearProgressBatch(ctx, profileID, mediaItemIDs, updatedAt)
-	if err == nil {
-		for _, mediaItemID := range mediaItemIDs {
-			s.updater.QueueItemMutation(s.userID, profileID, mediaItemID)
-		}
-	}
-	return err
-}
-
-// --- Watch history: history imports and watch-provider syncs may record a
-// completed watch without any progress write, so the progress hooks alone
-// would never see them. AddHistory (the live playback path) is deliberately
-// not hooked: playback always writes progress alongside it, and those writes
-// already queue on transitions.
-
-func (s *interestTrackingStore) AddHistoryIfMissing(ctx context.Context, entry userstore.WatchHistoryEntry) (bool, error) {
-	created, err := s.UserStore.AddHistoryIfMissing(ctx, entry)
-	if err == nil && created && entry.Completed {
-		s.updater.QueueItemMutation(s.userID, entry.ProfileID, entry.MediaItemID)
-	}
-	return created, err
-}
-
-func (s *interestTrackingStore) RemoveHistoryItems(ctx context.Context, profileID string, mediaItemIDs []string, removedAt time.Time) error {
-	err := s.UserStore.RemoveHistoryItems(ctx, profileID, mediaItemIDs, removedAt)
-	if err == nil {
-		for _, mediaItemID := range mediaItemIDs {
-			s.updater.QueueItemMutation(s.userID, profileID, mediaItemID)
-		}
-	}
-	return err
-}
-
-func (s *interestTrackingStore) ClearWatchedState(ctx context.Context, profileID string, mediaItemIDs []string, clearedAt time.Time) error {
-	err := s.UserStore.ClearWatchedState(ctx, profileID, mediaItemIDs, clearedAt)
-	if err == nil {
-		for _, mediaItemID := range mediaItemIDs {
-			s.updater.QueueItemMutation(s.userID, profileID, mediaItemID)
-		}
-	}
-	return err
-}
-
 // --- Optional store capabilities.
 //
-// This decorator embeds the userstore.UserStore *interface*, which promotes
-// only the methods declared on that interface. Any optional capability the
-// backing store implements is invisible through the wrapper unless it is
-// forwarded explicitly here — and because callers reach these via type
-// assertion with a working fallback, a missing forward is silent: no error, no
-// test failure, just a much slower path in production. Marking a series
-// watched regressed exactly this way. When adding a new optional capability to
-// userstore, forward it here and extend the compile-time assertions below.
-
-// MarkWatchedBatch forwards the transactional batch mark-watched write, whose
-// whole purpose is that a large series commits as one unit. Falling through to
-// the per-target loop would restore the partial-write window it removes.
-func (s *interestTrackingStore) MarkWatchedBatch(
-	ctx context.Context,
-	profileID string,
-	targets []userstore.MarkWatchedTarget,
-	entries []userstore.WatchHistoryEntry,
-) ([]userstore.WatchHistoryEntry, error) {
-	writer, ok := s.UserStore.(userstore.WatchedBatchWriter)
-	if !ok {
-		// The helper runs against the inner store, so this decorator's own
-		// MarkWatched hook never fires; queue here or the recompute is lost.
-		// A mid-loop error still leaves earlier targets written, so queue
-		// regardless of err — a redundant queue only costs one recompute,
-		// while a missing one leaves profile_series_interest stale until some
-		// unrelated mutation or the rebuild task touches the series.
-		written, err := userstore.MarkWatchedBatch(ctx, s.UserStore, profileID, targets, entries)
-		s.queueTargetMutations(profileID, targets)
-		return written, err
-	}
-	written, err := writer.MarkWatchedBatch(ctx, profileID, targets, entries)
-	// The batch write is one transaction: on error nothing landed, so there is
-	// nothing to recompute.
-	if err == nil {
-		s.queueItemMutations(profileID, written)
-	}
-	return written, err
-}
-
-// queueItemMutations records one interest mutation per written entry, matching
-// what the per-target path queues through MarkWatched.
-func (s *interestTrackingStore) queueItemMutations(profileID string, entries []userstore.WatchHistoryEntry) {
-	for _, entry := range entries {
-		s.updater.QueueItemMutation(s.userID, profileID, entry.MediaItemID)
-	}
-}
-
-// queueTargetMutations queues by requested target rather than written entry,
-// for the non-transactional path where a partial write may have occurred.
-func (s *interestTrackingStore) queueTargetMutations(profileID string, targets []userstore.MarkWatchedTarget) {
-	for _, target := range targets {
-		s.updater.QueueItemMutation(s.userID, profileID, target.MediaItemID)
-	}
-}
-
 // AddVisibleHistory forwards the watermark-aware history insert. The generic
 // fallback needs two round-trips (timestamp lookup, then insert) to do the
 // same job.
@@ -634,16 +320,6 @@ func (s *interestTrackingStore) VisibleHistoryTimestamps(ctx context.Context, pr
 		return userstore.VisibleHistoryTimestamps(ctx, s.UserStore, profileID, mediaItemIDs, at)
 	}
 	return visibility.VisibleHistoryTimestamps(ctx, profileID, mediaItemIDs, at)
-}
-
-func (s *interestTrackingStore) DeleteHistoryBySource(ctx context.Context, profileID string, mediaItemIDs []string, source userstore.WatchHistorySource) error {
-	err := s.UserStore.DeleteHistoryBySource(ctx, profileID, mediaItemIDs, source)
-	if err == nil {
-		for _, mediaItemID := range mediaItemIDs {
-			s.updater.QueueItemMutation(s.userID, profileID, mediaItemID)
-		}
-	}
-	return err
 }
 
 // DeleteProfile purges notification state alongside the profile itself;
@@ -730,31 +406,36 @@ func (s *interestTrackingStore) ListAdminSettingValuesPage(ctx context.Context, 
 	return pager.ListAdminSettingValuesPage(ctx, after, limit)
 }
 
-// ApplyJellycompatProgress preserves the atomic leaf edit through the production
-// decorator and queues derived state only after its transaction commits.
+// MarkWatchedBatch forwards the transactional batch mark-watched write, whose
+// whole purpose is that a large series commits as one unit. Falling through to
+// the per-target loop would restore the partial-write window it removes.
+func (s *interestTrackingStore) MarkWatchedBatch(
+	ctx context.Context,
+	profileID string,
+	targets []userstore.MarkWatchedTarget,
+	entries []userstore.WatchHistoryEntry,
+) ([]userstore.WatchHistoryEntry, error) {
+	writer, ok := s.UserStore.(userstore.WatchedBatchWriter)
+	if !ok {
+		return userstore.MarkWatchedBatch(ctx, s.UserStore, profileID, targets, entries)
+	}
+	return writer.MarkWatchedBatch(ctx, profileID, targets, entries)
+}
+
+// ApplyJellycompatProgress forwards the atomic leaf edit.
 func (s *interestTrackingStore) ApplyJellycompatProgress(ctx context.Context, profileID string, edit userstore.JellycompatProgressEdit) error {
 	writer, ok := s.UserStore.(userstore.JellycompatProgressEditor)
 	if !ok {
 		return fmt.Errorf("atomic user progress updates unavailable")
 	}
-	if err := writer.ApplyJellycompatProgress(ctx, profileID, edit); err != nil {
-		return err
-	}
-	s.updater.QueueItemMutation(s.userID, profileID, edit.MediaItemID)
-	return nil
+	return writer.ApplyJellycompatProgress(ctx, profileID, edit)
 }
 
-// ApplyJellycompatParent queues parent and child interest changes only after
-// their shared transaction commits.
+// ApplyJellycompatParent forwards the atomic parent edit.
 func (s *interestTrackingStore) ApplyJellycompatParent(ctx context.Context, profileID string, edit userstore.JellycompatParentEdit) error {
 	writer, ok := s.UserStore.(userstore.JellycompatParentEditor)
 	if !ok {
 		return fmt.Errorf("atomic parent user data updates unavailable")
 	}
-	if err := writer.ApplyJellycompatParent(ctx, profileID, edit); err != nil {
-		return err
-	}
-	s.queueTargetMutations(profileID, edit.Targets)
-	s.updater.QueueItemMutation(s.userID, profileID, edit.MediaItemID)
-	return nil
+	return writer.ApplyJellycompatParent(ctx, profileID, edit)
 }

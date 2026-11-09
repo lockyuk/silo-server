@@ -2,10 +2,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { setAccessToken, setRefreshToken, setProfileId, setProfileToken } from "@/api/client";
 import { captureNotificationAuthority } from "./notifications";
 import {
-  listNotificationWebPushSubscriptions,
-  deleteNotificationWebPushSubscription,
   listNotificationWebhooks,
-  listNotificationServerChannels,
+  deleteNotificationWebhook,
 } from "./notificationDestinations";
 const json = (body: unknown) =>
   new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } });
@@ -20,11 +18,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 it("drains each destination list using the signed cursor and captured profile", async () => {
-  for (const list of [
-    listNotificationWebPushSubscriptions,
-    listNotificationWebhooks,
-    listNotificationServerChannels,
-  ]) {
+  for (const list of [listNotificationWebhooks]) {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(
@@ -59,8 +53,8 @@ it("refuses stale deletion dispatch and stale receipt after PIN replacement", as
     return new Response(null, { status: 204 });
   });
   vi.stubGlobal("fetch", fetch);
-  await expect(deleteNotificationWebPushSubscription("row", context)).rejects.toThrow();
+  await expect(deleteNotificationWebhook({ id: "row", etag: "tag" }, context)).rejects.toThrow();
   expect(fetch).toHaveBeenCalledTimes(1);
-  await expect(deleteNotificationWebPushSubscription("row", context)).rejects.toThrow();
+  await expect(deleteNotificationWebhook({ id: "row", etag: "tag" }, context)).rejects.toThrow();
   expect(fetch).toHaveBeenCalledTimes(1);
 });

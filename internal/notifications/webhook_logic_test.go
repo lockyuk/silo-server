@@ -15,6 +15,11 @@ import (
 	"unicode/utf8"
 )
 
+const (
+	testSeriesPosterCDN  = "https://image.tmdb.org/t/p/w500/severance.jpg"
+	testSeriesPosterPath = "tmdb://poster/severance.jpg"
+)
+
 // mapSettingReader is a SettingReader fake; missing keys read as unset.
 type mapSettingReader map[string]string
 
@@ -143,7 +148,7 @@ func webhookTestRow() DeliveryRow {
 			SeriesID:    &seriesID,
 			EpisodeID:   &episodeID,
 			Type:        DeliveryTypeEpisodeAvailable,
-			ReasonFlags: []byte(`{"favorite":true,"continue_watching":true}`),
+			ReasonFlags: []byte(`{"followed":true}`),
 			CreatedAt:   time.Date(2026, 4, 28, 12, 34, 56, 0, time.UTC),
 		},
 		SeriesTitle:     "Severance",
@@ -184,7 +189,7 @@ func TestBuildDiscordWebhookPayload(t *testing.T) {
 		t.Fatalf("unexpected title %q", embed.Title)
 	}
 	if embed.Color != discordColorFavorite {
-		t.Fatalf("favorite reason must pick the favorite color, got %d", embed.Color)
+		t.Fatalf("followed reason must pick the accent color, got %d", embed.Color)
 	}
 	if embed.Author == nil || embed.Author.Name != "New episode on Silo" {
 		t.Fatalf("unexpected author %+v", embed.Author)
@@ -203,7 +208,7 @@ func TestBuildDiscordWebhookPayload(t *testing.T) {
 		t.Fatalf("unexpected description %q", embed.Description)
 	}
 	if len(embed.Fields) != 3 ||
-		embed.Fields[0].Name != "Reason" || embed.Fields[0].Value != "Favorited & Continue Watching" ||
+		embed.Fields[0].Name != "Reason" || embed.Fields[0].Value != "Following" ||
 		embed.Fields[1].Value != "★ 8.7 IMDb" ||
 		embed.Fields[2].Value != "Drama, Sci-Fi & Fantasy" {
 		t.Fatalf("unexpected fields: %+v", embed.Fields)
@@ -483,7 +488,7 @@ func digestEpisodeRows(n int, overview func(i int) string) []DeliveryRow {
 		row.SeriesTitle = fmt.Sprintf("%02d %s", i, strings.Repeat("Series Title ", 6))
 		row.EpisodeTitle = strings.Repeat("Episode Title ", 6)
 		row.SeasonNumber, row.EpisodeNumber = &season, &episode
-		row.ReasonFlags = []byte(`{"favorite":true,"watchlist":true,"continue_watching":true,"next_up":true}`)
+		row.ReasonFlags = []byte(`{"followed":true}`)
 		row.SeriesOverview, row.EpisodeOverview = overview(i), overview(i)
 		row.Genres = digestGenres
 		row.TVDBID = "123456789"
@@ -509,18 +514,6 @@ func digestDeclinedRows(n int, title, reason string) []DeliveryRow {
 func digestLongDeclines(n int) []DeliveryRow {
 	return digestDeclinedRows(n, strings.Repeat("Requested Title ", 14),
 		strings.Repeat("Not available in any region we can source. ", 20))
-}
-
-func digestContentGroups(n int) []ContentGroup {
-	groups := make([]ContentGroup, 0, n)
-	for i := 0; i < n; i++ {
-		groups = append(groups, ContentGroup{Kind: EventKindMovie, ItemID: fmt.Sprintf("movie-%d", i), Meta: ContentMeta{
-			Title: fmt.Sprintf("%02d %s", i, strings.Repeat("Movie Title ", 18)), Year: 2026,
-			Type: "movie", Overview: digestOverview, Genres: digestGenres, ContentRating: "PG-13", RatingIMDB: 7.9,
-			IMDBID: "tt11280740", TMDBID: "95396", TVDBID: "123456789",
-		}})
-	}
-	return groups
 }
 
 type discordDigestCase struct {
@@ -561,17 +554,6 @@ func TestDiscordDigestMessageLimit(t *testing.T) {
 		}},
 		{name: "dm over the embed cap", items: 14, links: 1, build: func() ([]byte, error) {
 			return BuildDiscordDMPayload(digestLongDeclines(14))
-		}},
-		{name: "server channel", items: 10, wantEmbeds: 10, links: 3, build: func() ([]byte, error) {
-			return BuildServerChannelDiscordContent(digestContentGroups(10), false)
-		}},
-		// A request overview is client-supplied up to the ~1 MiB body cap;
-		// clipping it must not cost time proportional to its length.
-		{name: "request with a 1 MiB overview", items: 1, wantEmbeds: 1, links: 1, build: func() ([]byte, error) {
-			return BuildServerChannelRequestDiscord(ServerChannelEventRequestApproved, RequestEventInfo{
-				TMDBID: 42, MediaType: "movie", Title: "00 Requested Title",
-				Overview: strings.Repeat(digestOverview, 2000),
-			})
 		}},
 	}
 	for _, tc := range cases {
@@ -720,15 +702,18 @@ func TestRetryableHTTPStatus(t *testing.T) {
 }
 
 func TestWebhookMatchesReasons(t *testing.T) {
-	hook := Webhook{NotifyFavorites: true, NotifyWatchlist: false, NotifyContinueWatching: false, NotifyNextUp: false}
-	if !hook.MatchesReasons(ReasonFlags{Favorite: true, Watchlist: true}) {
-		t.Fatal("favorite reason must match a favorites-enabled webhook")
+	hook := Webhook{NotifyNewReleases: true}
+	if !hook.MatchesReasons(ReasonFlags{Followed: true}) {
+		t.Fatal("a followed release must match a new-releases webhook")
 	}
-	if hook.MatchesReasons(ReasonFlags{Watchlist: true}) {
-		t.Fatal("watchlist-only delivery must not match a favorites-only webhook")
+	if !hook.MatchesReasons(ReasonFlags{NewRelease: true}) {
+		t.Fatal("an everything-new release must match a new-releases webhook")
 	}
 	if hook.MatchesReasons(ReasonFlags{}) {
 		t.Fatal("no reasons must never match")
+	}
+	if (Webhook{}).MatchesReasons(ReasonFlags{Followed: true}) {
+		t.Fatal("a webhook with new releases off must not match")
 	}
 }
 

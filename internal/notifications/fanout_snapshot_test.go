@@ -4,17 +4,17 @@ import "testing"
 
 func TestCapturedFanoutCandidatesPreserveCursorAdvances(t *testing.T) {
 	captured := map[profileKey]struct{}{{1, "captured"}: {}}
-	refreshed := []SeriesInterest{
-		{UserID: 1, ProfileID: "new-profile", Favorite: true},
-		{UserID: 1, ProfileID: "captured", Favorite: true, LastNotifiedEpisodeKey: new(20)},
+	refreshed := []FanoutCandidate{
+		{UserID: 1, ProfileID: "new-profile", Followed: true},
+		{UserID: 1, ProfileID: "captured", Followed: true, LastNotifiedEpisodeKey: new(20)},
 		// The same profile ID on another account was not captured.
-		{UserID: 2, ProfileID: "captured", Favorite: true},
+		{UserID: 2, ProfileID: "captured", Followed: true},
 	}
 	candidates := capturedFanoutCandidates(refreshed, captured)
 	if len(candidates) != 1 || candidates[0].UserID != 1 || candidates[0].ProfileID != "captured" {
 		t.Fatalf("refreshed recipients escaped captured profile set: %+v", candidates)
 	}
-	prefs := Preferences{Enabled: true, NotifyFavorites: true}
+	prefs := Preferences{Enabled: true}
 	for _, episode := range []int{19, 20} {
 		if _, eligible := EvaluateRecipient(candidates[0], prefs, episode); eligible {
 			t.Fatalf("episode %d ignored earlier event's refreshed cursor", episode)

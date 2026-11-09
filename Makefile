@@ -585,11 +585,6 @@ test-scenario-new-viewer-libraries:
 test-scenario-new-webhook-destinations:
 	SILO_SCENARIO_REQUIRED=1 go test -count=1 -run '^TestRequiredNewWebhookDestinations$$' ./internal/scenariocatalog/executor
 
-# NEW administrator notification channel reads; outside frozen oracle.
-.PHONY: test-scenario-new-server-channels
-test-scenario-new-server-channels:
-	SILO_SCENARIO_REQUIRED=1 go test -count=1 -run '^TestRequiredNewServerChannels$$' ./internal/scenariocatalog/executor
-
 # NEW administrator device metadata reads; outside frozen oracle.
 .PHONY: test-scenario-new-admin-device-reads
 test-scenario-new-admin-device-reads:

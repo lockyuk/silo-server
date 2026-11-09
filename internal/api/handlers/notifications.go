@@ -288,11 +288,7 @@ func (h *NotificationsHandler) HandleGetPreferences(w http.ResponseWriter, r *ht
 }
 
 type updatePreferencesRequest struct {
-	Enabled                *bool `json:"enabled"`
-	NotifyFavorites        *bool `json:"notify_favorites"`
-	NotifyWatchlist        *bool `json:"notify_watchlist"`
-	NotifyContinueWatching *bool `json:"notify_continue_watching"`
-	NotifyNextUp           *bool `json:"notify_next_up"`
+	Enabled *bool `json:"enabled"`
 }
 
 // HandleUpdatePreferences handles PUT /notifications/preferences. Fields are
@@ -307,7 +303,7 @@ func (h *NotificationsHandler) HandleUpdatePreferences(w http.ResponseWriter, r 
 		return
 	}
 
-	prefs, err := h.system.Preferences.Patch(r.Context(), userID, profileID, notifications.PreferencePatch{Enabled: req.Enabled, NotifyFavorites: req.NotifyFavorites, NotifyWatchlist: req.NotifyWatchlist, NotifyContinueWatching: req.NotifyContinueWatching, NotifyNextUp: req.NotifyNextUp})
+	prefs, err := h.system.Preferences.Patch(r.Context(), userID, profileID, notifications.PreferencePatch{Enabled: req.Enabled})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to save notification preferences")
 		return
@@ -319,14 +315,11 @@ type capabilityResponse struct {
 	InApp       capabilityInApp          `json:"in_app"`
 	ApplePush   capabilityPush           `json:"apple_push"`
 	AndroidPush capabilityPush           `json:"android_push"`
-	WebPush     capabilityWebPush        `json:"web_push"`
 	Webhooks    capabilityWebhooks       `json:"webhooks"`
 	Email       capabilityAccountChannel `json:"email"`
-	Discord     capabilityAccountChannel `json:"discord"`
 }
 
-// capabilityAccountChannel describes an account-level digest channel (email,
-// Discord DMs).
+// capabilityAccountChannel describes an account-level digest channel (email).
 type capabilityAccountChannel struct {
 	Available bool `json:"available"`
 	// Modes lists the cadences users may pick (per-episode is an admin
@@ -349,11 +342,6 @@ func (c capabilityAccountChannel) withoutWeeklyDigest() capabilityAccountChannel
 	}
 	c.Modes = modes
 	return c
-}
-
-type capabilityWebPush struct {
-	Available bool   `json:"available"`
-	PublicKey string `json:"public_key,omitempty"`
 }
 
 type capabilityInApp struct {
@@ -381,7 +369,6 @@ type capabilityWebhooks struct {
 func (h *NotificationsHandler) HandleCapability(w http.ResponseWriter, r *http.Request) {
 	view := h.NotificationCapabilities(r.Context())
 	view.Email = view.Email.withoutWeeklyDigest()
-	view.Discord = view.Discord.withoutWeeklyDigest()
 	writeJSON(w, http.StatusOK, view)
 }
 
@@ -397,32 +384,10 @@ func (h *NotificationsHandler) NotificationCapabilities(ctx context.Context) Not
 			SupportedTypes: []string{"discord", "generic"},
 		}
 	}
-	webPush := capabilityWebPush{}
-	if h.system.WebPush != nil && h.system.Settings.WebPushEnabled(ctx) {
-		if publicKey, err := h.system.WebPush.PublicKey(ctx); err == nil && publicKey != "" {
-			webPush = capabilityWebPush{Available: true, PublicKey: publicKey}
-		}
-	}
 	email := h.emailCapability(ctx)
-	discordCap := capabilityAccountChannel{Modes: []string{}}
-	if h.system.DiscordAvailable(ctx) {
-		modes := []string{notifications.ChannelModeDailyDigest}
-		if h.system.Settings.DiscordAllowPerEpisode(ctx) {
-			modes = append(modes,
-				notifications.ChannelModePerEpisode,
-				notifications.ChannelModePerEpisodeAndDigest)
-		}
-		modes = append(modes, notifications.ChannelModeWeeklyDigest)
-		discordCap = capabilityAccountChannel{
-			Available:     true,
-			Modes:         modes,
-			DigestHour:    h.system.Settings.DiscordDigestHour(ctx),
-			DigestWeekday: int(h.system.Settings.DiscordDigestWeekday(ctx)),
-		}
-	}
 	applePush := capabilityPush{Available: false, Provider: "off", SupportedModes: []string{"in_app_only"}}
 	androidPush := capabilityPush{Available: false, Provider: "off", SupportedModes: []string{"in_app_only"}}
-	// Like web push above, availability requires both the wiring (cipher/store)
+	// Availability requires both the wiring (cipher/store)
 	// and the admin delivery toggle: Available must mean "setup will actually
 	// deliver", not "the server could store a token".
 	if h.system.PushDevices != nil && h.system.PushDevices.Available() {
@@ -446,10 +411,8 @@ func (h *NotificationsHandler) NotificationCapabilities(ctx context.Context) Not
 		InApp:       capabilityInApp{Enabled: h.system.Settings.UIEnabled(ctx)},
 		ApplePush:   applePush,
 		AndroidPush: androidPush,
-		WebPush:     webPush,
 		Webhooks:    webhooks,
 		Email:       email,
-		Discord:     discordCap,
 	}
 }
 

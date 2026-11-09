@@ -30,7 +30,7 @@ const (
 type FanoutWorker struct {
 	pool        *pgxpool.Pool
 	releases    *ReleaseRepository
-	interests   *InterestRepository
+	follows     *FollowRepository
 	deliveries  *DeliveryRepository
 	preferences *PreferencesRepository
 	settings    *Settings
@@ -45,7 +45,6 @@ type FanoutWorker struct {
 	// subscription.
 	webhooks    *WebhookRepository
 	rateLimiter *profileRateLimiter
-	webPush     *WebPushRepository
 	pushDevices *PushDeviceRepository
 }
 
@@ -54,12 +53,6 @@ type FanoutWorker struct {
 func (w *FanoutWorker) SetWebhookOutbox(webhooks *WebhookRepository, limiter *profileRateLimiter) {
 	w.webhooks = webhooks
 	w.rateLimiter = limiter
-}
-
-// SetWebPushOutbox wires durable web push attempt enqueueing into the fanout
-// transaction.
-func (w *FanoutWorker) SetWebPushOutbox(webPush *WebPushRepository) {
-	w.webPush = webPush
 }
 
 // SetPushOutbox wires durable Apple push attempt enqueueing into the fanout
@@ -73,7 +66,7 @@ func (w *FanoutWorker) SetPushOutbox(pushDevices *PushDeviceRepository) {
 func NewFanoutWorker(
 	pool *pgxpool.Pool,
 	releases *ReleaseRepository,
-	interests *InterestRepository,
+	follows *FollowRepository,
 	deliveries *DeliveryRepository,
 	preferences *PreferencesRepository,
 	settings *Settings,
@@ -83,7 +76,7 @@ func NewFanoutWorker(
 	return &FanoutWorker{
 		pool:        pool,
 		releases:    releases,
-		interests:   interests,
+		follows:     follows,
 		deliveries:  deliveries,
 		preferences: preferences,
 		settings:    settings,
@@ -245,7 +238,7 @@ func (w *FanoutWorker) processBatch(ctx context.Context) (processed int, runErr 
 	candidatesByEvent := make(map[string]map[profileKey]struct{}, len(fanout))
 	profiles := make(map[string]struct{})
 	for _, event := range fanout {
-		candidates, err := w.interests.ListActiveBySeries(ctx, tx, event.LibraryID, event.SeriesID)
+		candidates, err := w.follows.ListCandidates(ctx, tx, event.SeriesID)
 		if err != nil {
 			return 0, err
 		}
@@ -349,7 +342,7 @@ func (w *FanoutWorker) processBatch(ctx context.Context) (processed int, runErr 
 // deliveries. Returns dispatch payloads for the rows actually inserted and
 // the candidate recipient count.
 func (w *FanoutWorker) fanOutEvent(ctx context.Context, tx pgx.Tx, event ReleaseEvent, capturedProfiles map[profileKey]struct{}) ([]DeliveryRow, int, error) {
-	candidates, err := w.interests.ListActiveBySeries(ctx, tx, event.LibraryID, event.SeriesID)
+	candidates, err := w.follows.ListCandidates(ctx, tx, event.SeriesID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -409,9 +402,6 @@ func (w *FanoutWorker) fanOutEvent(ctx context.Context, tx pgx.Tx, event Release
 	if err := w.enqueueWebhookOutbox(ctx, tx, inserted, pending); err != nil {
 		return nil, 0, err
 	}
-	if err := w.enqueueWebPushOutbox(ctx, tx, inserted); err != nil {
-		return nil, 0, err
-	}
 	if err := w.enqueuePushOutbox(ctx, tx, inserted); err != nil {
 		return nil, 0, err
 	}
@@ -420,7 +410,7 @@ func (w *FanoutWorker) fanOutEvent(ctx context.Context, tx pgx.Tx, event Release
 	for _, row := range inserted {
 		notifiedProfiles = append(notifiedProfiles, row.key())
 	}
-	if err := w.interests.GuardedSetLastNotified(ctx, tx, event.LibraryID, event.SeriesID, event.EpisodeKey, notifiedProfiles); err != nil {
+	if err := w.follows.GuardedSetLastNotified(ctx, tx, event.SeriesID, event.EpisodeKey, notifiedProfiles); err != nil {
 		return nil, 0, err
 	}
 
@@ -513,31 +503,6 @@ func pushLibraryAllowed(libraries []int, library *int) bool {
 	return len(libraries) == 0 || library == nil || slices.Contains(libraries, *library)
 }
 
-// enqueueWebPushOutbox inserts `pending` web push attempt rows for each newly
-// inserted delivery, inside the fanout transaction. Subscriptions have no
-// per-reason filters: profile preferences already gated delivery creation,
-// and push volume is bounded by the per-series burst cap.
-func (w *FanoutWorker) enqueueWebPushOutbox(ctx context.Context, tx pgx.Tx, inserted []InsertedDelivery) error {
-	if w.webPush == nil || len(inserted) == 0 || !w.settings.WebPushEnabled(ctx) {
-		return nil
-	}
-	subsByProfile, err := w.webPush.ListEnabledByProfiles(ctx, tx, insertedProfileKeys(inserted))
-	if err != nil {
-		return err
-	}
-	attempts := make([]DeliveryAttempt, 0, len(inserted))
-	for _, row := range inserted {
-		for _, sub := range subsByProfile[row.key()] {
-			attempts = append(attempts, DeliveryAttempt{
-				ID:                     ulid.Make().String(),
-				NotificationDeliveryID: row.ID,
-				TargetID:               sub.ID,
-			})
-		}
-	}
-	return w.webPush.EnqueueAttempts(ctx, tx, attempts)
-}
-
 // enqueueWebhookOutbox inserts `pending` webhook attempt rows for each newly
 // inserted delivery, inside the fanout transaction. Two filters apply:
 // per-webhook reason flags, and the per-profile delivery rate limit
@@ -620,7 +585,7 @@ func eventIDs(events []ReleaseEvent) []string {
 	return ids
 }
 
-func candidateProfiles(candidates []SeriesInterest) []profileKey {
+func candidateProfiles(candidates []FanoutCandidate) []profileKey {
 	keys := make([]profileKey, 0, len(candidates))
 	for _, candidate := range candidates {
 		keys = append(keys, candidate.key())
@@ -632,8 +597,8 @@ func candidateProfiles(candidates []SeriesInterest) []profileKey {
 // whose inbox locks were not included in the transaction-wide acquisition,
 // which also leaves out every candidate that was ineligible or failed the
 // access check when the batch was captured.
-func capturedFanoutCandidates(candidates []SeriesInterest, captured map[profileKey]struct{}) []SeriesInterest {
-	return slices.DeleteFunc(candidates, func(candidate SeriesInterest) bool {
+func capturedFanoutCandidates(candidates []FanoutCandidate, captured map[profileKey]struct{}) []FanoutCandidate {
+	return slices.DeleteFunc(candidates, func(candidate FanoutCandidate) bool {
 		_, ok := captured[candidate.key()]
 		return !ok
 	})

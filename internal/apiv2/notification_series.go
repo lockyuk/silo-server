@@ -13,16 +13,17 @@ import (
 	"github.com/Silo-Server/silo-server/internal/notifications"
 )
 
-// The notified-series list: every series whose new episodes the acting
-// profile has a reason to hear about, the index episode fanout reads, so a
-// profile can see why a series notifies it or why it does not. A profile can
-// mute one series, which stops its new-episode notifications whatever its
-// reasons, until it unmutes.
+// The notified-series list: every series the acting profile follows or
+// muted. A profile hears about new episodes of the series it follows, and of
+// everything else too when it asked for everything new, except the series it
+// muted.
 
 const (
-	opListNotificationSeries   = "listNotificationSeries"
-	opMuteNotificationSeries   = "muteNotificationSeries"
-	opUnmuteNotificationSeries = "unmuteNotificationSeries"
+	opListNotificationSeries     = "listNotificationSeries"
+	opMuteNotificationSeries     = "muteNotificationSeries"
+	opUnmuteNotificationSeries   = "unmuteNotificationSeries"
+	opFollowNotificationSeries   = "followNotificationSeries"
+	opUnfollowNotificationSeries = "unfollowNotificationSeries"
 )
 
 // The listNotificationSeries sort fields besides the default title.
@@ -34,8 +35,8 @@ const (
 
 // The listNotificationSeries status filters besides the default "all".
 const (
-	notificationSeriesActive   = "active"
-	notificationSeriesInactive = "inactive"
+	notificationSeriesFollowed = "followed"
+	notificationSeriesMuted    = "muted"
 )
 
 // NotificationSeriesInput is the listNotificationSeries query.
@@ -43,39 +44,16 @@ type NotificationSeriesInput struct {
 	ArtworkQuery
 	LimitParam
 	Cursor string `query:"cursor" doc:"Opaque cursor from page.next_cursor" example:"eyJ0IjoiYmVhciJ9"`
-	Status string `query:"status" default:"all" enum:"all,active,inactive" doc:"active keeps the series that notify; inactive keeps the ones that do not, because the profile's preferences silence every reason or the profile muted the series"`
-	Reason string `query:"reason" enum:"favorite,watchlist,continue_watching,next_up" doc:"Keeps the series with this reason, whether or not the preferences let it notify; absent keeps every reason"`
+	Status string `query:"status" default:"all" enum:"all,followed,muted" doc:"followed keeps the series the profile follows; muted keeps the ones it muted"`
 	Q      string `query:"q" maxLength:"200" doc:"Keeps the series whose title or sort title contains this text, case-insensitively" example:"bear"`
 	Sort   string `query:"sort" default:"title" enum:"title,-title,year,-year,added_at,-added_at,latest_episode_added,-latest_episode_added" doc:"One field, descending with a leading '-'. added_at is when the series joined the catalog; latest_episode_added when it last gained an episode. A series without a year or an episode sorts last either way; ties order by title."`
 }
 
-// NotificationSeriesReasons are the reasons a profile can hear about a
-// series, keyed like an episode notification's reason_flags.
-type NotificationSeriesReasons struct {
-	Favorite         bool `json:"favorite" doc:"The series is one of the profile's favorites"`
-	Watchlist        bool `json:"watchlist" doc:"The series is on the profile's watchlist"`
-	ContinueWatching bool `json:"continue_watching" doc:"The profile is partway through the series"`
-	NextUp           bool `json:"next_up" doc:"The profile finished an episode and waits for the next"`
-}
-
-func notificationSeriesReasonsOf(f notifications.ReasonFlags) NotificationSeriesReasons {
-	return NotificationSeriesReasons{Favorite: f.Favorite, Watchlist: f.Watchlist, ContinueWatching: f.ContinueWatching, NextUp: f.NextUp}
-}
-
-// NotificationEpisodeRef names an episode by its season and episode number.
-type NotificationEpisodeRef struct {
-	SeasonNumber  int `json:"season_number" example:"2"`
-	EpisodeNumber int `json:"episode_number" example:"9"`
-}
-
 // NotificationSeries is one series on the list.
 type NotificationSeries struct {
-	Item          CatalogItem               `json:"item" doc:"The series as a catalog card"`
-	Reasons       NotificationSeriesReasons `json:"reasons" doc:"The profile's relationships to the series"`
-	ActiveReasons NotificationSeriesReasons `json:"active_reasons" doc:"The reasons the profile's notification preferences let notify; all false when they silence the series"`
-	Notifies      bool                      `json:"notifies" doc:"True when at least one reason is active and the profile has not muted the series"`
-	Muted         bool                      `json:"muted" doc:"The profile muted the series: it gets no new-episode notification for it, whatever the reasons, until it unmutes. active_reasons still names the reasons that would notify once unmuted."`
-	NextUpAfter   *NotificationEpisodeRef   `json:"next_up_after,omitempty" doc:"With an active Next Up reason, the last episode the profile finished: on that reason alone, only a new episode after it notifies"`
+	Item     CatalogItem `json:"item" doc:"The series as a catalog card"`
+	Followed bool        `json:"followed" doc:"The profile follows the series: its new episodes notify the profile"`
+	Muted    bool        `json:"muted" doc:"The profile muted the series: the profile hears nothing about it, followed or not, until it unmutes"`
 }
 
 // NotificationSeriesCollection is the listNotificationSeries envelope.
@@ -147,15 +125,13 @@ func orderMissingLast(aMissing, bMissing bool, c int, desc bool) int {
 	return c
 }
 
-// notificationSeriesMatch reports whether a series passes the query's
-// status, reason, and search filters.
+// notificationSeriesMatch reports whether a series passes the query's status
+// and search filters.
 func notificationSeriesMatch(in *NotificationSeriesInput, query string) func(notifications.NotifiedSeries) bool {
 	return func(s notifications.NotifiedSeries) bool {
 		switch {
-		case in.Status == notificationSeriesActive && !s.Notifies(),
-			in.Status == notificationSeriesInactive && s.Notifies():
-			return false
-		case in.Reason != "" && !s.Reasons.Has(in.Reason):
+		case in.Status == notificationSeriesFollowed && !s.Followed,
+			in.Status == notificationSeriesMuted && !s.Muted:
 			return false
 		}
 		return query == "" || strings.Contains(strings.ToLower(s.Title), query) || strings.Contains(s.SortKey, query)
@@ -165,8 +141,8 @@ func notificationSeriesMatch(in *NotificationSeriesInput, query string) func(not
 func registerNotificationSeries(reg *Registry) {
 	cursors := NewCursors(reg.deps.CursorSecret)
 	op := notificationOperation(http.MethodGet, "/series", opListNotificationSeries)
-	op.Summary = "List the series whose new episodes can notify the acting profile."
-	op.Description = "Every series the profile favorited, put on its watchlist, is partway through, or waits on a next episode of, and every series it muted, filtered and sorted as asked (by title by default). Each carries its reasons, which of them the profile's notification preferences let notify, and whether the profile muted it. Series the viewer may not see are omitted."
+	op.Summary = "List the series the acting profile follows or muted."
+	op.Description = "Every series the profile follows and every series it muted, filtered and sorted as asked (by title by default). Each says whether the profile follows it and whether it muted it. Series the viewer may not see are omitted."
 	Register(reg, op, func(ctx context.Context, in *NotificationSeriesInput) (*NotificationSeriesOutput, error) {
 		return reg.listNotificationSeries(ctx, cursors, in)
 	})
@@ -174,17 +150,29 @@ func registerNotificationSeries(reg *Registry) {
 	mute := notificationOperation(http.MethodPut, "/series/{series_id}/mute", opMuteNotificationSeries)
 	mute.DefaultStatus = http.StatusNoContent
 	mute.Summary = "Mute new-episode notifications for one series."
-	mute.Description = "The acting profile gets no new-episode notification for the series on any channel, whatever its reasons, until it unmutes. Favorites, the watchlist, Home, and watch history are unchanged, and other profiles are unaffected. Muting a series already muted succeeds and changes nothing. A series the viewer may not see, or an item that is not a series, is 404."
+	mute.Description = "The acting profile gets no new-episode notification for the series on any channel, whether or not it follows it or asked for everything new, until it unmutes. Following a series lifts its mute. Other profiles are unaffected. Muting a series already muted succeeds and changes nothing. A series the viewer may not see, or an item that is not a series, is 404."
 	Register(reg, mute, reg.muteNotificationSeries)
 
 	unmute := notificationOperation(http.MethodDelete, "/series/{series_id}/mute", opUnmuteNotificationSeries)
 	unmute.DefaultStatus = http.StatusNoContent
 	unmute.Summary = "Unmute new-episode notifications for one series."
-	unmute.Description = "The series notifies the acting profile again for its active reasons. The mute applies when notification delivery evaluates a new episode, normally within a minute of it arriving: an episode evaluated while the series was muted is not announced later, and one still waiting to be evaluated when the profile unmutes is announced. Unmuting a series that is not muted succeeds and changes nothing. No access check runs, so a profile can lift a mute on a series it can no longer see."
+	unmute.Description = "The series notifies the acting profile again. The mute applies when notification delivery evaluates a new episode, normally within a minute of it arriving: an episode evaluated while the series was muted is not announced later, and one still waiting to be evaluated when the profile unmutes is announced. Unmuting a series that is not muted succeeds and changes nothing. No access check runs, so a profile can lift a mute on a series it can no longer see."
 	Register(reg, unmute, reg.unmuteNotificationSeries)
+
+	follow := notificationOperation(http.MethodPut, "/series/{series_id}/follow", opFollowNotificationSeries)
+	follow.DefaultStatus = http.StatusNoContent
+	follow.Summary = "Follow one series for new-episode notifications."
+	follow.Description = "The acting profile gets a notification for each new episode of the series, whether or not it asked for everything new. Following lifts any mute of the series. Following a series already followed succeeds and changes nothing. A series the viewer may not see, or an item that is not a series, is 404."
+	Register(reg, follow, reg.followNotificationSeries)
+
+	unfollow := notificationOperation(http.MethodDelete, "/series/{series_id}/follow", opUnfollowNotificationSeries)
+	unfollow.DefaultStatus = http.StatusNoContent
+	unfollow.Summary = "Stop following one series."
+	unfollow.Description = "The series no longer notifies the acting profile unless it asked for everything new, in which case it notifies it like any other series. Unfollowing a series that is not followed succeeds and changes nothing. No access check runs, so a profile can unfollow a series it can no longer see."
+	Register(reg, unfollow, reg.unfollowNotificationSeries)
 }
 
-// NotificationSeriesMuteInput names the series to mute or unmute.
+// NotificationSeriesMuteInput names the series to mute, unmute, follow or unfollow.
 type NotificationSeriesMuteInput struct {
 	SeriesID ID `path:"series_id" minLength:"1" doc:"Catalog item identifier of the series" example:"series-tvdb-81189"`
 }
@@ -230,6 +218,47 @@ func (reg *Registry) unmuteNotificationSeries(ctx context.Context, in *Notificat
 	return nil, nil
 }
 
+func (reg *Registry) followNotificationSeries(ctx context.Context, in *NotificationSeriesMuteInput) (*struct{}, error) {
+	svc, p := reg.notificationInbox()
+	if p != nil {
+		return nil, p
+	}
+	if reg.deps.PersonalLists == nil {
+		return nil, unavailable("notification series")
+	}
+	viewer, p := personalListViewer(ctx, imagesize.Request{})
+	if p != nil {
+		return nil, p
+	}
+	seriesID := string(in.SeriesID)
+	visible, err := reg.deps.PersonalLists.VisibleItemIDs(ctx, viewer, []string{seriesID})
+	if err != nil {
+		return nil, serviceProblem(err)
+	}
+	if !visible[seriesID] {
+		return nil, NewProblem(TypeNotFound, "Series not found.")
+	}
+	if err := svc.FollowNotificationSeries(ctx, viewer.UserID, viewer.ProfileID, seriesID); err != nil {
+		return nil, serviceProblem(err)
+	}
+	return nil, nil
+}
+
+func (reg *Registry) unfollowNotificationSeries(ctx context.Context, in *NotificationSeriesMuteInput) (*struct{}, error) {
+	svc, p := reg.notificationInbox()
+	if p != nil {
+		return nil, p
+	}
+	userID, profileID, p := viewerIdentity(ctx)
+	if p != nil {
+		return nil, p
+	}
+	if err := svc.UnfollowNotificationSeries(ctx, userID, profileID, string(in.SeriesID)); err != nil {
+		return nil, serviceProblem(err)
+	}
+	return nil, nil
+}
+
 func (reg *Registry) listNotificationSeries(ctx context.Context, cursors *Cursors, in *NotificationSeriesInput) (*NotificationSeriesOutput, error) {
 	svc, p := reg.notificationInbox()
 	if p != nil {
@@ -246,7 +275,7 @@ func (reg *Registry) listNotificationSeries(ctx context.Context, cursors *Cursor
 	scope := CursorScope{
 		OperationID: opListNotificationSeries,
 		Security:    strconv.Itoa(viewer.UserID) + "/" + viewer.ProfileID + "/" + viewerScopeDigest(ctx),
-		Filter:      in.Status + "|" + in.Reason + "|" + query,
+		Filter:      in.Status + "|" + query,
 		Sort:        in.Sort,
 		Tiebreaker:  tiebreakerItemID,
 	}
@@ -319,19 +348,5 @@ func (reg *Registry) listNotificationSeries(ctx context.Context, cursors *Cursor
 }
 
 func notificationSeriesOf(s notifications.NotifiedSeries, item CatalogItem) NotificationSeries {
-	out := NotificationSeries{
-		Item:          item,
-		Reasons:       notificationSeriesReasonsOf(s.Reasons),
-		ActiveReasons: notificationSeriesReasonsOf(s.Active),
-		Notifies:      s.Notifies(),
-		Muted:         s.Muted,
-	}
-	// Next Up waits for any episode keyed at or past last-finished + 1, which
-	// need not exist (after a season finale the next is the following season's
-	// first), so the contract names the finished episode instead.
-	if s.NextExpectedEpisodeKey != nil {
-		season, episode := notifications.SplitEpisodeKey(*s.NextExpectedEpisodeKey - 1)
-		out.NextUpAfter = &NotificationEpisodeRef{SeasonNumber: season, EpisodeNumber: episode}
-	}
-	return out
+	return NotificationSeries{Item: item, Followed: s.Followed, Muted: s.Muted}
 }

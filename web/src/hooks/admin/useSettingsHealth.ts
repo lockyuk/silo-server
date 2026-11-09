@@ -241,7 +241,7 @@ export function buildSettingsHealth(input: SettingsHealthInput): SettingsHealthI
   const emailState: SettingsHealthState = mailReady ? "ok" : "off";
 
   // Invitation and reset links, sign-in provider redirects, and links in
-  // email and Discord messages are all built from it, and Silo cannot guess it.
+  // email messages are all built from it, and Silo cannot guess it.
   const publicUrl = readText(settings, "server.public_url");
   const publicUrlState: SettingsHealthState = publicUrl ? "ok" : "off";
 

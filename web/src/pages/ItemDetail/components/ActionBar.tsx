@@ -17,6 +17,8 @@ import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router";
 import {
   type LucideIcon,
+  Bell,
+  BellOff,
   Heart,
   Plus,
   Check,
@@ -232,6 +234,9 @@ export interface ActionBarProps {
   isFavorite?: boolean;
   onToggleWatchlist?: () => void;
   inWatchlist?: boolean;
+  /** Follow or unfollow a series for new-episode notifications. */
+  onToggleFollow?: () => void;
+  isFollowing?: boolean;
   /** Marks or clears Not interested; movies and series only. */
   onToggleNotInterested?: () => void;
   notInterested?: boolean;
@@ -309,6 +314,8 @@ export default function ActionBar({
   isFavorite = false,
   onToggleWatchlist,
   inWatchlist = false,
+  onToggleFollow,
+  isFollowing = false,
   onToggleNotInterested,
   notInterested = false,
   onRefresh,
@@ -739,6 +746,12 @@ export default function ActionBar({
       >
         {inWatchlist ? <Check className="size-4" /> : <Plus className="size-4" />}
         {inWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
+      </DetailOverflowMenuItem>
+    ),
+    onToggleFollow && (
+      <DetailOverflowMenuItem key="follow" closeMenu={closeOverflowMenu} onAction={onToggleFollow}>
+        {isFollowing ? <BellOff className="size-4" /> : <Bell className="size-4" />}
+        {isFollowing ? "Stop following" : "Follow for notifications"}
       </DetailOverflowMenuItem>
     ),
     contentId && canAddToCollection && (

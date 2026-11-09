@@ -1,9 +1,9 @@
 # Notifications
 
 Silo's user-facing notification system treats media availability as durable,
-server-side release events, fans them out to interested profiles as inbox
-rows, and accelerates delivery through realtime websocket, web push, and
-outbound webhooks. The durable `notification_deliveries` row is always the
+server-side release events, fans them out to the profiles that follow the
+series (or asked for everything new) as inbox rows, and accelerates delivery
+through realtime websocket, mobile push, email, and outbound webhooks. The durable `notification_deliveries` row is always the
 source of truth; every other channel is best-effort on top of it. The code
 lives in `internal/notifications` (distinct from the operational catalog/jobs
 `Hub` in the same package).
@@ -36,11 +36,12 @@ arrives. Changing what counts as a release changes that order too.
 
 Event kinds:
 
-- `episode` — carries series/episode identity and fans out to interested
-  profiles. An unset kind is normalized to `episode` (the column defaults to
+- `episode` — carries series/episode identity and fans out to the profiles
+  that follow the series or asked for every new episode. An unset kind is normalized to `episode` (the column defaults to
   it; only in-memory events can be empty).
-- Flat item kinds (`movie`, `audiobook`, `ebook`) — carry an item ID only and
-  feed the server-channel broadcast feed; they do not fan out per profile.
+- Flat item kinds (`movie`, `audiobook`, `ebook`) — carry an item ID only.
+  Movies fan out to the profiles that asked for every new movie; the other
+  kinds feed the email alert sweeps and are not fanned out per profile.
 
 Events can be suppressed instead of fanned out, with the reason recorded on
 the row: `series_burst` when the per-series burst cap consumed the event
@@ -49,15 +50,12 @@ batch), or `stale` when the event aged past the fanout staleness horizon
 (extended downtime, fanout disabled for a stretch) — delivering it long after
 the fact would be noise.
 
-Server channels read the event feed directly, suppressed events included, and
-skip a title that a different, still existing library had made available
-before the event: a second copy (a 4K library beside an HD one) is not news
-for a server-wide post. Profile fanout keeps those events, because it must
-still reach profiles that can see only the library that got the copy. It
-skips a profile that can open the episode through another library that
-holds it now and made it available before the event, so the copy is not news
-to that profile. The check reads current access and current copies, not
-what the profile was told: a profile that can open the earlier copy is
+Profile fanout keeps events that another library had made available before
+the event, because it must still reach profiles that can see only the library
+that got the copy. It skips a profile that can open the episode through another
+library that holds it now and made it available before the event, so the copy
+is not news to that profile. The check reads current access and current copies,
+not what the profile was told: a profile that can open the earlier copy is
 skipped even if that copy's own event never reached it (a burst-capped or
 stale event, or access granted later). Once the earlier library's copy is
 gone, the check no longer skips the profile, though the delivery dedupe key
@@ -69,89 +67,57 @@ types with a generic fallback.
 
 ## Eligibility rules
 
-Fanout evaluates each candidate `(profile, series)` interest row against the
-release event's episode key:
+A profile hears about a new episode in one of two ways, the same two choices
+the email alerts offer:
 
-- `favorite`, `watchlist`, and `continue_watching` notify on any newly
-  available episode of the series.
-- `next_up` notifies only when the episode is at or beyond the profile's
-  `next_expected_episode_key`.
-- Suppress when `last_notified_episode_key >= episode_key`.
-- `continue_watching` and `next_up` follow Home. The interest recompute
-  clears them for a series the profile removed from that surface:
-  - An active series drop clears both until the profile watches the series
-    again.
-  - A per-card Continue Watching dismissal clears `continue_watching` while
-    the dismissed episode's progress is unchanged. As on Home, an in-progress
-    episode no longer counts once a later episode of the series was completed
-    more recently. Specials (season 0) have no airing position, so only a
-    later special supersedes an in-progress special.
-  - A per-card Next Up dismissal clears `next_up` while the dismissed episode
-    is still the card Home would show: the first episode after the most
-    recently completed one that has a present file and that the profile has
-    not started (by Home's Postgres progress test, or by the profile's own
-    store). Specials (season 0) have no airing position, so when the most
-    recent completion is a special in a series with regular seasons, Home
-    counts from the most recently completed regular episode instead, or from
-    the start of season 1 when the profile has finished none.
+- It **follows** the series. Following is explicit: the profile follows a show
+  from its page (`PUT /api/v2/notifications/series/{series_id}/follow`), and
+  `profile_series_follows` holds one row per `(account, profile, series)` with
+  the newest episode key the profile was told about. Favorites, the watchlist
+  and watch progress no longer imply a follow.
+- It asked for **everything new** (`notification_preferences.notify_new_episodes`,
+  on by default), which covers every new episode the profile can open, followed
+  or not. `notify_new_movies` is the same switch for movies.
 
-  Favorites and watchlist are unaffected. The progression cursor is kept, so
-  `next_up` resumes from the right episode once a removal lapses. Every
-  removal or restore queues a recompute, and a second one ten minutes later.
-  Resuming playback can lift a removal without changing any progress state,
-  so a progress write queues one too when it is the row's first write since
-  the profile's last Home change on this node, or when it lands more than
-  ten minutes after the row's stamp, by its own stamp or by the clock (a new
-  watch session, or a late import).
+Fanout evaluates each candidate (a follower of the series, or an
+everything-new profile) against the release event's episode key:
 
-  The Home-change marker and the second recompute live in the memory of the
-  node that handled the removal. A resume handled by another node within ten
-  minutes waits for that second recompute, and if the node restarts first,
-  for the daily interest rebuild. A release fanned out in that window is
-  judged on the stale interest. Evaluating Home removals at fanout time would
-  close the gap.
-- A series the profile muted is a hard gate too. `ListActiveBySeries`, the
-  query that loads a release's candidate recipients, anti-joins
+- A profile whose preferences are disabled is never notified.
+- A follower that did not ask for everything new is not told again of an
+  episode at or below `last_notified_episode_key`. A profile that asked for
+  everything new hears about any newly added episode, including one older than
+  the last it was told about (a back-filled season); the per-episode unique key
+  still stops repeats.
+- A series the profile muted is a hard gate. `FollowRepository.ListCandidates`,
+  the query that loads a release's candidate recipients, anti-joins
   `profile_series_notification_mutes`, so a muting profile is never a
-  candidate: no delivery row is created and no channel sees the event. The
-  check costs one index probe per candidate inside that query, and it runs
-  again when fanout re-reads the candidates under the inbox locks. A mute
-  committed after that second read is like a preference change made just
-  after the delivery. Muting writes no interest row: the mute lives in its own
-  table keyed by account, profile, and series, because interest rows are
-  recomputed per library and pruned once their reasons go, and a mute lasts
-  until the profile unmutes. The account is part of the key because profile
-  IDs, such as the legacy `default`, repeat across accounts. A muted
-  profile's notification cursor does not move. The mute is read when fanout
-  evaluates a release, not when the episode arrives: unmuting does not
-  announce episodes fanout already evaluated during the mute, since their
-  release events are processed, but an event still inside the settle delay at
-  unmute is fanned out to the profile. No suppression state is kept per
-  release; the window is the settle delay plus one claim pass, and it applies
-  symmetrically to a mute made just after a release. A mute follows its series through a
-  catalog merge or split like other per-profile series state, and profile
-  deletion removes it.
-- Profile-level notification preferences are a hard gate: a reason disabled
-  in preferences can never match, so no delivery row is created and no
-  channel — including webhooks — ever sees the event. Per-webhook reason
-  filters can only narrow further, never re-enable.
+  candidate: no delivery row is created and no channel sees the event. Following
+  a series lifts its mute. The mute lives in its own table keyed by account,
+  profile, and series, and lasts until the profile unmutes. The account is part
+  of the key because profile IDs, such as the legacy `default`, repeat across
+  accounts. A muted profile's notification cursor does not move. The mute is
+  read when fanout evaluates a release, not when the episode arrives: unmuting
+  does not announce episodes fanout already evaluated during the mute, but an
+  event still inside the settle delay at unmute is fanned out to the profile.
+  A follow or mute follows its series through a catalog merge or split like
+  other per-profile series state, and profile deletion removes both.
+- Profile-level notification preferences are a hard gate: no delivery row is
+  created for a disabled profile, so no channel — including webhooks — ever
+  sees the event.
 - Access is the other hard gate, checked when fanout runs. The candidate's
   scope is resolved the way a catalog request resolves it, the event's
   library must be in that scope, and the episode must pass the catalog's
   visibility query: series library membership, content-rating ceiling and
-  advisory-age limit. Interest rows are recomputed when the profile's
-  relationship to the series changes and by the daily rebuild, and the
-  recompute checks libraries only, so a row can outlive a library
-  restriction for up to a day and a maturity limit indefinitely; this check
-  is what keeps the title off every channel for that profile. A candidate
-  whose profile no longer exists is skipped, and its notification cursor
-  does not move. If a scope cannot be resolved right now (a failed read, or
-  viewer preferences that could not be loaded), the batch rolls back and the
-  event is retried on the next run. Only candidates that would otherwise get
-  a delivery are resolved. A delivery already in an inbox is not re-checked
-  when access changes later.
+  advisory-age limit. A follow can outlive a library restriction or a maturity
+  limit set later; this check is what keeps the title off every channel for
+  that profile. A candidate whose profile no longer exists is skipped, and its
+  notification cursor does not move. If a scope cannot be resolved right now (a
+  failed read, or viewer preferences that could not be loaded), the batch rolls
+  back and the event is retried on the next run. Only candidates that would
+  otherwise get a delivery are resolved. A delivery already in an inbox is not
+  re-checked when access changes later.
 
-Multiple matching reasons produce one delivery with merged reason flags.
+A profile that both follows a series and asked for everything new gets one delivery with merged reason flags (`followed`, `new_release`).
 Deliveries are deduplicated per `(account, profile, release event)` and, for
 `episode.available`, per `(account, profile, episode)` across libraries.
 Retention removes those rows, so once the first delivery is gone, profile
@@ -160,7 +126,7 @@ that can still open the earlier copy from being told again.
 Reprocessing an event is idempotent.
 
 A profile ID is unique only within its account: every account from before
-profiles has a profile named `default`. Interest rows, preferences, mutes,
+profiles has a profile named `default`. Follows, preferences, mutes,
 the delivery dedupe keys, and every inbox read, count, and mark-read are
 therefore keyed by account and profile, and profile deletion removes those
 for the deleted profile's account only. The email channel reads a profile's
@@ -168,16 +134,13 @@ deliveries on the account that owns its email settings. Still keyed by
 profile ID alone: the inbox clock (`notification_inbox_clocks`), which only
 orders inserts, so two accounts' same-ID profiles share it and serialize
 their inserts without changing either inbox's order; and the email settings,
-push devices, web push subscriptions, and webhooks.
+push devices, and webhooks.
 
-The notified-series list (`GET /api/v2/notifications/series`) shows a profile
-the same index fanout evaluates, plus the series it muted. `ActiveReasons` is
-the event-independent half of these rules, shared by fanout and the list, so
-the two cannot disagree about which reasons a preference silences; a muted
-series keeps its active reasons on the list but does not notify. The list filters series through the
-catalog's card access check rather than fanout's per-library one, and it leaves
-out the per-episode checks (Next Up's expected episode and the
-already-notified cursor), which depend on the episode that arrives.
+The notified-series list (`GET /api/v2/notifications/series`) shows the series a
+profile follows plus the series it muted, each marked `followed` and `muted`.
+It filters series through the catalog's card access check rather than fanout's
+per-library one, and it leaves out the per-episode checks (the already-notified
+cursor), which depend on the episode that arrives.
 
 ## Release-event retention
 
@@ -197,19 +160,18 @@ inbox rows to make rollback possible.
 
 Request lifecycle deliveries (`request.fulfilled`, `request.approved`,
 `request.declined`) are operational notices posted directly to the requesting
-profile — no interest index, no fanout. `request.fulfilled` also goes to every
+profile — no follow list, no fanout. `request.fulfilled` also goes to every
 profile that followed the title (see
 [media-requests.md](media-requests.md#following-a-title)), with `follower: true`
 in its `reason_flags` so every channel words it as a followed title rather than
 the recipient's own request. Their `reason_flags` carry request
 identifiers (request ID, TMDB ID, media type; approved/declined also carry
-the title since no catalog item exists yet) rather than the four reason
-booleans. Partial unique indexes make the inserts idempotent:
+the title since no catalog item exists yet) rather than the follow reasons. Partial unique indexes make the inserts idempotent:
 `request.fulfilled` per `(user_id, profile_id, request_id)`, because a
 follower on another account can share the requester's profile id (every
 account from before profiles has a `default` profile), and approved/declined,
 which only reach the requester, per `(profile_id, request_id, type)`. An
-operational delivery's webhook, web push and mobile push targets are the
+operational delivery's webhook and mobile push targets are the
 recipient profile's on the recipient's account. The per-webhook
 `notify_requests` flag gates the webhook channel for them.
 
@@ -223,8 +185,8 @@ already has its delivery. The scope is resolved before the dispatch
 transaction opens, because the resolver reads through the connection pool. `request.approved` and `request.declined` name no catalog
 item; they repeat the title the requester submitted.
 
-Approval is the one transition whose two destinations disagree. Server
-channels see `request.approved` for every approval; the requester only gets a
+Approval is the one transition whose two destinations disagree. The
+requester only gets a
 `request.approved` delivery when an administrator approved a pending request.
 Auto-approval is the policy answering the requester's own submission, so a
 notice about it is noise. The approval paths that notify say who approved with
@@ -236,7 +198,7 @@ notice by omission.
 ## Outbound webhooks
 
 Each profile can register up to a capped number of webhook destinations
-(Discord or generic), with per-webhook reason filters. The profile chose the
+(Discord or generic), each switchable for new releases and for requests. The profile chose the
 URL, so notification content — titles, season/episode numbers — is included;
 the guardrails below are the ones the profile cannot opt out of.
 
@@ -289,19 +251,12 @@ Discord's infrastructure and to everyone in the channel. The rules:
 ### Discord payload
 
 Discord webhooks receive a native embed (no `content` line), with
-`username: "Silo"` and a per-reason accent color (favorite, watchlist,
-continue-watching, next-up precedence order). The builder enforces Discord's
+`username: "Silo"`. The builder enforces Discord's
 embed limits — 256-char title, 4096-char description, 1024-char field
 values, 2048-char footer, 6000 chars total — truncating description first
 and never the title. Embeds cannot ping: Discord only parses mentions from
 the top-level `content` field, which this payload never sets (the
 `allowed_mentions` field is omitted rather than sent).
-
-Discord applies the 6000-char total to a whole message, not to each embed.
-Multi-embed messages (Discord DM digests and server-channel content posts, up
-to 10 embeds) count characters across all their embeds: overview teasers
-shorten first, then the oldest embeds move into the "…and N more" `content`
-line, which also counts items past the 10-embed cap.
 
 ### Generic payload and HMAC signing
 

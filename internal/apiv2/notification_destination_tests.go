@@ -9,13 +9,11 @@ import (
 )
 
 const (
-	testNotificationWebhookOperation       = "testNotificationWebhook"
-	testNotificationServerChannelOperation = "testAdminNotificationServerChannel"
+	testNotificationWebhookOperation = "testNotificationWebhook"
 )
 
 type NotificationDestinationTestService interface {
 	TestNotificationWebhook(context.Context, int, string, string) (*notifications.WebhookTestResult, error)
-	TestNotificationServerChannel(context.Context, string) (*notifications.WebhookTestResult, error)
 }
 
 type NotificationDestinationTestInput struct {
@@ -34,9 +32,9 @@ type NotificationDestinationTestOutput struct {
 func notificationDestinationTestOutput(result *notifications.WebhookTestResult, err error) (*NotificationDestinationTestOutput, error) {
 	if err != nil {
 		switch {
-		case errors.Is(err, notifications.ErrWebhookNotFound), errors.Is(err, notifications.ErrServerChannelNotFound):
+		case errors.Is(err, notifications.ErrWebhookNotFound):
 			return nil, NewProblem(TypeNotFound, "Notification destination not found.")
-		case errors.Is(err, notifications.ErrWebhooksDisabled), errors.Is(err, notifications.ErrServerChannelsDisabled):
+		case errors.Is(err, notifications.ErrWebhooksDisabled):
 			return nil, NewProblem(TypePermissionDenied, "Notification channel is disabled.")
 		default:
 			return nil, serviceProblem(err)
@@ -59,13 +57,5 @@ func registerNotificationDestinationTests(reg *Registry) {
 			return nil, p
 		}
 		return notificationDestinationTestOutput(svc.TestNotificationWebhook(ctx, user, profile, string(in.ID)))
-	})
-	admin := Operation{Operation: humaOp(http.MethodPost, Prefix+"/admin/notifications/server-channels/{id}/test", testNotificationServerChannelOperation, "admin", "Send one synchronous sample to a server notification channel."), Class: ClassActingAdmin, DemoRestricted: true, ServiceBacked: true, RetrySafety: RetrySafetyNonRetryable}
-	Register(reg, admin, func(ctx context.Context, in *NotificationDestinationTestInput) (*NotificationDestinationTestOutput, error) {
-		svc := reg.deps.NotificationDestinationTests
-		if svc == nil {
-			return nil, unavailable("notification test delivery")
-		}
-		return notificationDestinationTestOutput(svc.TestNotificationServerChannel(ctx, string(in.ID)))
 	})
 }

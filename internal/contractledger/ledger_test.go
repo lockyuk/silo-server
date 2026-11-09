@@ -981,6 +981,8 @@ var mutationWithoutLegacyRow = map[string]string{
 	"resetPlaybackLearnedLimit":                "V2-only buffering-quality connection observation reset; no v1 equivalent.",
 	"muteNotificationSeries":                   "V2-only mute of one series' new-episode notifications (v1 is frozen). Muting a muted series inserts no row, so a replay converges on the same mute.",
 	"unmuteNotificationSeries":                 "V2-only lift of a series mute (v1 is frozen). Unmuting a series that is not muted deletes nothing, so a replay converges.",
+	"followNotificationSeries":                 "V2-only follow of one series for new-episode notifications (v1 is frozen). Following a followed series inserts no row, so a replay converges on the same follow.",
+	"unfollowNotificationSeries":               "V2-only unfollow of a series (v1 is frozen). Unfollowing a series that is not followed deletes nothing, so a replay converges.",
 	"retirePushDevice":                         "V2-only session-less Android push retirement (v1 is frozen). It is ordered by the installation generation: a replay at the newest removal's generation answers removed without writing, and an older one conflicts.",
 	"markNotInterested":                        "V2-only Not interested mark (v1 is frozen). Marking a marked title changes no row and sends no notice, so a replay converges on the same mark.",
 	"unmarkNotInterested":                      "V2-only clearing of a Not interested mark (v1 is frozen). Clearing an absent mark changes no row and sends no notice, so a replay converges.",

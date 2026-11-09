@@ -112,18 +112,10 @@ const EMAIL_CHANNEL_ADVANCED_KEYS = [
  */
 const MAIL_STATUS_KEYS = ["email.enabled", "email.smtp_host", "email.from_address"];
 
-/**
- * The Discord application. Saved by its own card inside the Discord channel
- * (a bot token has to be testable before it is committed), but listed here so
- * one form owns every value this page reads.
- */
-const DISCORD_APP_KEYS = ["discord.client_id", "discord.client_secret", "discord.bot_token"];
-
 const KEYS = [
   ...PIPELINE_KEYS,
   "notifications.ui_enabled",
   "notifications.webhooks_enabled",
-  "notifications.web_push_enabled",
   ...PUSH_DELIVERY_KEYS,
   // Relay lifecycle fields are read for status but are never edited through
   // the shared settings form; credential endpoints replace them atomically.
@@ -139,7 +131,6 @@ const KEYS = [
   ...EMAIL_CHANNEL_ADVANCED_KEYS,
   ...RETENTION_KEYS,
   ...MAIL_STATUS_KEYS,
-  ...DISCORD_APP_KEYS,
 ];
 
 const DEFAULT_PUSH_RELAY_URL = "https://push.siloserver.org";
@@ -448,10 +439,6 @@ function RegisterRelayRow({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Discord application credentials
-// ---------------------------------------------------------------------------
-
 export default function NotificationsAdminSettings() {
   const form = useSettingsForm({ keys: useMemo(() => KEYS, []) });
   const restartKeys = useRestartKeys();
@@ -519,7 +506,7 @@ export default function NotificationsAdminSettings() {
   const uiOn = isOn("notifications.ui_enabled");
   const emailOn = isOn("notifications.email_enabled");
   // Mobile push defaults on (the effective snapshot carries the default);
-  // Discord and personal webhooks are opt-in.
+  // Personal webhooks are opt-in.
   const applePushOn = form.getValue("notifications.apple_push_delivery_enabled") === "true";
   const androidPushOn = form.getValue("notifications.android_push_delivery_enabled") === "true";
   const mobilePushOn = applePushOn || androidPushOn;
@@ -550,11 +537,6 @@ export default function NotificationsAdminSettings() {
     form.getValue("email.smtp_host"),
     form.getValue("email.from_address"),
   );
-  // The Discord application is configured in the Discord channel card below,
-  // next to the delivery settings it gates. "Configured" mirrors the server's
-  // own rule (DiscordConfigured): client id, client secret, AND bot token —
-  // a partial save (say, only the bot token) must not read as connected.
-
   // The kill switches live under Advanced, so a pipeline someone switched off
   // has to say so up here: every channel below is idle while it is.
   const pausedMessage = !releaseEventsOn

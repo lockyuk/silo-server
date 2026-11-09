@@ -54,7 +54,7 @@ func registerEventsSocket(reg *Registry) {
 	op.Parameters = []*huma.Param{
 		{Name: eventsProtocolHeader, In: paramInHeader, Required: true, Schema: &huma.Schema{Type: huma.TypeString}, Description: "Offer silo.events.v2 followed by silo.ticket.<single-use-ticket>."},
 		{Name: eventsOriginHeader, In: paramInHeader, Schema: &huma.Schema{Type: huma.TypeString}, Description: socketOriginHeaderDoc},
-		{Name: eventsChannelsQuery, In: discordLinkQuery, Schema: &huma.Schema{Type: huma.TypeString}, Description: "Optional comma-separated declared channel selection."},
+		{Name: eventsChannelsQuery, In: "query", Schema: &huma.Schema{Type: huma.TypeString}, Description: "Optional comma-separated declared channel selection."},
 	}
 	RegisterRaw(reg, RawOperation{Operation: op, Protocol: eventsRawProtocol, Reason: "Session-bound single-use proof, Origin and subprotocol validation precede the upgrade; connection lifetime is bounded."}, socketHandler(reg.deps.EventsSocket, "realtime unavailable"))
 }

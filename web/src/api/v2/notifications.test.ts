@@ -6,14 +6,13 @@ import {
   listNotificationSeries,
   markAllNotificationsRead,
   setNotificationSeriesMuted,
+  setNotificationSeriesFollowed,
   updateNotificationPreferences,
 } from "./notifications";
 import {
-  getNotificationDiscordPreferences,
   getNotificationEmailPreferences,
 } from "./notificationChannels";
 import { testNotificationDestination } from "./notificationDestinationTests";
-import { testNotificationDiscord } from "./notificationDiscord";
 import { clearNotificationRelay } from "./notificationRelay";
 const row = {
   id: "delivery-1",
@@ -97,16 +96,10 @@ it.each<[string, (authority: ReturnType<typeof captureNotificationAuthority>) =>
   [
     ["markAllNotificationsRead", (authority) => markAllNotificationsRead("cutoff", authority)],
     ["getNotificationEmailPreferences", getNotificationEmailPreferences],
-    ["getNotificationDiscordPreferences", getNotificationDiscordPreferences],
-    ["testNotificationDiscord", testNotificationDiscord],
     ["clearNotificationRelay", clearNotificationRelay],
     [
       "testNotificationDestination webhook",
-      (authority) => testNotificationDestination("webhook", "destination", authority),
-    ],
-    [
-      "testNotificationDestination server-channel",
-      (authority) => testNotificationDestination("server-channel", "destination", authority),
+      (authority) => testNotificationDestination("destination", authority),
     ],
   ],
 )("%s refuses a captured authority after profile replacement", async (_name, call) => {
@@ -128,11 +121,11 @@ it("preserves explicit false preferences and omits response-only profile identit
   await updateNotificationPreferences({
     profile_id: "ignored",
     enabled: false,
-    notify_favorites: false,
+    notify_new_episodes: false,
   });
   expect(JSON.parse(String(fetcher.mock.calls[0]![1]?.body))).toEqual({
     enabled: false,
-    notify_favorites: false,
+    notify_new_episodes: false,
   });
 });
 it("pages notified series by status and rejects a page that repeats its cursor", async () => {
@@ -145,9 +138,8 @@ it("pages notified series by status and rejects a page that repeats its cursor",
       genres: [],
       keywords: [],
     },
-    reasons: { favorite: true, watchlist: false, continue_watching: false, next_up: false },
-    active_reasons: { favorite: true, watchlist: false, continue_watching: false, next_up: false },
-    notifies: true,
+    followed: true,
+    muted: false,
   };
   const fetch = vi
     .fn<typeof globalThis.fetch>()
@@ -156,23 +148,37 @@ it("pages notified series by status and rejects a page that repeats its cursor",
     )
     .mockResolvedValueOnce(response({ items: [], page: { has_more: true, next_cursor: "next" } }));
   vi.stubGlobal("fetch", fetch);
-  const page = await listNotificationSeries("inactive", {
+  const page = await listNotificationSeries("followed", {
     q: "bear",
-    reason: "favorite",
     sort: "-latest_episode_added",
   });
   expect(page).toEqual({ series: [series], next_cursor: "next" });
   const url = new URL(String(fetch.mock.calls[0]![0]), "http://silo.test");
   expect(url.pathname).toBe("/api/v2/notifications/series");
   expect(Object.fromEntries(url.searchParams)).toMatchObject({
-    status: "inactive",
+    status: "followed",
     q: "bear",
-    reason: "favorite",
     sort: "-latest_episode_added",
   });
-  await expect(listNotificationSeries("inactive", {}, "next")).rejects.toThrow(
+  await expect(listNotificationSeries("followed", {}, "next")).rejects.toThrow(
     "Invalid series page",
   );
+});
+it("follows with PUT and unfollows with DELETE on the series' follow", async () => {
+  const fetch = vi
+    .fn<typeof globalThis.fetch>()
+    .mockImplementation(async () => new Response(null, { status: 204 }));
+  vi.stubGlobal("fetch", fetch);
+  await setNotificationSeriesFollowed("series:bear", true);
+  await setNotificationSeriesFollowed("series:bear", false);
+  const calls = fetch.mock.calls.map(([input, init]) => [
+    new URL(String(input), "http://silo.test").pathname,
+    init?.method,
+  ]);
+  expect(calls).toEqual([
+    ["/api/v2/notifications/series/series%3Abear/follow", "PUT"],
+    ["/api/v2/notifications/series/series%3Abear/follow", "DELETE"],
+  ]);
 });
 it("mutes with PUT and unmutes with DELETE on the series' mute", async () => {
   const fetch = vi

@@ -6,8 +6,6 @@ import (
 	"net/url"
 	"slices"
 	"testing"
-
-	"github.com/Silo-Server/silo-server/internal/notifications"
 )
 
 type notificationSeriesPage struct {
@@ -45,22 +43,21 @@ func notificationSeriesIDs(items []NotificationSeries) []string {
 	return ids
 }
 
-func TestNotificationSeriesSearchAndReasonFilter(t *testing.T) {
+func TestNotificationSeriesSearchAndStatusFilter(t *testing.T) {
 	h, _ := notificationSeriesHandler(t)
 	for query, want := range map[string][]string{
-		"?q=BEAR":                        {"series:bear"},
-		"?q=+horses+":                    {"series:slow-horses"},
-		"?reason=watchlist":              {"series:slow-horses"},
-		"?reason=favorite":               {"series:bear", "series:wire"},
-		"?reason=favorite&status=active": {"series:bear"},
-		"?reason=next_up&status=active":  {"series:andor"},
-		"?q=zzz":                         {},
+		"?q=BEAR":                 {"series:bear"},
+		"?q=+horses+":             {"series:slow-horses"},
+		"?status=followed":        {"series:andor", "series:bear", "series:slow-horses"},
+		"?status=muted":           {"series:wire"},
+		"?status=followed&q=bear": {"series:bear"},
+		"?q=zzz":                  {},
 	} {
 		if got := notificationSeriesIDs(getNotificationSeries(t, h, query).Items); !slices.Equal(got, want) {
 			t.Errorf("%s = %v, want %v", query, got, want)
 		}
 	}
-	requireProblem(t, do(t, h, http.MethodGet, Prefix+"/notifications/series?reason=other", "", profileOwner()), TypeValidationFailed)
+	requireProblem(t, do(t, h, http.MethodGet, Prefix+"/notifications/series?status=other", "", profileOwner()), TypeValidationFailed)
 	requireProblem(t, do(t, h, http.MethodGet, Prefix+"/notifications/series?sort=rating", "", profileOwner()), TypeValidationFailed)
 }
 
@@ -94,7 +91,7 @@ func TestNotificationSeriesSorts(t *testing.T) {
 		}
 	}
 	first := getNotificationSeries(t, h, "?limit=1&sort=-year")
-	for _, changed := range []string{"&sort=year", "&sort=-year&q=a", "&sort=-year&reason=favorite"} {
+	for _, changed := range []string{"&sort=year", "&sort=-year&q=a", "&sort=-year&status=followed"} {
 		requireProblem(t, do(t, h, http.MethodGet, Prefix+"/notifications/series?limit=1"+changed+"&cursor="+url.QueryEscape(first.Page.NextCursor), "", profileOwner()), TypeInvalidCursor)
 	}
 }
@@ -127,7 +124,7 @@ func TestNotificationSeriesMuteRefusals(t *testing.T) {
 }
 
 func notificationSeriesFixtureCases() []fixtureCase {
-	return []fixtureCase{{name: "notification_list_notification_series", operationID: opListNotificationSeries, scenario: "Series that can notify the acting profile, with one the viewer may not see omitted.", method: http.MethodGet, path: "/api/v2/notifications/series", headers: profileOwner(), status: http.StatusOK, schema: "#/components/schemas/NotificationSeriesCollection", assertHeaders: []string{"Content-Type", "Cache-Control"}}}
+	return []fixtureCase{{name: "notification_list_notification_series", operationID: opListNotificationSeries, scenario: "The series the acting profile follows or muted, with one the viewer may not see omitted.", method: http.MethodGet, path: "/api/v2/notifications/series", headers: profileOwner(), status: http.StatusOK, schema: "#/components/schemas/NotificationSeriesCollection", assertHeaders: []string{"Content-Type", "Cache-Control"}}}
 }
 
 // notificationSeriesMuteFixtureCases pin muting and unmuting one series and
@@ -136,13 +133,25 @@ func notificationSeriesMuteFixtureCases() []fixtureCase {
 	problem := "#/components/schemas/Problem"
 	return []fixtureCase{
 		{name: "notification_mute_notification_series", operationID: opMuteNotificationSeries,
-			scenario: "The acting profile mutes one series: no new-episode notification for it on any channel until it unmutes. Repeating the call changes nothing.",
+			scenario: "The acting profile mutes one series: no new-episode notification for it on any channel, followed or not, until it unmutes. Repeating the call changes nothing.",
 			method:   http.MethodPut, path: "/api/v2/notifications/series/series:bear/mute", headers: profileOwner(),
 			status: http.StatusNoContent, assertHeaders: []string{"Cache-Control"}},
 		{name: "notification_mute_notification_series_not_found", operationID: opMuteNotificationSeries,
 			scenario: "A series the viewer may not see cannot be muted.",
 			method:   http.MethodPut, path: "/api/v2/notifications/series/series:hidden/mute", headers: profileOwner(),
 			status: http.StatusNotFound, assertHeaders: []string{"Content-Type", "Cache-Control"}, schema: problem},
+		{name: "notification_follow_notification_series", operationID: opFollowNotificationSeries,
+			scenario: "The acting profile follows one series: its new episodes notify the profile, and any mute of it is lifted. Repeating the call changes nothing.",
+			method:   http.MethodPut, path: "/api/v2/notifications/series/series:bear/follow", headers: profileOwner(),
+			status: http.StatusNoContent, assertHeaders: []string{"Cache-Control"}},
+		{name: "notification_follow_notification_series_not_found", operationID: opFollowNotificationSeries,
+			scenario: "A series the viewer may not see cannot be followed.",
+			method:   http.MethodPut, path: "/api/v2/notifications/series/series:hidden/follow", headers: profileOwner(),
+			status: http.StatusNotFound, assertHeaders: []string{"Content-Type", "Cache-Control"}, schema: problem},
+		{name: "notification_unfollow_notification_series", operationID: opUnfollowNotificationSeries,
+			scenario: "The acting profile stops following a series. Unfollowing a series that is not followed changes nothing.",
+			method:   http.MethodDelete, path: "/api/v2/notifications/series/series:bear/follow", headers: profileOwner(),
+			status: http.StatusNoContent, assertHeaders: []string{"Cache-Control"}},
 		{name: "notification_unmute_notification_series", operationID: opUnmuteNotificationSeries,
 			scenario: "The acting profile unmutes a series; it notifies again from the next new episode. Unmuting a series that is not muted changes nothing.",
 			method:   http.MethodDelete, path: "/api/v2/notifications/series/series:wire/mute", headers: profileOwner(),
@@ -150,12 +159,25 @@ func notificationSeriesMuteFixtureCases() []fixtureCase {
 	}
 }
 
-// Next Up waits for any episode past the last finished one; after a season
-// finale that is the next season's first, so the response names the finale.
-func TestNotificationSeriesNextUpNamesTheFinishedEpisode(t *testing.T) {
-	expected := notifications.EpisodeKey(1, 10) + 1
-	got := notificationSeriesOf(notifications.NotifiedSeries{Active: notifications.ReasonFlags{NextUp: true}, NextExpectedEpisodeKey: &expected}, CatalogItem{})
-	if got.NextUpAfter == nil || *got.NextUpAfter != (NotificationEpisodeRef{SeasonNumber: 1, EpisodeNumber: 10}) {
-		t.Fatalf("next_up_after = %+v, want S1E10", got.NextUpAfter)
+// A series the viewer may not see and an item that is not a series are 404 on
+// follow, and the hidden one is never written. Unfollow runs no access check.
+func TestNotificationSeriesFollowRefusals(t *testing.T) {
+	h, inbox := notificationSeriesMuteHandler(t)
+	requireProblem(t, do(t, h, http.MethodPut, Prefix+"/notifications/series/series:hidden/follow", "", profileOwner()), TypeNotFound)
+	requireProblem(t, do(t, h, http.MethodPut, Prefix+"/notifications/series/"+notificationNotASeriesID+"/follow", "", profileOwner()), TypeNotFound)
+	if len(inbox.follows) != 0 {
+		t.Fatalf("follows = %v", inbox.follows)
+	}
+	if rec := do(t, h, http.MethodPut, Prefix+"/notifications/series/series:bear/follow", "", profileOwner()); rec.Code != http.StatusNoContent {
+		t.Fatal(rec.Code, rec.Body.String())
+	}
+	if !slices.Equal(inbox.follows, []string{"1/p-owner/series:bear"}) {
+		t.Fatalf("follows = %v", inbox.follows)
+	}
+	if rec := do(t, h, http.MethodDelete, Prefix+"/notifications/series/series:hidden/follow", "", profileOwner()); rec.Code != http.StatusNoContent {
+		t.Fatal(rec.Code, rec.Body.String())
+	}
+	if !slices.Equal(inbox.unfollows, []string{"1/p-owner/series:hidden"}) {
+		t.Fatalf("unfollows = %v", inbox.unfollows)
 	}
 }

@@ -121,8 +121,8 @@ func (h *NotificationsHandler) PatchNotificationPreferences(ctx context.Context,
 	return h.system.Preferences.Patch(ctx, userID, profile, patch)
 }
 
-// ListNotifiedSeries answers every series whose new episodes the profile has
-// a reason to hear about, before catalog access filtering.
+// ListNotifiedSeries answers every series the profile follows or muted, before
+// catalog access filtering.
 func (h *NotificationsHandler) ListNotifiedSeries(ctx context.Context, userID int, profile string) ([]notifications.NotifiedSeries, error) {
 	return h.system.ListNotifiedSeries(ctx, userID, profile)
 }
@@ -140,6 +140,21 @@ func (h *NotificationsHandler) MuteNotificationSeries(ctx context.Context, userI
 // UnmuteNotificationSeries lifts the profile's mute of the series.
 func (h *NotificationsHandler) UnmuteNotificationSeries(ctx context.Context, userID int, profile, seriesID string) error {
 	return h.system.UnmuteSeries(ctx, userID, profile, seriesID)
+}
+
+// FollowNotificationSeries makes the profile follow the series. The caller has
+// checked that the viewer may see the item; an ID that names no series is 404.
+func (h *NotificationsHandler) FollowNotificationSeries(ctx context.Context, userID int, profile, seriesID string) error {
+	err := h.system.FollowSeries(ctx, userID, profile, seriesID)
+	if errors.Is(err, notifications.ErrSeriesNotFound) {
+		return apiError(http.StatusNotFound, "not_found", "Series not found")
+	}
+	return err
+}
+
+// UnfollowNotificationSeries stops the profile following the series.
+func (h *NotificationsHandler) UnfollowNotificationSeries(ctx context.Context, userID int, profile, seriesID string) error {
+	return h.system.UnfollowSeries(ctx, userID, profile, seriesID)
 }
 
 // NotificationPushDisplay uses the same profile-scoped row and rendering as the

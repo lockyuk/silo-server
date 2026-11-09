@@ -48,7 +48,7 @@
         "optional_viewer_access", "profile_required", "rate_limited", "viewer_access"
       ]
     },
-    "requestKind": { "enum": ["none", "json", "multipart", "binary", "range", "dynamic_proxy", "unknown"] },
+    "requestKind": { "enum": ["none", "json", "multipart", "form", "binary", "range", "dynamic_proxy", "unknown"] },
     "responseMediaKind": { "enum": ["json", "multipart", "binary", "range", "redirect", "websocket", "html", "css", "dynamic_proxy", "unknown"] },
     "consumer": { "enum": ["web", "apple", "android", "internal", "compat", "external_unknown", "unused"] },
     "callSiteRepo": { "enum": ["web", "apple", "android", "server"] },

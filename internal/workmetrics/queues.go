@@ -26,7 +26,6 @@ var queueQueries = []struct{ name, sql string }{
 	{"metadata_translation", `SELECT status, count(*), min(created_at) FROM metadata_translation_jobs WHERE status IN ('pending','running') GROUP BY status`},
 	{"autoscan_intake", `SELECT CASE WHEN locked_by = '' THEN 'queued' ELSE 'running' END, count(*), min(received_at) FROM autoscan_webhook_deliveries GROUP BY 1`},
 	{"webhook_delivery", `SELECT 'queued', count(*), min(attempted_at) FROM webhook_delivery_attempts WHERE outcome IN ('pending','retrying')`},
-	{"web_push_delivery", `SELECT 'queued', count(*), min(attempted_at) FROM web_push_delivery_attempts WHERE outcome IN ('pending','retrying')`},
 	{"native_push_delivery", `SELECT 'queued', count(*), min(created_at) FROM push_delivery_attempts WHERE outcome IN ('pending','retrying')`},
 }
 var queueDepthDesc = prometheus.NewDesc("silo_queue_items", "Shared durable queue items; aggregate replicas with max, not sum. Queued includes delayed retries.", []string{labelQueue, "state"}, nil)

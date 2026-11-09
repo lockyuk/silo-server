@@ -60,6 +60,7 @@ import {
   useTestNotificationWebhook,
   useUpdateNotificationWebhook,
 } from "@/hooks/queries/notificationWebhooks";
+import { FollowedSeriesList } from "@/components/notifications/FollowedSeriesList";
 import { useAvailableUserLibraries } from "@/hooks/queries/libraries";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { formatRelativeTime } from "@/lib/date";
@@ -166,18 +167,8 @@ function EmailDestinationRow({ prefs }: { prefs: NotificationEmailPreferences })
   );
 }
 
-// Reason filters a personal webhook can choose from.
-const REASON_FIELDS = [
-  { key: "notify_favorites", label: "Favorites" },
-  { key: "notify_watchlist", label: "Watchlist" },
-  { key: "notify_continue_watching", label: "Continue Watching" },
-  { key: "notify_next_up", label: "Next Up" },
-] as const;
-
-// Webhooks additionally carry the request.fulfilled toggle; it is not an
-// episode reason.
+// What a personal webhook can be switched on for.
 const WEBHOOK_NOTIFY_FIELDS = [
-  ...REASON_FIELDS,
   { key: "notify_new_releases", label: "New releases" },
   { key: "notify_requests", label: "Requests" },
 ] as const;
@@ -441,6 +432,61 @@ function PushSection() {
   );
 }
 
+/** Which shows notify the profile: the ones it follows, or everything new. */
+function AudienceSection() {
+  const { data: prefs } = useNotificationPreferences();
+  const updatePrefs = useUpdateNotificationPreferences();
+  if (!prefs) return null;
+  const everything = prefs.notify_new_episodes;
+  const disabled = updatePrefs.isPending || !prefs.enabled;
+  return (
+    <SettingsGroup
+      title="What you hear about"
+      description="Choose which new episodes and movies notify you, on every channel."
+    >
+      <div className="space-y-2">
+        <div>
+          <div className="text-sm">New episodes</div>
+          <div className="text-muted-foreground text-xs">
+            {everything
+              ? "Every new episode you can watch"
+              : "Only the shows you follow. Follow a show from its page."}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Pill
+            on={!everything}
+            label="Shows I follow"
+            disabled={disabled}
+            onClick={() => updatePrefs.mutate({ notify_new_episodes: false })}
+          />
+          <Pill
+            on={everything}
+            label="Everything new"
+            disabled={disabled}
+            onClick={() => updatePrefs.mutate({ notify_new_episodes: true })}
+          />
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm">New movies</div>
+          <div className="text-muted-foreground text-xs">Every new movie you can watch</div>
+        </div>
+        <Switch
+          checked={prefs.notify_new_movies}
+          disabled={disabled}
+          onCheckedChange={(checked) => updatePrefs.mutate({ notify_new_movies: checked })}
+        />
+      </div>
+      <div className="space-y-2">
+        <div className="text-sm">Shows you follow</div>
+        <FollowedSeriesList />
+      </div>
+    </SettingsGroup>
+  );
+}
+
 function WebhookFormDialog({
   open,
   onOpenChange,
@@ -459,10 +505,6 @@ function WebhookFormDialog({
   const [name, setName] = useState(webhook?.name ?? "");
   const [url, setUrl] = useState("");
   const [reasons, setReasons] = useState<Record<WebhookNotifyKey, boolean>>({
-    notify_favorites: webhook?.notify_favorites ?? true,
-    notify_watchlist: webhook?.notify_watchlist ?? true,
-    notify_continue_watching: webhook?.notify_continue_watching ?? true,
-    notify_next_up: webhook?.notify_next_up ?? true,
     notify_new_releases: webhook?.notify_new_releases ?? true,
     notify_requests: webhook?.notify_requests ?? true,
   });
@@ -549,20 +591,14 @@ function WebhookFormDialog({
           <div className="space-y-2">
             <Label>Send notifications for</Label>
             {WEBHOOK_NOTIFY_FIELDS.map((field) => {
-              // Requests have no per-profile reason toggle; only the master
-              // switch suppresses them.
-              const globallyDisabled =
-                globalPrefs != null &&
-                (!globalPrefs.enabled ||
-                  (field.key !== "notify_requests" &&
-                    !(globalPrefs[field.key as keyof NotificationPreferences] as boolean)));
+              const globallyDisabled = globalPrefs != null && !globalPrefs.enabled;
               return (
                 <div key={field.key} className="flex items-center justify-between gap-3">
                   <div className="text-sm">
                     {field.label}
                     {globallyDisabled && (
                       <span className="text-muted-foreground ml-2 text-xs">
-                        disabled in profile preferences
+                        notifications are off for this profile
                       </span>
                     )}
                   </div>
@@ -640,10 +676,10 @@ function WebhookCard({
 
       <div className="text-muted-foreground text-xs">
         {enabledReasons.length === WEBHOOK_NOTIFY_FIELDS.length
-          ? "All reasons"
+          ? "New releases and requests"
           : enabledReasons.length > 0
             ? enabledReasons.join(" · ")
-            : "No reasons selected"}
+            : "Nothing selected"}
       </div>
 
       {lastSuccess && !failing && (
@@ -843,6 +879,8 @@ export default function NotificationsSettings() {
       />
 
       <NotificationStatus />
+
+      <AudienceSection />
 
       <EmailSection />
 

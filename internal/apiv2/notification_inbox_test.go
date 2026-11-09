@@ -32,21 +32,22 @@ type fakeNotificationInbox struct {
 	// mutes and unmutes record the series each call named, as
 	// account/profile/series.
 	mutes, unmutes []string
+	// follows and unfollows record the series each call named.
+	follows, unfollows []string
 }
 
 // fixtureNotifiedSeries is a profile's notified-series list in service
 // order: Next Up alone, two active reasons, a series the viewer may not see,
 // a watchlist series the preferences silence, and a muted favorite.
 func fixtureNotifiedSeries() []notifications.NotifiedSeries {
-	nextUp := notifications.EpisodeKey(2, 9)
 	day := func(n int) time.Time { return fixedTime().Add(time.Duration(n) * 24 * time.Hour) }
 	latest := func(n int) *time.Time { t := day(n); return &t }
 	return []notifications.NotifiedSeries{
-		{SeriesID: "series:andor", SeriesSortFields: notifications.SeriesSortFields{SortKey: "andor", Title: "Andor", Year: 2022, AddedAt: day(0), LatestEpisodeAddedAt: latest(3)}, Reasons: notifications.ReasonFlags{NextUp: true}, Active: notifications.ReasonFlags{NextUp: true}, NextExpectedEpisodeKey: &nextUp},
-		{SeriesID: "series:bear", SeriesSortFields: notifications.SeriesSortFields{SortKey: "bear", Title: "The Bear", Year: 2024, AddedAt: day(1), LatestEpisodeAddedAt: latest(5)}, Reasons: notifications.ReasonFlags{Favorite: true, ContinueWatching: true}, Active: notifications.ReasonFlags{Favorite: true, ContinueWatching: true}},
-		{SeriesID: "series:hidden", SeriesSortFields: notifications.SeriesSortFields{SortKey: "hidden", Title: "Hidden", AddedAt: day(2)}, Reasons: notifications.ReasonFlags{Favorite: true}, Active: notifications.ReasonFlags{Favorite: true}},
-		{SeriesID: "series:slow-horses", SeriesSortFields: notifications.SeriesSortFields{SortKey: "slow horses", Title: "Slow Horses", Year: 2023, AddedAt: day(3), LatestEpisodeAddedAt: latest(1)}, Reasons: notifications.ReasonFlags{Watchlist: true}},
-		{SeriesID: "series:wire", SeriesSortFields: notifications.SeriesSortFields{SortKey: "wire", Title: "The Wire", Year: 2002, AddedAt: day(4), LatestEpisodeAddedAt: latest(2)}, Reasons: notifications.ReasonFlags{Favorite: true}, Active: notifications.ReasonFlags{Favorite: true}, Muted: true},
+		{SeriesID: "series:andor", SeriesSortFields: notifications.SeriesSortFields{SortKey: "andor", Title: "Andor", Year: 2022, AddedAt: day(0), LatestEpisodeAddedAt: latest(3)}, Followed: true},
+		{SeriesID: "series:bear", SeriesSortFields: notifications.SeriesSortFields{SortKey: "bear", Title: "The Bear", Year: 2024, AddedAt: day(1), LatestEpisodeAddedAt: latest(5)}, Followed: true},
+		{SeriesID: "series:hidden", SeriesSortFields: notifications.SeriesSortFields{SortKey: "hidden", Title: "Hidden", AddedAt: day(2)}, Followed: true},
+		{SeriesID: "series:slow-horses", SeriesSortFields: notifications.SeriesSortFields{SortKey: "slow horses", Title: "Slow Horses", Year: 2023, AddedAt: day(3), LatestEpisodeAddedAt: latest(1)}, Followed: true},
+		{SeriesID: "series:wire", SeriesSortFields: notifications.SeriesSortFields{SortKey: "wire", Title: "The Wire", Year: 2002, AddedAt: day(4), LatestEpisodeAddedAt: latest(2)}, Muted: true},
 	}
 }
 
@@ -66,6 +67,19 @@ func (f *fakeNotificationInbox) UnmuteNotificationSeries(_ context.Context, user
 	return nil
 }
 
+func (f *fakeNotificationInbox) FollowNotificationSeries(_ context.Context, userID int, profile, seriesID string) error {
+	if seriesID == notificationNotASeriesID {
+		return &handlers.APIError{Status: http.StatusNotFound, Code: "not_found", Message: "Series not found"}
+	}
+	f.follows = append(f.follows, fmt.Sprintf("%d/%s/%s", userID, profile, seriesID))
+	return nil
+}
+
+func (f *fakeNotificationInbox) UnfollowNotificationSeries(_ context.Context, userID int, profile, seriesID string) error {
+	f.unfollows = append(f.unfollows, fmt.Sprintf("%d/%s/%s", userID, profile, seriesID))
+	return nil
+}
+
 func (f *fakeNotificationInbox) ListNotifiedSeries(context.Context, int, string) ([]notifications.NotifiedSeries, error) {
 	if f.series == nil {
 		return fixtureNotifiedSeries(), nil
@@ -78,7 +92,7 @@ func fixtureNotificationInbox() *fakeNotificationInbox {
 }
 func (*fakeNotificationInbox) NotificationCapabilities(context.Context) handlers.NotificationCapabilitiesView {
 	var out handlers.NotificationCapabilitiesView
-	_ = json.Unmarshal([]byte(`{"in_app":{"enabled":true},"apple_push":{"available":false,"provider":"off","supported_modes":["in_app_only"]},"android_push":{"available":false,"provider":"off","supported_modes":["in_app_only"]},"web_push":{"available":false},"webhooks":{"available":false,"max_per_profile":0,"supported_types":[]},"email":{"available":false,"modes":[],"digest_hour":0},"discord":{"available":false,"modes":[],"digest_hour":0}}`), &out)
+	_ = json.Unmarshal([]byte(`{"in_app":{"enabled":true},"apple_push":{"available":false,"provider":"off","supported_modes":["in_app_only"]},"android_push":{"available":false,"provider":"off","supported_modes":["in_app_only"]},"webhooks":{"available":false,"max_per_profile":0,"supported_types":[]},"email":{"available":false,"modes":[],"digest_hour":0},"discord":{"available":false,"modes":[],"digest_hour":0}}`), &out)
 	return out
 }
 func (f *fakeNotificationInbox) row(profile string) notifications.DeliveryRowPayload {
@@ -186,7 +200,7 @@ func TestNotificationInboxScopedCursorAndReadCutoff(t *testing.T) {
 	requireProblem(t, do(t, h, http.MethodPost, path+"/read-all", string(body), actingRequestAdmin), TypeInvalidCursor)
 	requireProblem(t, do(t, h, http.MethodPut, path+"/preferences", `{"enabled":null}`, profileOwner()), TypeValidationFailed)
 	saved = do(t, h, http.MethodPut, path+"/preferences", `{"enabled":false}`, profileOwner())
-	if saved.Code != 200 || f.patch.Enabled == nil || *f.patch.Enabled || f.patch.NotifyFavorites != nil {
+	if saved.Code != 200 || f.patch.Enabled == nil || *f.patch.Enabled || f.patch.NotifyNewEpisodes != nil {
 		t.Fatal(saved.Code, saved.Body.String(), f.patch)
 	}
 }

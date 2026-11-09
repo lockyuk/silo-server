@@ -44,15 +44,13 @@ func destinationAccountsDB(t *testing.T) *pgxpool.Pool {
 	}
 	if _, err = pool.Exec(ctx, "CREATE TABLE notification_webhooks ("+ddl+"\n);"+`
 		ALTER TABLE notification_webhooks ADD COLUMN notify_requests boolean NOT NULL DEFAULT false, ADD COLUMN revision bigint NOT NULL DEFAULT 1;
-		CREATE TABLE web_push_subscriptions (LIKE public.web_push_subscriptions INCLUDING ALL);
-		CREATE TABLE web_push_delivery_attempts (LIKE public.web_push_delivery_attempts INCLUDING ALL);
 		CREATE TABLE push_devices (LIKE public.push_devices INCLUDING ALL);
 		CREATE TABLE android_push_installations (LIKE public.android_push_installations INCLUDING ALL);
 		CREATE TABLE apple_push_installations (LIKE public.apple_push_installations INCLUDING ALL);
 		CREATE TABLE notification_deliveries (LIKE public.notification_deliveries INCLUDING ALL);
 		CREATE TABLE notification_preferences (LIKE public.notification_preferences INCLUDING ALL);
 		CREATE TABLE notification_email_prefs (LIKE public.notification_email_prefs INCLUDING ALL);
-		CREATE TABLE profile_series_interest (LIKE public.profile_series_interest INCLUDING ALL);
+		CREATE TABLE profile_series_follows (LIKE public.profile_series_follows INCLUDING ALL);
 		CREATE TABLE profile_series_notification_mutes (LIKE public.profile_series_notification_mutes INCLUDING ALL)`); err != nil {
 		t.Fatal(err)
 	}

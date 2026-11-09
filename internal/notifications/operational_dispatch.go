@@ -88,23 +88,6 @@ func (s *System) DispatchOperational(ctx context.Context, delivery Delivery, opt
 			return nil, err
 		}
 	}
-	if s.webPushRepo != nil && s.Settings.WebPushEnabled(ctx) {
-		subsByProfile, err := s.webPushRepo.ListEnabledByProfiles(ctx, tx, []profileKey{owner})
-		if err != nil {
-			return nil, err
-		}
-		attempts := make([]DeliveryAttempt, 0, 2)
-		for _, sub := range subsByProfile[owner] {
-			attempts = append(attempts, DeliveryAttempt{
-				ID:                     ulid.Make().String(),
-				NotificationDeliveryID: row.ID,
-				TargetID:               sub.ID,
-			})
-		}
-		if err := s.webPushRepo.EnqueueAttempts(ctx, tx, attempts); err != nil {
-			return nil, err
-		}
-	}
 	if s.pushDeviceRepo != nil {
 		if platforms := s.Settings.EnabledPushPlatforms(ctx); len(platforms) > 0 {
 			devicesByProfile, err := s.pushDeviceRepo.ListEnabledPushByProfiles(ctx, tx, []profileKey{owner}, platforms)

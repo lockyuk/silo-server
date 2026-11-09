@@ -13,15 +13,14 @@ import (
 // a profile that muted the series gets no delivery, so no channel sees the
 // episode, and its notification cursor stays put. A refused mute changes
 // nothing, and neither does the mute for a profile with the same ID on another
-// account. The mute leaves the interest row as it was, and once the profile
+// account. The mute leaves the follow row as it was, and once the profile
 // unmutes, the next episode notifies it again.
 func TestFanoutSkipsProfilesThatMutedTheSeries(t *testing.T) {
 	pool := inboxPageDB(t)
 	ctx := t.Context()
 	c := seedAccessCatalog(t, pool)
 	seedFanoutEvent(t, pool, c, []string{"open", "muted", "other-muted"})
-	interests := NewInterestRepository(pool)
-	s := &System{Interests: interests}
+	s := &System{Follows: NewFollowRepository(pool)}
 	if err := s.MuteSeries(ctx, 1, "muted", c.series); err != nil {
 		t.Fatalf("MuteSeries: %v", err)
 	}
@@ -42,14 +41,14 @@ func TestFanoutSkipsProfilesThatMutedTheSeries(t *testing.T) {
 	if got := accountRecipients(t, pool, "event-1"); !slices.Equal(got, []string{"1/open", "1/other-muted"}) {
 		t.Fatalf("event-1 recipients = %v, want account 1's open and other-muted", got)
 	}
-	var favorite, cursorMoved bool
+	var cursorMoved bool
 	if err := pool.QueryRow(ctx, `
-		SELECT favorite, last_notified_episode_key IS NOT NULL FROM profile_series_interest WHERE user_id = 1 AND profile_id = 'muted'`,
-	).Scan(&favorite, &cursorMoved); err != nil {
-		t.Fatalf("read muted interest: %v", err)
+		SELECT last_notified_episode_key IS NOT NULL FROM profile_series_follows WHERE user_id = 1 AND profile_id = 'muted'`,
+	).Scan(&cursorMoved); err != nil {
+		t.Fatalf("read muted follow: %v", err)
 	}
-	if !favorite || cursorMoved {
-		t.Fatalf("muted interest favorite = %v, cursor moved = %v; want the row unchanged", favorite, cursorMoved)
+	if cursorMoved {
+		t.Fatal("the muted profile's notification cursor moved; want the row unchanged")
 	}
 
 	if err := s.UnmuteSeries(ctx, 1, "muted", c.series); err != nil {
@@ -96,15 +95,14 @@ func accountRecipients(t *testing.T, pool *pgxpool.Pool, eventID string) []strin
 }
 
 // seedSeriesMutes creates the list's tables in a test schema with two series
-// and a movie, the Bear as a favorite of p1 and p2 on account 1 and, through
-// another library, of p1 on account 2, and account 1 p1's mutes of both
+// and a movie, the Bear followed by p1 and p2 on account 1 and by p1 on account 2, and account 1 p1's mutes of both
 // series, each written twice.
 func seedSeriesMutes(t *testing.T) (*pgxpool.Pool, *System) {
 	t.Helper()
 	pool := schemaDB(t, "series_mutes_")
 	ctx := t.Context()
 	for _, stmt := range []string{
-		`CREATE TABLE profile_series_interest (LIKE public.profile_series_interest INCLUDING ALL)`,
+		`CREATE TABLE profile_series_follows (LIKE public.profile_series_follows INCLUDING ALL)`,
 		`CREATE TABLE media_items (LIKE public.media_items INCLUDING ALL)`,
 		`CREATE TABLE notification_preferences (LIKE public.notification_preferences INCLUDING ALL)`,
 		`CREATE TABLE profile_series_notification_mutes (LIKE public.profile_series_notification_mutes INCLUDING ALL)`,
@@ -112,16 +110,16 @@ func seedSeriesMutes(t *testing.T) (*pgxpool.Pool, *System) {
 			('series:bear', 'series', 'The Bear', '', '{}', 2022),
 			('series:andor', 'series', 'Andor', '', '{}', 2022),
 			('movie:heat', 'movie', 'Heat', '', '{}', 1995)`,
-		`INSERT INTO profile_series_interest (user_id, profile_id, library_id, series_id, favorite) VALUES
-			(1, 'p1', 1, 'series:bear', true),
-			(1, 'p2', 1, 'series:bear', true),
-			(2, 'p1', 2, 'series:bear', true)`,
+		`INSERT INTO profile_series_follows (user_id, profile_id, series_id) VALUES
+			(1, 'p1', 'series:bear'),
+			(1, 'p2', 'series:bear'),
+			(2, 'p1', 'series:bear')`,
 	} {
 		if _, err := pool.Exec(ctx, stmt); err != nil {
 			t.Fatalf("seed: %v", err)
 		}
 	}
-	s := &System{Interests: NewInterestRepository(pool), Preferences: NewPreferencesRepository(pool)}
+	s := &System{Follows: NewFollowRepository(pool), Preferences: NewPreferencesRepository(pool)}
 	for range 2 {
 		for _, id := range []string{"series:bear", "series:andor"} {
 			if err := s.MuteSeries(ctx, 1, "p1", id); err != nil {
@@ -134,8 +132,8 @@ func seedSeriesMutes(t *testing.T) (*pgxpool.Pool, *System) {
 
 // TestSeriesMutesList covers the mute store and the notified-series list:
 // muting is per profile and account and idempotent, only series can be muted, a muted
-// series is listed muted with its active reasons kept and does not notify,
-// and a muted series with no reason is still listed so it can be unmuted.
+// series is listed muted and a muted series that is not followed is still
+// listed so it can be unmuted.
 func TestSeriesMutesList(t *testing.T) {
 	_, s := seedSeriesMutes(t)
 	ctx := t.Context()
@@ -152,11 +150,11 @@ func TestSeriesMutesList(t *testing.T) {
 		t.Fatalf("p1 series = %+v, want andor then bear", got)
 	}
 	andor, bear := got[0], got[1]
-	if !andor.Muted || andor.Reasons.Any() || andor.Notifies() || andor.Title != "Andor" {
-		t.Errorf("andor = %+v, want a muted entry with no reason", andor)
+	if !andor.Muted || andor.Followed || andor.Title != "Andor" {
+		t.Errorf("andor = %+v, want a muted entry that is not followed", andor)
 	}
-	if !bear.Muted || !bear.Active.Favorite || bear.Notifies() {
-		t.Errorf("bear = %+v, want muted with its favorite still active", bear)
+	if !bear.Muted || !bear.Followed {
+		t.Errorf("bear = %+v, want muted and still followed", bear)
 	}
 	for _, profile := range []struct {
 		userID int
@@ -166,14 +164,14 @@ func TestSeriesMutesList(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ListNotifiedSeries %d/%s: %v", profile.userID, profile.id, err)
 		}
-		if len(other) != 1 || other[0].Muted || !other[0].Notifies() {
-			t.Fatalf("%d/%s series = %+v, want bear notifying: a mute is per profile and account", profile.userID, profile.id, other)
+		if len(other) != 1 || other[0].Muted || !other[0].Followed {
+			t.Fatalf("%d/%s series = %+v, want bear followed and unmuted: a mute is per profile and account", profile.userID, profile.id, other)
 		}
 	}
 }
 
 // TestSeriesMutesUnmuteAndPurge covers lifting a mute, which is idempotent and
-// drops a series with no reason from the list, and the removal of a deleted
+// drops a series that is not followed from the list, and the removal of a deleted
 // profile's mutes, which leaves a same-ID profile on another account alone.
 func TestSeriesMutesUnmuteAndPurge(t *testing.T) {
 	pool, s := seedSeriesMutes(t)
@@ -194,7 +192,7 @@ func TestSeriesMutesUnmuteAndPurge(t *testing.T) {
 	if err := s.MuteSeries(ctx, 2, "p1", "series:bear"); err != nil {
 		t.Fatalf("MuteSeries account 2: %v", err)
 	}
-	if err := s.Interests.deleteMutesForProfile(ctx, 1, "p1"); err != nil {
+	if err := s.Follows.DeleteAllForProfile(ctx, 1, "p1"); err != nil {
 		t.Fatalf("deleteMutesForProfile: %v", err)
 	}
 	rows, err := pool.Query(ctx, `SELECT user_id::text || '/' || profile_id || '/' || series_id FROM profile_series_notification_mutes`)

@@ -15,9 +15,6 @@ type FulfillmentNotifier interface {
 	// req.Followers, that the title is available. It may run again for the
 	// same request, so each recipient's delivery must be idempotent.
 	NotifyFulfilled(ctx context.Context, req Request, contentID string) error
-	// AnnounceFulfilled posts the server-wide announcement. It runs once per
-	// request, after the request is stamped as notified, and is best-effort.
-	AnnounceFulfilled(ctx context.Context, req Request)
 }
 
 // SetFulfillmentNotifier wires the notification system into the reconcile
@@ -155,17 +152,11 @@ func (s *Service) notifyFulfilledPending(ctx context.Context) {
 				"request_id", req.ID, "err", err)
 			continue
 		}
-		stamped, err := s.store.MarkFulfilledNotified(ctx, req.ID)
+		_, err = s.store.MarkFulfilledNotified(ctx, req.ID)
 		if err != nil {
 			slog.WarnContext(ctx, "request fulfill-notify: mark failed", "component", "requests",
 				"request_id", req.ID, "err", err)
 			continue
-		}
-		// The announcement has no per-recipient dedupe, so it goes out only
-		// from the pass whose stamp took: a retry after a failed write above
-		// does not repeat it.
-		if stamped {
-			s.notifier.AnnounceFulfilled(ctx, *req)
 		}
 	}
 }

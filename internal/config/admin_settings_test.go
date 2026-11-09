@@ -257,7 +257,6 @@ func TestNormalizeAdminSettingRejectsInvalidValues(t *testing.T) {
 		{key: PlaybackTranscodeSoftwareToneMapSettingKey, value: "maybe"},
 		{key: "auth.access_token_expiry", value: "forever"},
 		{key: "recommendations.embeddings_cron", value: "not a cron"},
-		{key: "notifications.server_channels.batch_seconds", value: "119"},
 		{key: "catalog.search.meilisearch.semantic_ratio", value: "1.2"},
 		{key: "email.smtp_port", value: "70000"},
 		{key: "theme.catalog_url", value: "http://raw.githubusercontent.com/Silo-Server/silo-themes/main/catalog.json"},

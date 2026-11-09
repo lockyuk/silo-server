@@ -118,19 +118,15 @@ func (r *DeliveryRepository) MarkReadThrough(ctx context.Context, userID int, pr
 
 // PreferencePatch preserves omitted fields without a read/whole-row-write race.
 type PreferencePatch struct {
-	Enabled                *bool
-	NotifyFavorites        *bool
-	NotifyWatchlist        *bool
-	NotifyContinueWatching *bool
-	NotifyNextUp           *bool
-	NotifyNewEpisodes      *bool
-	NotifyNewMovies        *bool
-	PushEnabled            *bool
-	PushLibraryIDs         *[]int
+	Enabled           *bool
+	NotifyNewEpisodes *bool
+	NotifyNewMovies   *bool
+	PushEnabled       *bool
+	PushLibraryIDs    *[]int
 }
 
 func (r *PreferencesRepository) Patch(ctx context.Context, userID int, profileID string, p PreferencePatch) (Preferences, error) {
 	prefs := DefaultPreferences(userID, profileID)
-	err := r.pool.QueryRow(ctx, `INSERT INTO notification_preferences(user_id,profile_id,enabled,notify_favorites,notify_watchlist,notify_continue_watching,notify_next_up,notify_new_episodes,notify_new_movies,push_enabled,push_library_ids,updated_at) VALUES($1,$2,COALESCE($3,true),COALESCE($4,true),COALESCE($5,true),COALESCE($6,true),COALESCE($7,true),COALESCE($8,true),COALESCE($9,true),COALESCE($10,true),COALESCE($11,'{}'::integer[]),now()) ON CONFLICT(user_id,profile_id) DO UPDATE SET enabled=COALESCE($3,notification_preferences.enabled),notify_favorites=COALESCE($4,notification_preferences.notify_favorites),notify_watchlist=COALESCE($5,notification_preferences.notify_watchlist),notify_continue_watching=COALESCE($6,notification_preferences.notify_continue_watching),notify_next_up=COALESCE($7,notification_preferences.notify_next_up),notify_new_episodes=COALESCE($8,notification_preferences.notify_new_episodes),notify_new_movies=COALESCE($9,notification_preferences.notify_new_movies),push_enabled=COALESCE($10,notification_preferences.push_enabled),push_library_ids=COALESCE($11,notification_preferences.push_library_ids),updated_at=now() RETURNING enabled,notify_favorites,notify_watchlist,notify_continue_watching,notify_next_up,notify_new_episodes,notify_new_movies,push_enabled,push_library_ids,updated_at`, userID, profileID, p.Enabled, p.NotifyFavorites, p.NotifyWatchlist, p.NotifyContinueWatching, p.NotifyNextUp, p.NotifyNewEpisodes, p.NotifyNewMovies, p.PushEnabled, p.PushLibraryIDs).Scan(&prefs.Enabled, &prefs.NotifyFavorites, &prefs.NotifyWatchlist, &prefs.NotifyContinueWatching, &prefs.NotifyNextUp, &prefs.NotifyNewEpisodes, &prefs.NotifyNewMovies, &prefs.PushEnabled, &prefs.PushLibraryIDs, &prefs.UpdatedAt)
+	err := r.pool.QueryRow(ctx, `INSERT INTO notification_preferences(user_id,profile_id,enabled,notify_new_episodes,notify_new_movies,push_enabled,push_library_ids,updated_at) VALUES($1,$2,COALESCE($3,true),COALESCE($4,true),COALESCE($5,true),COALESCE($6,true),COALESCE($7,'{}'::integer[]),now()) ON CONFLICT(user_id,profile_id) DO UPDATE SET enabled=COALESCE($3,notification_preferences.enabled),notify_new_episodes=COALESCE($4,notification_preferences.notify_new_episodes),notify_new_movies=COALESCE($5,notification_preferences.notify_new_movies),push_enabled=COALESCE($6,notification_preferences.push_enabled),push_library_ids=COALESCE($7,notification_preferences.push_library_ids),updated_at=now() RETURNING enabled,notify_new_episodes,notify_new_movies,push_enabled,push_library_ids,updated_at`, userID, profileID, p.Enabled, p.NotifyNewEpisodes, p.NotifyNewMovies, p.PushEnabled, p.PushLibraryIDs).Scan(&prefs.Enabled, &prefs.NotifyNewEpisodes, &prefs.NotifyNewMovies, &prefs.PushEnabled, &prefs.PushLibraryIDs, &prefs.UpdatedAt)
 	return prefs, err
 }

@@ -9,13 +9,8 @@ import (
 )
 
 type fakeFulfillmentBackend struct {
-	disabled    map[string]bool
-	deliveries  []Delivery
-	channelPost int
-}
-
-func (f *fakeFulfillmentBackend) PostServerChannelRequestEvent(context.Context, string, RequestEventInfo) {
-	f.channelPost++
+	disabled   map[string]bool
+	deliveries []Delivery
 }
 
 func (f *fakeFulfillmentBackend) notificationsEnabled(_ context.Context, _ int, profileID string) (bool, error) {
@@ -62,15 +57,6 @@ func TestNotifyFulfilledTellsRequesterAndFollowers(t *testing.T) {
 	}
 	if flags := parseRequestFlags(follower.ReasonFlags); flags.RequestID != "req-1" || flags.TMDBID != 949 {
 		t.Fatalf("follower flags = %+v, want the request identity", flags)
-	}
-	// The server-wide post waits for AnnounceFulfilled, which the caller runs
-	// once the request is stamped, so a retried delivery never repeats it.
-	if backend.channelPost != 0 {
-		t.Fatalf("channel posts after NotifyFulfilled = %d, want none", backend.channelPost)
-	}
-	notifier.AnnounceFulfilled(context.Background(), fulfilledRequest())
-	if backend.channelPost != 1 {
-		t.Fatalf("channel posts after AnnounceFulfilled = %d, want 1", backend.channelPost)
 	}
 }
 

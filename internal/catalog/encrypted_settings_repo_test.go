@@ -256,9 +256,6 @@ func TestSensitiveSettingKeys_Audited(t *testing.T) {
 		"requests.sonarr.api_key",
 		"watchsync.simkl.client_secret",
 		"email.smtp_password",
-		"discord.client_secret",
-		"discord.bot_token",
-		"notifications.web_push.vapid_keypair",
 		"notifications.push_relay_api_key",
 	}
 	for _, k := range mustHave {

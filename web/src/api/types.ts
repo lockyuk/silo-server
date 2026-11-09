@@ -3067,11 +3067,7 @@ export interface NotificationUnreadCountResponse {
 export interface NotificationPreferences {
   profile_id: string;
   enabled: boolean;
-  notify_favorites: boolean;
-  notify_watchlist: boolean;
-  notify_continue_watching: boolean;
-  notify_next_up: boolean;
-  /** Every new episode the profile can open, followed or not. */
+  /** Every new episode the profile can open, followed or not. Off: only the shows it follows. */
   notify_new_episodes: boolean;
   /** Every new movie the profile can open. */
   notify_new_movies: boolean;
@@ -3096,10 +3092,6 @@ export interface NotificationWebhook {
   type: NotificationWebhookType;
   url_host: string;
   enabled: boolean;
-  notify_favorites: boolean;
-  notify_watchlist: boolean;
-  notify_continue_watching: boolean;
-  notify_next_up: boolean;
   notify_new_releases?: boolean;
   notify_requests: boolean;
   consecutive_failures: number;
@@ -3117,10 +3109,6 @@ export interface NotificationWebhookInput {
   url?: string;
   type?: NotificationWebhookType;
   enabled?: boolean;
-  notify_favorites?: boolean;
-  notify_watchlist?: boolean;
-  notify_continue_watching?: boolean;
-  notify_next_up?: boolean;
   notify_new_releases?: boolean;
   notify_requests?: boolean;
 }
@@ -3132,48 +3120,7 @@ export interface NotificationWebhookTestResult {
   message?: string;
 }
 
-/** Admin-owned broadcast destination ("community channel"). */
-export interface ServerNotificationChannel {
-  id: string;
-  name: string;
-  type: NotificationWebhookType;
-  url_host: string;
-  enabled: boolean;
-  notify_new_movies: boolean;
-  notify_new_episodes: boolean;
-  notify_new_audiobooks: boolean;
-  notify_new_ebooks: boolean;
-  notify_request_submitted: boolean;
-  notify_request_approved: boolean;
-  notify_request_declined: boolean;
-  notify_request_fulfilled: boolean;
-  consecutive_failures: number;
-  disabled_reason: string | null;
-  last_success_at: string | null;
-  last_failure_at: string | null;
-  last_failure_status: number | null;
-  last_failure_message: string | null;
-  created_at: string;
-  /** Present only in create / rotate-secret responses; shown exactly once. */
-  signing_secret?: string;
-}
-
-export interface ServerNotificationChannelInput {
-  name?: string;
-  url?: string;
-  type?: NotificationWebhookType;
-  enabled?: boolean;
-  notify_new_movies?: boolean;
-  notify_new_episodes?: boolean;
-  notify_new_audiobooks?: boolean;
-  notify_new_ebooks?: boolean;
-  notify_request_submitted?: boolean;
-  notify_request_approved?: boolean;
-  notify_request_declined?: boolean;
-  notify_request_fulfilled?: boolean;
-}
-
-/** An account-level digest channel (email, Discord DMs). */
+/** An account-level digest channel (email). */
 export interface NotificationAccountChannelCapability {
   available: boolean;
   modes: string[];
@@ -3186,10 +3133,8 @@ export interface NotificationCapability {
   in_app: { enabled: boolean };
   apple_push: { available: boolean; provider: string; supported_modes: string[] };
   android_push: { available: boolean; provider: string; supported_modes: string[] };
-  web_push: { available: boolean; public_key?: string };
   webhooks: { available: boolean; max_per_profile: number; supported_types: string[] };
   email: NotificationAccountChannelCapability;
-  discord: NotificationAccountChannelCapability;
 }
 
 export type NotificationChannelMode =
@@ -3199,7 +3144,6 @@ export type NotificationChannelMode =
   | "per_episode_and_digest"
   | "weekly_digest";
 export type NotificationEmailMode = NotificationChannelMode | "per_episode_and_weekly_digest";
-export type NotificationDiscordMode = NotificationChannelMode;
 
 /**
  * Profile-scoped email channel state. Each profile verifies its own
@@ -3239,29 +3183,6 @@ export interface NotificationEmailPreferencesUpdate {
   types?: string[];
   library_ids?: number[];
   max_age_hours?: number;
-}
-
-/** Account-level Discord DM channel: link state, mode, and delivery health. */
-export interface NotificationDiscordPreferences {
-  linked: boolean;
-  discord_username?: string;
-  mode: NotificationDiscordMode;
-  /** Last DM delivery failure, surfaced as link health. Empty when healthy. */
-  link_failure?: string;
-}
-
-export interface NotificationDiscordLinkInit {
-  url: string;
-}
-
-export interface WebPushSubscriptionView {
-  id: string;
-  endpoint: string;
-  device_name?: string;
-  enabled: boolean;
-  created_at: string;
-  last_success_at: string | null;
-  last_failure_at: string | null;
 }
 
 export interface EventsHelloMessage {

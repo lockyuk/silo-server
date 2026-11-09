@@ -471,15 +471,7 @@ var adminSettingDefaults = map[string]string{
 	"notifications.email.allow_per_episode":                    "true",
 	"notifications.email.digest_hour":                          "8",
 	"notifications.email.digest_weekday":                       "0",
-	"notifications.discord_enabled":                            "false",
-	"notifications.discord.allow_per_episode":                  "true",
-	"notifications.discord.digest_hour":                        "8",
-	"notifications.discord.digest_weekday":                     "0",
 	"notifications.discord.poster_mode":                        "provider",
-	"notifications.server_channels_enabled":                    "true",
-	"notifications.server_channels.batch_seconds":              "300",
-	"notifications.server_channels.mention_requesters":         "false",
-	"notifications.web_push_enabled":                           "true",
 	"notifications.apple_push_delivery_enabled":                "true",
 	"notifications.android_push_delivery_enabled":              "true",
 
@@ -649,9 +641,7 @@ func NormalizeAdminSetting(key, raw string) (string, error) {
 		"notifications.ui_enabled", "notifications.webhooks_enabled",
 		"notifications.webhooks.allow_private_destinations", "media_servers.allow_private_destinations",
 		"notifications.email_enabled",
-		"notifications.email.allow_per_episode", "notifications.discord_enabled",
-		"notifications.discord.allow_per_episode", "notifications.server_channels_enabled",
-		"notifications.server_channels.mention_requesters", "notifications.web_push_enabled",
+		"notifications.email.allow_per_episode",
 		"notifications.apple_push_delivery_enabled", "notifications.android_push_delivery_enabled",
 		"catalog.search.meilisearch.semantic_enabled", "catalog.search.meilisearch.binary_quantized",
 		"s3.public_path_style", "s3.private_path_style", "s3.user_db_path_style",
@@ -773,12 +763,10 @@ func NormalizeAdminSetting(key, raw string) (string, error) {
 		return normalizeAdminInt(key, value, 1, 100)
 	case "notifications.webhooks.deliveries_per_minute_per_profile":
 		return normalizeAdminInt(key, value, 1, 10000)
-	case "notifications.email.digest_hour", "notifications.discord.digest_hour":
+	case "notifications.email.digest_hour":
 		return normalizeAdminInt(key, value, 0, 23)
-	case "notifications.email.digest_weekday", "notifications.discord.digest_weekday":
+	case "notifications.email.digest_weekday":
 		return normalizeAdminInt(key, value, 0, 6)
-	case "notifications.server_channels.batch_seconds":
-		return normalizeAdminInt(key, value, 120, 3600)
 	case "catalog.search.meilisearch.timeout_ms":
 		return normalizeAdminInt(key, value, 1, math.MaxInt32)
 	case "catalog.search.meilisearch.sync_batch_size":

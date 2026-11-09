@@ -80,7 +80,6 @@ type RequestFulfillmentNotifier struct {
 // fulfillmentBackend is the slice of System the fulfillment adapter uses; the
 // unexported methods keep *System its only production implementation.
 type fulfillmentBackend interface {
-	PostServerChannelRequestEvent(ctx context.Context, event string, info RequestEventInfo)
 	notificationsEnabled(ctx context.Context, userID int, profileID string) (bool, error)
 	fulfilledDelivered(ctx context.Context, recipient requests.Follower, requestID string) (bool, error)
 	dispatchFulfilled(ctx context.Context, delivery Delivery) error
@@ -153,18 +152,6 @@ func (n *RequestFulfillmentNotifier) NotifyFulfilled(ctx context.Context, req re
 	return firstErr
 }
 
-// AnnounceFulfilled implements requests.FulfillmentNotifier: the server-channel
-// post. The caller runs it once, after the request is stamped as notified,
-// since a retried NotifyFulfilled would otherwise repeat the community
-// announcement. It is not gated by anyone's personal preferences, and it is
-// detached and best-effort.
-func (n *RequestFulfillmentNotifier) AnnounceFulfilled(ctx context.Context, req requests.Request) {
-	if n == nil || n.backend == nil {
-		return
-	}
-	n.backend.PostServerChannelRequestEvent(ctx, ServerChannelEventRequestFulfilled, requestEventInfoFor(req))
-}
-
 // notifyFulfilledProfile posts one request.fulfilled delivery to a profile
 // whose notifications are on and that an earlier pass has not told yet. The
 // insert would dedupe anyway, but checking first keeps a told recipient from
@@ -203,7 +190,6 @@ const requestLifecycleDispatchTimeout = 30 * time.Second
 // The unexported method keeps the interface in-package, leaving *System as
 // the only production implementation.
 type requestLifecycleBackend interface {
-	PostServerChannelRequestEvent(ctx context.Context, event string, info RequestEventInfo)
 	dispatchRequestLifecycleDetached(ctx context.Context, req requests.Request, deliveryType string)
 }
 
@@ -234,7 +220,6 @@ func NewRequestLifecycleNotifier(system *System) *RequestLifecycleNotifier {
 // server channels only: the requester performed the action themselves, so a
 // personal confirmation would be noise.
 func (n *RequestLifecycleNotifier) RequestSubmitted(ctx context.Context, req requests.Request) {
-	n.backend.PostServerChannelRequestEvent(ctx, ServerChannelEventRequestSubmitted, requestEventInfoFor(req))
 }
 
 // RequestApproved implements requests.LifecycleNotifier. Every approval is
@@ -246,7 +231,6 @@ func (n *RequestLifecycleNotifier) RequestApproved(
 	req requests.Request,
 	origin requests.ApprovalOrigin,
 ) {
-	n.backend.PostServerChannelRequestEvent(ctx, ServerChannelEventRequestApproved, requestEventInfoFor(req))
 	switch origin {
 	case requests.ApprovalOriginAdmin:
 		n.backend.dispatchRequestLifecycleDetached(ctx, req, DeliveryTypeRequestApproved)
@@ -261,7 +245,6 @@ func (n *RequestLifecycleNotifier) RequestApproved(
 
 // RequestDeclined implements requests.LifecycleNotifier.
 func (n *RequestLifecycleNotifier) RequestDeclined(ctx context.Context, req requests.Request) {
-	n.backend.PostServerChannelRequestEvent(ctx, ServerChannelEventRequestDeclined, requestEventInfoFor(req))
 	n.backend.dispatchRequestLifecycleDetached(ctx, req, DeliveryTypeRequestDeclined)
 }
 

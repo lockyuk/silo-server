@@ -15,7 +15,6 @@ type fakeNotificationDestinationCreate struct {
 	calls, user int
 	profile     string
 	webhook     notifications.WebhookInput
-	channel     notifications.ServerChannelInput
 	err         error
 }
 
@@ -25,12 +24,6 @@ func (f *fakeNotificationDestinationCreate) CreateNotificationWebhook(_ context.
 	f.profile = profile
 	f.webhook = in
 	return &notifications.Webhook{ID: "created", Name: *in.Name, Type: "generic", URLHost: "example.test"}, "one-time-secret", f.err
-}
-func (f *fakeNotificationDestinationCreate) CreateNotificationServerChannel(_ context.Context, user int, in notifications.ServerChannelInput) (*notifications.ServerChannel, string, error) {
-	f.calls++
-	f.user = user
-	f.channel = in
-	return &notifications.ServerChannel{ID: "created", Name: *in.Name, Type: "generic", URLHost: "example.test"}, "one-time-secret", f.err
 }
 func TestNotificationDestinationCreate(t *testing.T) {
 	fake := new(fakeNotificationDestinationCreate)
@@ -45,7 +38,6 @@ func TestNotificationDestinationCreate(t *testing.T) {
 		disabled, invalid, limit error
 	}{
 		{"webhook", Prefix + "/notifications/webhooks", "p-owner", profileOwner(), notifications.ErrWebhooksDisabled, notifications.ErrWebhookInvalid, notifications.ErrWebhookLimit},
-		{"channel", Prefix + "/admin/notifications/server-channels", "", bearer(adminToken), notifications.ErrServerChannelsDisabled, notifications.ErrServerChannelInvalid, notifications.ErrServerChannelLimit},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			*fake = fakeNotificationDestinationCreate{}
@@ -65,11 +57,8 @@ func TestNotificationDestinationCreate(t *testing.T) {
 			if rec.Header().Get("Cache-Control") != "no-store" {
 				t.Fatal("one-time secret response must not be cached")
 			}
-			if tc.profile != "" && (fake.webhook.URL == nil || *fake.webhook.URL != "https://example.test/private-hook" || fake.webhook.NotifyFavorites != nil) {
+			if fake.webhook.URL == nil || *fake.webhook.URL != "https://example.test/private-hook" {
 				t.Fatal("personal input/defaults changed")
-			}
-			if tc.profile == "" && (fake.channel.URL == nil || *fake.channel.URL != "https://example.test/private-hook" || fake.channel.Enabled != nil) {
-				t.Fatal("admin input/defaults changed")
 			}
 			for _, failure := range []struct {
 				err    error
@@ -87,12 +76,6 @@ func TestNotificationDestinationCreate(t *testing.T) {
 			if rec.Code != 422 || fake.calls != before {
 				t.Fatalf("missing URL dispatched: %d", rec.Code)
 			}
-			if tc.profile == "" {
-				rec = do(t, h, http.MethodPost, tc.path, body, profileOwner())
-				if rec.Code != 403 || fake.calls != before {
-					t.Fatal("non-admin created channel")
-				}
-			}
 			rec = do(t, missing, http.MethodPost, tc.path, body, tc.headers)
 			if rec.Code != 503 {
 				t.Fatalf("unavailable: %d", rec.Code)
@@ -104,6 +87,5 @@ func TestNotificationDestinationCreate(t *testing.T) {
 func notificationDestinationCreateFixtureCases() []fixtureCase {
 	return []fixtureCase{
 		{name: "notification_webhook_create", operationID: createNotificationWebhookOperation, method: "POST", path: Prefix + "/notifications/webhooks", body: `{"name":"fixture","url":"https://example.test/hook"}`, headers: profileOwner(), status: 201, schema: "#/components/schemas/NotificationDestinationCreated", assertHeaders: []string{"Content-Type", "Cache-Control"}, scenario: "A new profile webhook returns its signing secret once; creation is not automatically replayed."},
-		{name: "notification_server_channel_create", operationID: createNotificationServerChannelOperation, method: "POST", path: Prefix + "/admin/notifications/server-channels", body: `{"name":"fixture","url":"https://example.test/hook"}`, headers: bearer(adminToken), status: 201, schema: "#/components/schemas/NotificationDestinationCreated", assertHeaders: []string{"Content-Type", "Cache-Control"}, scenario: "An administrator creates a server channel without sending a notification."},
 	}
 }

@@ -37,17 +37,12 @@ vi.mock("@/hooks/useRestartKeys", () => ({
   useRestartKeys: () => restartKeysMock(),
 }));
 
-vi.mock("@/hooks/queries/admin/serverNotificationChannels", () => ({
-  useServerNotificationChannels: () => ({ data: [] }),
-}));
-
 const makeForm = (overrides: Record<string, string> = {}) =>
   fakeSettingsForm(
     {
       "notifications.release_events_enabled": "true",
       "notifications.fanout_enabled": "true",
       "notifications.ui_enabled": "true",
-      "notifications.web_push_enabled": "true",
       "notifications.apple_push_delivery_enabled": "true",
       "notifications.android_push_delivery_enabled": "true",
       "notifications.push_relay_url": "https://push.siloserver.org",

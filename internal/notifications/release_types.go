@@ -73,60 +73,25 @@ type ReleaseEvent struct {
 	CreatedAt        time.Time
 }
 
-// SeriesInterest is the compact recipient-index row used by fanout.
-type SeriesInterest struct {
-	UserID                  int
-	ProfileID               string
-	LibraryID               int
-	SeriesID                string
-	Favorite                bool
-	Watchlist               bool
-	ContinueWatching        bool
-	NextUpCandidate         bool
-	LastCompletedEpisodeKey *int
-	NextExpectedEpisodeKey  *int
-	LastNotifiedEpisodeKey  *int
-	UpdatedAt               time.Time
-}
-
-func (i SeriesInterest) key() profileKey { return profileKey{i.UserID, i.ProfileID} }
-
-// HasAnyInterest reports whether at least one interest flag is set.
-func (i SeriesInterest) HasAnyInterest() bool {
-	return i.Favorite || i.Watchlist || i.ContinueWatching || i.NextUpCandidate
-}
-
-// ReasonFlags records which interest reasons matched for an
-// episode.available or movie.available delivery. NewRelease means the
-// profile asked to hear about everything new of that kind.
+// ReasonFlags records why an episode.available or movie.available delivery
+// was created. Followed means the profile follows the series; NewRelease
+// means the profile asked to hear about everything new of that kind.
 type ReasonFlags struct {
-	Favorite         bool `json:"favorite"`
-	Watchlist        bool `json:"watchlist"`
-	ContinueWatching bool `json:"continue_watching"`
-	NextUp           bool `json:"next_up"`
-	NewRelease       bool `json:"new_release,omitempty"`
+	Followed   bool `json:"followed"`
+	NewRelease bool `json:"new_release,omitempty"`
 }
 
 // The reason names, as ReasonFlags' JSON keys spell them.
 const (
-	ReasonFavorite         = "favorite"
-	ReasonWatchlist        = "watchlist"
-	ReasonContinueWatching = "continue_watching"
-	ReasonNextUp           = "next_up"
-	ReasonNewRelease       = "new_release"
+	ReasonFollowed   = "followed"
+	ReasonNewRelease = "new_release"
 )
 
 // Has reports whether the named reason is set; an unknown name never is.
 func (f ReasonFlags) Has(reason string) bool {
 	switch reason {
-	case ReasonFavorite:
-		return f.Favorite
-	case ReasonWatchlist:
-		return f.Watchlist
-	case ReasonContinueWatching:
-		return f.ContinueWatching
-	case ReasonNextUp:
-		return f.NextUp
+	case ReasonFollowed:
+		return f.Followed
 	case ReasonNewRelease:
 		return f.NewRelease
 	}
@@ -135,26 +100,22 @@ func (f ReasonFlags) Has(reason string) bool {
 
 // Any reports whether at least one reason matched.
 func (f ReasonFlags) Any() bool {
-	return f.Favorite || f.Watchlist || f.ContinueWatching || f.NextUp || f.NewRelease
+	return f.Followed || f.NewRelease
 }
 
 // Preferences are the per-profile notification controls. Missing rows default
-// to every interest reason enabled and the "everything new" reasons off.
+// to everything new on.
 type Preferences struct {
-	UserID                 int    `json:"-"`
-	ProfileID              string `json:"profile_id"`
-	Enabled                bool   `json:"enabled"`
-	NotifyFavorites        bool   `json:"notify_favorites"`
-	NotifyWatchlist        bool   `json:"notify_watchlist"`
-	NotifyContinueWatching bool   `json:"notify_continue_watching"`
-	NotifyNextUp           bool   `json:"notify_next_up"`
+	UserID    int    `json:"-"`
+	ProfileID string `json:"profile_id"`
+	Enabled   bool   `json:"enabled"`
 	// NotifyNewEpisodes and NotifyNewMovies ask for every new episode and
-	// movie the profile can open, followed or not.
+	// movie the profile can open, followed or not. With NotifyNewEpisodes off
+	// the profile hears only about the series it follows.
 	NotifyNewEpisodes bool `json:"notify_new_episodes"`
 	NotifyNewMovies   bool `json:"notify_new_movies"`
-	// PushEnabled queues phone and browser push for the profile's
-	// notifications; off leaves them in the inbox only. Not part of the
-	// frozen v1 shape.
+	// PushEnabled queues phone push for the profile's notifications; off
+	// leaves them in the inbox only. Not part of the frozen v1 shape.
 	PushEnabled bool `json:"-"`
 	// PushLibraryIDs limits push to these libraries; empty means all.
 	PushLibraryIDs []int     `json:"-"`
@@ -162,19 +123,15 @@ type Preferences struct {
 }
 
 // DefaultPreferences returns the defaults for the profile on userID's
-// account: every interest reason on, the "everything new" reasons off.
+// account: everything new on.
 func DefaultPreferences(userID int, profileID string) Preferences {
 	return Preferences{
-		UserID:                 userID,
-		ProfileID:              profileID,
-		Enabled:                true,
-		NotifyFavorites:        true,
-		NotifyWatchlist:        true,
-		NotifyContinueWatching: true,
-		NotifyNextUp:           true,
-		NotifyNewEpisodes:      true,
-		NotifyNewMovies:        true,
-		PushEnabled:            true,
+		UserID:            userID,
+		ProfileID:         profileID,
+		Enabled:           true,
+		NotifyNewEpisodes: true,
+		NotifyNewMovies:   true,
+		PushEnabled:       true,
 	}
 }
 

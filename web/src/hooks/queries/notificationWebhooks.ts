@@ -11,8 +11,6 @@ import {
 } from "@/api/v2/notifications";
 import type { NotificationWebhookInput } from "@/api/types";
 import {
-  listNotificationWebPushSubscriptions,
-  deleteNotificationWebPushSubscription,
   deleteNotificationWebhook,
   rotateNotificationWebhookSecret,
   listNotificationWebhooks,
@@ -183,7 +181,7 @@ export function useTestNotificationWebhook() {
       if (inFlight.current) throw new Error("A test delivery is already in progress.");
       inFlight.current = true;
       try {
-        return await testNotificationDestination("webhook", id, context);
+        return await testNotificationDestination(id, context);
       } finally {
         inFlight.current = false;
       }
@@ -230,35 +228,3 @@ export function useRotateNotificationWebhookSecret() {
   };
 }
 
-export function useWebPushSubscriptions(enabled = true) {
-  const context = captureProfileRequestContext();
-  return useQuery({
-    queryKey: [...notificationKeys.webPushSubscriptions(), notificationScope(context)],
-    queryFn: () => listNotificationWebPushSubscriptions(context ?? captureNotificationAuthority()),
-    enabled: enabled && context !== null,
-    retry: false,
-  });
-}
-
-export function useDeleteWebPushSubscription() {
-  const queryClient = useQueryClient();
-  const context = captureProfileRequestContext();
-  return useMutation({
-    retry: false,
-    mutationFn: async (id: string) => {
-      if (!context) throw new StaleApiRequestContextError();
-      await deleteNotificationWebPushSubscription(id, context);
-      return context;
-    },
-    onSuccess: (authority) => {
-      requireNotificationAuthority(authority);
-      void queryClient.invalidateQueries({
-        queryKey: [...notificationKeys.webPushSubscriptions(), notificationScope(authority)],
-        exact: true,
-      });
-    },
-    onError: () => {
-      toast.error("Failed to remove push subscription");
-    },
-  });
-}

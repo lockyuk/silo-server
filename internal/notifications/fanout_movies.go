@@ -96,9 +96,6 @@ func (w *FanoutWorker) fanOutMovieEvent(ctx context.Context, tx pgx.Tx, event Re
 	if err := w.enqueueWebhookOutbox(ctx, tx, inserted, pending); err != nil {
 		return nil, err
 	}
-	if err := w.enqueueWebPushOutbox(ctx, tx, inserted); err != nil {
-		return nil, err
-	}
 	if err := w.enqueuePushOutbox(ctx, tx, inserted); err != nil {
 		return nil, err
 	}

@@ -25,8 +25,6 @@ type flatItemKind struct {
 	// AvailabilityTable receives the one-way "first became available in this
 	// library" facts for the kind.
 	AvailabilityTable string
-	// WantsToggle reads the channel's notify_new_* toggle for the kind.
-	WantsToggle func(ServerChannel) bool
 	// Selected reads the ingest scope's AvailabilityKinds flag for the kind.
 	Selected func(AvailabilityKinds) bool
 }
@@ -38,21 +36,18 @@ var flatItemKinds = []flatItemKind{
 		Kind:              EventKindMovie,
 		ItemType:          mediaTypeMovie,
 		AvailabilityTable: movieAvailabilityTable,
-		WantsToggle:       func(c ServerChannel) bool { return c.NotifyNewMovies },
 		Selected:          func(k AvailabilityKinds) bool { return k.Movies },
 	},
 	{
 		Kind:              EventKindAudiobook,
 		ItemType:          mediaTypeAudiobook,
 		AvailabilityTable: itemAvailabilityTable,
-		WantsToggle:       func(c ServerChannel) bool { return c.NotifyNewAudiobooks },
 		Selected:          func(k AvailabilityKinds) bool { return k.Audiobooks },
 	},
 	{
 		Kind:              EventKindEbook,
 		ItemType:          mediaTypeEbook,
 		AvailabilityTable: itemAvailabilityTable,
-		WantsToggle:       func(c ServerChannel) bool { return c.NotifyNewEbooks },
 		Selected:          func(k AvailabilityKinds) bool { return k.Ebooks },
 	},
 }

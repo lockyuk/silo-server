@@ -25,7 +25,6 @@ func NewWebhookRepository(pool *pgxpool.Pool) *WebhookRepository {
 const webhookColumns = `
 	id, user_id, profile_id, name, type, url_ciphertext, url_host,
 	signing_secret_ciphertext, enabled,
-	notify_favorites, notify_watchlist, notify_continue_watching, notify_next_up,
 	notify_requests, notify_new_releases,
 	consecutive_failures, disabled_reason,
 	last_success_at, last_failure_at, last_failure_status, last_failure_message,
@@ -36,7 +35,6 @@ func scanWebhook(row pgx.Row) (*Webhook, error) {
 	err := row.Scan(
 		&hook.ID, &hook.UserID, &hook.ProfileID, &hook.Name, &hook.Type,
 		&hook.URLCiphertext, &hook.URLHost, &hook.SigningSecretCiphertext, &hook.Enabled,
-		&hook.NotifyFavorites, &hook.NotifyWatchlist, &hook.NotifyContinueWatching, &hook.NotifyNextUp,
 		&hook.NotifyRequests, &hook.NotifyNewReleases,
 		&hook.ConsecutiveFailures, &hook.DisabledReason,
 		&hook.LastSuccessAt, &hook.LastFailureAt, &hook.LastFailureStatus, &hook.LastFailureMessage,
@@ -174,12 +172,10 @@ func (r *WebhookRepository) InsertWithLimit(ctx context.Context, hook Webhook, m
 		INSERT INTO notification_webhooks
 			(id, user_id, profile_id, name, type, url_ciphertext, url_host,
 			 signing_secret_ciphertext, enabled,
-			 notify_favorites, notify_watchlist, notify_continue_watching, notify_next_up,
 			 notify_requests, notify_new_releases)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
 		hook.ID, hook.UserID, hook.ProfileID, hook.Name, hook.Type,
 		hook.URLCiphertext, hook.URLHost, hook.SigningSecretCiphertext, hook.Enabled,
-		hook.NotifyFavorites, hook.NotifyWatchlist, hook.NotifyContinueWatching, hook.NotifyNextUp,
 		hook.NotifyRequests, hook.NotifyNewReleases); err != nil {
 		if isWebhookNameViolation(err) {
 			return ErrWebhookNameTaken
@@ -199,16 +195,13 @@ func (r *WebhookRepository) Update(ctx context.Context, hook Webhook) error {
 		UPDATE notification_webhooks SET
 			name = $2, type = $3, url_ciphertext = $4, url_host = $5,
 			signing_secret_ciphertext = $6, enabled = $7,
-			notify_favorites = $8, notify_watchlist = $9,
-			notify_continue_watching = $10, notify_next_up = $11,
-			notify_requests = $12,
-			consecutive_failures = $13, disabled_reason = $14,
-			notify_new_releases = $15,
+			notify_requests = $8,
+			consecutive_failures = $9, disabled_reason = $10,
+			notify_new_releases = $11,
 			updated_at = now()
 		WHERE id = $1`,
 		hook.ID, hook.Name, hook.Type, hook.URLCiphertext, hook.URLHost,
 		hook.SigningSecretCiphertext, hook.Enabled,
-		hook.NotifyFavorites, hook.NotifyWatchlist, hook.NotifyContinueWatching, hook.NotifyNextUp,
 		hook.NotifyRequests,
 		hook.ConsecutiveFailures, hook.DisabledReason, hook.NotifyNewReleases)
 	if err != nil {
@@ -481,13 +474,11 @@ func (r *WebhookRepository) UpdateGuarded(ctx context.Context, userID int, profi
 	}
 	row, err := scanWebhook(tx.QueryRow(ctx, `UPDATE notification_webhooks SET
  name=$4, url_ciphertext=$5, url_host=$6, enabled=$7,
- notify_favorites=$8, notify_watchlist=$9, notify_continue_watching=$10,
- notify_next_up=$11, notify_requests=$12, consecutive_failures=$13,
- disabled_reason=$14, notify_new_releases=$15, updated_at=now()
+ notify_requests=$8, consecutive_failures=$9,
+ disabled_reason=$10, notify_new_releases=$11, updated_at=now()
  WHERE user_id=$1 AND profile_id=$2 AND id=$3 RETURNING `+webhookColumns,
 		userID, profile, id, hook.Name, hook.URLCiphertext, hook.URLHost, hook.Enabled,
-		hook.NotifyFavorites, hook.NotifyWatchlist, hook.NotifyContinueWatching,
-		hook.NotifyNextUp, hook.NotifyRequests, hook.ConsecutiveFailures, hook.DisabledReason,
+		hook.NotifyRequests, hook.ConsecutiveFailures, hook.DisabledReason,
 		hook.NotifyNewReleases))
 	if isWebhookNameViolation(err) {
 		return nil, ErrWebhookNameTaken

@@ -24,13 +24,12 @@ func NewPreferencesRepository(pool *pgxpool.Pool) *PreferencesRepository {
 func (r *PreferencesRepository) Get(ctx context.Context, userID int, profileID string) (Preferences, error) {
 	prefs := DefaultPreferences(userID, profileID)
 	err := r.pool.QueryRow(ctx, `
-		SELECT enabled, notify_favorites, notify_watchlist, notify_continue_watching, notify_next_up,
+		SELECT enabled,
 		       notify_new_episodes, notify_new_movies, push_enabled, push_library_ids, updated_at
 		FROM notification_preferences
 		WHERE user_id = $1 AND profile_id = $2`,
 		userID, profileID,
-	).Scan(&prefs.Enabled, &prefs.NotifyFavorites, &prefs.NotifyWatchlist,
-		&prefs.NotifyContinueWatching, &prefs.NotifyNextUp,
+	).Scan(&prefs.Enabled,
 		&prefs.NotifyNewEpisodes, &prefs.NotifyNewMovies, &prefs.PushEnabled, &prefs.PushLibraryIDs, &prefs.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return prefs, nil
@@ -53,8 +52,7 @@ func (r *PreferencesRepository) GetMany(ctx context.Context, tx pgx.Tx, profiles
 	}
 	userIDs, profileIDs := profileKeyArrays(profiles)
 	rows, err := tx.Query(ctx, `
-		SELECT p.user_id, p.profile_id, p.enabled, p.notify_favorites, p.notify_watchlist,
-		       p.notify_continue_watching, p.notify_next_up,
+		SELECT p.user_id, p.profile_id, p.enabled,
 		       p.notify_new_episodes, p.notify_new_movies, p.push_enabled, p.push_library_ids, p.updated_at
 		FROM notification_preferences p
 		JOIN unnest($1::integer[], $2::text[]) AS wanted(user_id, profile_id)
@@ -66,8 +64,7 @@ func (r *PreferencesRepository) GetMany(ctx context.Context, tx pgx.Tx, profiles
 	defer rows.Close()
 	for rows.Next() {
 		var prefs Preferences
-		if err := rows.Scan(&prefs.UserID, &prefs.ProfileID, &prefs.Enabled, &prefs.NotifyFavorites,
-			&prefs.NotifyWatchlist, &prefs.NotifyContinueWatching, &prefs.NotifyNextUp,
+		if err := rows.Scan(&prefs.UserID, &prefs.ProfileID, &prefs.Enabled,
 			&prefs.NotifyNewEpisodes, &prefs.NotifyNewMovies, &prefs.PushEnabled, &prefs.PushLibraryIDs, &prefs.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan notification preferences: %w", err)
 		}
@@ -81,21 +78,15 @@ func (r *PreferencesRepository) GetMany(ctx context.Context, tx pgx.Tx, profiles
 func (r *PreferencesRepository) Upsert(ctx context.Context, prefs Preferences) error {
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO notification_preferences
-			(user_id, profile_id, enabled, notify_favorites, notify_watchlist, notify_continue_watching, notify_next_up,
-			 notify_new_episodes, notify_new_movies, push_enabled, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+			(user_id, profile_id, enabled, notify_new_episodes, notify_new_movies, push_enabled, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, now())
 		ON CONFLICT (user_id, profile_id) DO UPDATE SET
 			enabled = EXCLUDED.enabled,
-			notify_favorites = EXCLUDED.notify_favorites,
-			notify_watchlist = EXCLUDED.notify_watchlist,
-			notify_continue_watching = EXCLUDED.notify_continue_watching,
-			notify_next_up = EXCLUDED.notify_next_up,
 			notify_new_episodes = EXCLUDED.notify_new_episodes,
 			notify_new_movies = EXCLUDED.notify_new_movies,
 			push_enabled = EXCLUDED.push_enabled,
 			updated_at = now()`,
-		prefs.UserID, prefs.ProfileID, prefs.Enabled, prefs.NotifyFavorites,
-		prefs.NotifyWatchlist, prefs.NotifyContinueWatching, prefs.NotifyNextUp,
+		prefs.UserID, prefs.ProfileID, prefs.Enabled,
 		prefs.NotifyNewEpisodes, prefs.NotifyNewMovies, prefs.PushEnabled)
 	if err != nil {
 		return fmt.Errorf("upsert notification preferences: %w", err)
@@ -115,8 +106,7 @@ func (r *PreferencesRepository) DeleteForProfile(ctx context.Context, userID int
 // new movie. Used by the fanout worker.
 func (r *PreferencesRepository) ListNewMovieRecipients(ctx context.Context, tx pgx.Tx) ([]Preferences, error) {
 	rows, err := tx.Query(ctx, `
-		SELECT user_id, profile_id, enabled, notify_favorites, notify_watchlist,
-		       notify_continue_watching, notify_next_up,
+		SELECT user_id, profile_id, enabled,
 		       notify_new_episodes, notify_new_movies, push_enabled, push_library_ids, updated_at
 		FROM notification_preferences
 		WHERE enabled AND notify_new_movies
@@ -128,8 +118,7 @@ func (r *PreferencesRepository) ListNewMovieRecipients(ctx context.Context, tx p
 	var out []Preferences
 	for rows.Next() {
 		var prefs Preferences
-		if err := rows.Scan(&prefs.UserID, &prefs.ProfileID, &prefs.Enabled, &prefs.NotifyFavorites,
-			&prefs.NotifyWatchlist, &prefs.NotifyContinueWatching, &prefs.NotifyNextUp,
+		if err := rows.Scan(&prefs.UserID, &prefs.ProfileID, &prefs.Enabled,
 			&prefs.NotifyNewEpisodes, &prefs.NotifyNewMovies, &prefs.PushEnabled, &prefs.PushLibraryIDs, &prefs.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan new movie recipient: %w", err)
 		}

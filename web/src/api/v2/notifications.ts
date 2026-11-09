@@ -80,12 +80,11 @@ export async function listNotifications(
   };
 }
 export type NotifiedSeries = V2Result<"GET /api/v2/notifications/series">["items"][number];
-export type NotifiedSeriesStatus = "active" | "inactive";
+export type NotifiedSeriesStatus = "all" | "followed" | "muted";
 type NotifiedSeriesQuery = NonNullable<V2Query<"GET /api/v2/notifications/series">>;
-/** The search, reason filter, and sort the Series view applies to both lists. */
+/** The search and sort the Series view applies. */
 export type NotifiedSeriesOptions = {
   q?: string;
-  reason?: NotifiedSeriesQuery["reason"];
   sort?: NotifiedSeriesQuery["sort"];
 };
 export async function listNotificationSeries(
@@ -102,7 +101,6 @@ export async function listNotificationSeries(
       cursor,
       image_size: "small",
       q: options.q || undefined,
-      reason: options.reason,
       sort: options.sort,
     },
     profileContext,
@@ -138,6 +136,21 @@ export async function setNotificationSeriesMuted(
   );
   requireNotificationAuthority(profileContext);
 }
+/** Follows (or unfollows) one series for new-episode notifications. */
+export async function setNotificationSeriesFollowed(
+  seriesId: string,
+  followed: boolean,
+  profileContext = captureNotificationAuthority(),
+) {
+  requireNotificationAuthority(profileContext);
+  await v2(
+    followed
+      ? "PUT /api/v2/notifications/series/{series_id}/follow"
+      : "DELETE /api/v2/notifications/series/{series_id}/follow",
+    { path: { series_id: seriesId }, profileContext, retryAuthentication: false },
+  );
+  requireNotificationAuthority(profileContext);
+}
 export async function unreadNotificationCount(profileContext = captureNotificationAuthority()) {
   requireNotificationAuthority(profileContext);
   const body = await v2("GET /api/v2/notifications/unread-count", { profileContext });
@@ -164,10 +177,6 @@ export async function updateNotificationPreferences(
   const body = await v2("PUT /api/v2/notifications/preferences", {
     body: {
       enabled: input.enabled,
-      notify_favorites: input.notify_favorites,
-      notify_watchlist: input.notify_watchlist,
-      notify_continue_watching: input.notify_continue_watching,
-      notify_next_up: input.notify_next_up,
       notify_new_episodes: input.notify_new_episodes,
       notify_new_movies: input.notify_new_movies,
       push_enabled: input.push_enabled,

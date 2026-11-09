@@ -4,10 +4,6 @@ import {
   queueNotificationEmailVerification,
   type EmailVerificationIntent,
 } from "@/api/v2/notificationEmailVerification";
-import {
-  beginNotificationDiscordLink,
-  unlinkNotificationDiscord,
-} from "@/api/v2/notificationDiscord";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   keepPreviousData,
@@ -25,6 +21,7 @@ import {
   type NotificationListFilter,
   listNotificationSeries,
   setNotificationSeriesMuted,
+  setNotificationSeriesFollowed,
   type NotifiedSeriesOptions,
   type NotifiedSeriesStatus,
   unreadNotificationCount,
@@ -37,12 +34,9 @@ import {
   getNotificationEmailPreferences,
   clearNotificationEmailAddress,
   updateNotificationEmailPreferences,
-  getNotificationDiscordPreferences,
-  updateNotificationDiscordPreferences,
 } from "@/api/v2/notificationChannels";
 import type {
   AppNotification,
-  NotificationDiscordMode,
   NotificationEmailPreferencesUpdate,
   NotificationListResponse,
   NotificationPreferences,
@@ -65,6 +59,7 @@ export const notificationInboxKeys = {
     scope,
   ],
 };
+const SERIES_STATUSES = ["all", "followed", "muted"] as const;
 function invalidateInbox(queryClient: QueryClient, scope = notificationScope()) {
   for (const status of ["all", "unread"] as const)
     void queryClient.invalidateQueries({ queryKey: notificationInboxKeys.list(status, scope) });
@@ -110,8 +105,7 @@ export function useNotifications(
   });
   return { ...query, restart: () => queryClient.resetQueries({ queryKey, exact: true }) };
 }
-/** The series whose new episodes can notify the profile, or whose
- * notifications its preferences silence, ordered by title. */
+/** The series the profile follows or muted, ordered by title. */
 export function useNotificationSeries(
   status: NotifiedSeriesStatus,
   options: NotifiedSeriesOptions,
@@ -126,15 +120,15 @@ export function useNotificationSeries(
     getNextPageParam: (last) => last.next_cursor,
     // A new search or sort keeps the previous list on screen until it loads.
     placeholderData: keepPreviousData,
-    // Favorites, watchlist, and progress change the list from other pages, so
-    // reopening the view reads it again.
+    // Following a series from its page changes the list, so reopening the
+    // view reads it again.
     refetchOnMount: "always",
     enabled: enabled && context !== null,
     retry: false,
   });
 }
-/** Mutes or unmutes one series, then reloads both series lists: the series
- * moves between them. A mute offers Undo, since the row leaves the view. */
+/** Mutes or unmutes one series, then reloads the series lists. A mute offers
+ * Undo. */
 export function useSetNotificationSeriesMuted() {
   const queryClient = useQueryClient();
   const context = captureNotificationAuthority();
@@ -144,7 +138,7 @@ export function useSetNotificationSeriesMuted() {
     retry: false,
     onSettled: () => {
       const scope = notificationScope(context);
-      for (const status of ["active", "inactive"] as const)
+      for (const status of SERIES_STATUSES)
         void queryClient.invalidateQueries({
           queryKey: notificationInboxKeys.series(status, scope),
         });
@@ -164,6 +158,56 @@ export function useSetNotificationSeriesMuted() {
     },
   });
   return mutation;
+}
+/** Follows or unfollows one series, then reloads the series lists. */
+export function useSetNotificationSeriesFollowed() {
+  const queryClient = useQueryClient();
+  // Rendered on every title page, so an unauthenticated render must not throw.
+  const context = captureProfileRequestContext();
+  return useMutation({
+    mutationFn: ({
+      seriesId,
+      followed,
+    }: {
+      seriesId: string;
+      title: string;
+      followed: boolean;
+    }) => {
+      if (!context) throw new StaleApiRequestContextError();
+      return setNotificationSeriesFollowed(seriesId, followed, context);
+    },
+    retry: false,
+    onSettled: () => {
+      if (!context) return;
+      const scope = notificationScope(context);
+      for (const status of SERIES_STATUSES)
+        void queryClient.invalidateQueries({
+          queryKey: notificationInboxKeys.series(status, scope),
+        });
+    },
+    onSuccess: (_data, variables) => {
+      toast.success(
+        variables.followed
+          ? `Following ${variables.title}: new episodes will notify you`
+          : `Stopped following ${variables.title}`,
+      );
+    },
+    onError: (error, variables) => {
+      if (error instanceof StaleApiRequestContextError) return;
+      toast.error(
+        variables.followed ? "Failed to follow the series" : "Failed to unfollow the series",
+      );
+    },
+  });
+}
+/** The IDs of every series the profile follows, for a Follow button's state. */
+export function useFollowedSeriesIds(enabled = true) {
+  const query = useNotificationSeries("followed", {}, enabled);
+  const ids = new Set<string>();
+  for (const page of query.data?.pages ?? [])
+    for (const series of page.series) ids.add(series.item.content_id);
+  if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();
+  return { ids, isLoading: query.isLoading };
 }
 export function useUnreadNotificationCount(enabled = true) {
   const context = captureProfileRequestContext();
@@ -223,8 +267,7 @@ export function useUpdateNotificationPreferences() {
     onSuccess: (prefs) => {
       const scope = notificationScope(context);
       queryClient.setQueryData(notificationInboxKeys.preferences(scope), prefs);
-      // Preferences decide which listed series notify.
-      for (const status of ["active", "inactive"] as const)
+      for (const status of SERIES_STATUSES)
         void queryClient.invalidateQueries({
           queryKey: notificationInboxKeys.series(status, scope),
         });
@@ -386,96 +429,6 @@ export function useClearEmailNotificationAddress() {
     mutateAsync: (_?: void, options?: Parameters<typeof mutation.mutateAsync>[1]) =>
       mutation.mutateAsync(context, options),
   };
-}
-
-export function useDiscordNotificationPreferences(enabled = true) {
-  const context = captureProfileRequestContext();
-  return useQuery({
-    queryKey: [...notificationKeys.discordPreferences(), notificationScope(context)],
-    queryFn: () => getNotificationDiscordPreferences(context ?? captureNotificationAuthority()),
-    enabled: enabled && context !== null,
-    retry: false,
-  });
-}
-
-export function useUpdateDiscordNotificationPreferences() {
-  const queryClient = useQueryClient();
-  const context = captureProfileRequestContext();
-  return useMutation({
-    retry: false,
-    mutationFn: (update: { mode: NotificationDiscordMode }) =>
-      updateNotificationDiscordPreferences(update, context ?? captureNotificationAuthority()),
-    onSuccess: (prefs) => {
-      if (!context) return;
-      requireNotificationAuthority(context);
-      queryClient.setQueryData(
-        [...notificationKeys.discordPreferences(), notificationScope(context)],
-        prefs,
-      );
-    },
-    onError: (error) => {
-      if (error instanceof StaleApiRequestContextError) return;
-      toast.error(error instanceof Error ? error.message : "Failed to save discord preferences");
-    },
-  });
-}
-
-/** Starts the Discord account-link OAuth flow; navigate to the returned URL. */
-export function useDiscordLinkInit() {
-  const context = captureProfileRequestContext();
-  const inFlight = useRef(false);
-  return useMutation({
-    retry: false,
-    mutationFn: async () => {
-      if (!context) throw new StaleApiRequestContextError();
-      if (inFlight.current) throw new Error("Discord linking is already starting.");
-      inFlight.current = true;
-      try {
-        return await beginNotificationDiscordLink(context);
-      } finally {
-        inFlight.current = false;
-      }
-    },
-    onError: (error) => {
-      if (!context) return;
-      try {
-        requireNotificationAuthority(context);
-      } catch {
-        return;
-      }
-      toast.error(error instanceof Error ? error.message : "Failed to start Discord link");
-    },
-  });
-}
-
-export function useUnlinkDiscord() {
-  const queryClient = useQueryClient();
-  const context = captureProfileRequestContext();
-  return useMutation({
-    retry: false,
-    mutationFn: async () => {
-      if (!context) throw new StaleApiRequestContextError();
-      await unlinkNotificationDiscord(context);
-      return context;
-    },
-    onSuccess: (authority) => {
-      requireNotificationAuthority(authority);
-      void queryClient.invalidateQueries({
-        queryKey: [...notificationKeys.discordPreferences(), notificationScope(authority)],
-        exact: true,
-      });
-      toast.success("Discord account unlinked");
-    },
-    onError: () => {
-      if (!context) return;
-      try {
-        requireNotificationAuthority(context);
-      } catch {
-        return;
-      }
-      toast.error("Failed to unlink Discord account");
-    },
-  });
 }
 
 // --- Realtime cache reducers (used by RealtimeEventsProvider) ---

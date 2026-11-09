@@ -8,28 +8,25 @@ import (
 // of one release event. Returns the matched reason flags and whether a
 // delivery should be created.
 //
-// Rules (docs/architecture/notifications.md, "Eligibility rules"):
-//   - favorite / watchlist / continue_watching notify on any newly available
-//     episode of the series
-//   - next_up notifies only when the episode is at or beyond the profile's
-//     next_expected_episode_key
-//   - suppress when last_notified_episode_key >= episode_key
-//   - new_release notifies on any newly available episode when the profile
-//     asked for every new episode
-//   - profile preferences are a hard gate: disabled reasons cannot match
-func EvaluateRecipient(interest SeriesInterest, prefs Preferences, episodeKey int) (ReasonFlags, bool) {
+//   - a profile that follows the series is notified of any newly available
+//     episode of it
+//   - a profile that asked for everything new is notified of any newly
+//     available episode, unless it muted the series (the candidate query
+//     leaves those out)
+//   - a follower that did not ask for everything new is not told again of an
+//     episode at or below the last it was told about
+//   - a disabled profile is never notified
+func EvaluateRecipient(candidate FanoutCandidate, prefs Preferences, episodeKey int) (ReasonFlags, bool) {
 	if !prefs.Enabled {
 		return ReasonFlags{}, false
 	}
 	// A profile that asked for every new episode hears about any episode
 	// newly added, including one older than the last it was told about (a
 	// back-filled season); the per-episode unique key still stops repeats.
-	if !prefs.NotifyNewEpisodes && interest.LastNotifiedEpisodeKey != nil && *interest.LastNotifiedEpisodeKey >= episodeKey {
+	if !prefs.NotifyNewEpisodes && candidate.LastNotifiedEpisodeKey != nil && *candidate.LastNotifiedEpisodeKey >= episodeKey {
 		return ReasonFlags{}, false
 	}
-	flags := ActiveReasons(interest, prefs)
-	flags.NextUp = flags.NextUp && episodeKey >= *interest.NextExpectedEpisodeKey
-	flags.NewRelease = prefs.NotifyNewEpisodes
+	flags := ReasonFlags{Followed: candidate.Followed, NewRelease: prefs.NotifyNewEpisodes}
 	return flags, flags.Any()
 }
 
@@ -40,22 +37,6 @@ func EvaluateMovieRecipient(prefs Preferences) (ReasonFlags, bool) {
 		return ReasonFlags{}, false
 	}
 	return ReasonFlags{NewRelease: true}, true
-}
-
-// ActiveReasons is the part of the eligibility rules that does not depend on
-// a release event: the interest reasons the profile's preferences let notify.
-// A Next Up reason counts only once the row knows the episode it waits for;
-// EvaluateRecipient then matches it against each event's episode key.
-func ActiveReasons(interest SeriesInterest, prefs Preferences) ReasonFlags {
-	if !prefs.Enabled {
-		return ReasonFlags{}
-	}
-	return ReasonFlags{
-		Favorite:         interest.Favorite && prefs.NotifyFavorites,
-		Watchlist:        interest.Watchlist && prefs.NotifyWatchlist,
-		ContinueWatching: interest.ContinueWatching && prefs.NotifyContinueWatching,
-		NextUp:           interest.NextUpCandidate && prefs.NotifyNextUp && interest.NextExpectedEpisodeKey != nil,
-	}
 }
 
 // PartitionEventsByKind splits claimed events into episode events (which fan

@@ -1301,7 +1301,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 		homeDismissalHandler = handlers.NewHomeDismissalHandler(deps.UserStoreProvider)
 		homeDismissalHandler.EventsHub = deps.EventsHub
 		if deps.DB != nil {
-			homeDismissalHandler.SetSeriesDrops(notifications.TrackDroppedSeries(catalog.NewDroppedSeriesRepo(deps.DB), deps.Notifications), itemRepo)
+			homeDismissalHandler.SetSeriesDrops(catalog.NewDroppedSeriesRepo(deps.DB), itemRepo)
 		}
 		if dispatcher, ok := deps.WatchProviderService.(handlers.LocalDroppedEventDispatcher); ok {
 			homeDismissalHandler.SetLocalDroppedEventDispatcher(dispatcher)
@@ -2386,9 +2386,9 @@ func newChiRouter(deps Dependencies) chi.Router {
 		historyIdentity := watchstate.NewStableIdentityResolver(itemRepo, episodeRepo, providerIDRepo)
 		historyImportSvc.SetStableIdentityResolver(historyIdentity)
 		// Shows hidden from the source's Continue Watching are dropped through
-		// the same tracker as Home dismissals, so interest recomputes.
+		// the same store as Home dismissals.
 		historyImportSvc.SetContinueWatchingStores(
-			notifications.TrackDroppedSeries(catalog.NewDroppedSeriesRepo(deps.DB), deps.Notifications),
+			catalog.NewDroppedSeriesRepo(deps.DB),
 			catalog.NewNextUpRepository(deps.DB, deps.UserStoreProvider),
 		)
 		if deps.EventsHub != nil {
@@ -2825,21 +2825,14 @@ func newChiRouter(deps Dependencies) chi.Router {
 		v2deps.ApplePushRetirement = deps.Notifications.PushDevices
 		v2deps.AdminNotificationPush = deps.Notifications
 		v2deps.AdminPushStyle = deps.Notifications
-		v2deps.AdminNotificationDiscord = deps.Notifications
 		v2deps.NotificationChannels = deps.Notifications
 		v2deps.NotificationEmailArtwork = deps.Notifications
 		if deps.Notifications.EmailAlerts != nil {
 			v2deps.AdminEmailAlerts = deps.Notifications.EmailAlerts
 			v2deps.NotificationEmailAlertLinks = handlers.NewEmailAlertLinksHandler(deps.Notifications.EmailAlerts)
 		}
-		v2deps.NotificationDiscordManagement = newDiscordNotificationsHandler(deps, profileTokenService)
 		v2deps.NotificationEmailVerification = deps.Notifications.EmailVerification
 		v2deps.NotificationEmailLinks = handlers.NewEmailLinkHandler(deps.Notifications)
-		linkHandler := handlers.NewDiscordLinkHandler(deps.Notifications, deps.Notifications.Settings, deps.PublicURL)
-		v2deps.NotificationDiscordLinks = linkHandler
-		if deps.OnConfigChange != nil {
-			deps.OnConfigChange(func(_, updated *config.Config) { linkHandler.SetPublicURL(updated.Server.PublicURL) })
-		}
 		v2deps.NotificationRelay = handlers.NewAdminApplePushHandler(deps.Notifications, settingsRepo)
 	}
 	v2deps.AdminAccessGroups = accessGroupHandler
@@ -3332,25 +3325,12 @@ func newChiRouter(deps Dependencies) chi.Router {
 			}
 		}
 
-		// Discord account-link OAuth callback: public — Discord redirects the
-		// browser here without credentials; the one-time link-state row
-		// authenticates the request and maps it back to the initiating
-		// account. The static path coexists with the authenticated
-		// /notifications subrouter below (static routes win in chi).
-		var discordNotificationsHandler *handlers.DiscordNotificationsHandler
 		if deps.Notifications != nil {
-			discordNotificationsHandler = newDiscordNotificationsHandler(deps, profileTokenService)
-			if deps.OnConfigChange != nil {
-				h := discordNotificationsHandler
-				deps.OnConfigChange(func(_, updated *config.Config) { h.SetPublicURL(updated.Server.PublicURL) })
-			}
-			r.Get("/notifications/discord/link/callback", discordNotificationsHandler.HandleLinkCallback)
-
 			// Tokenized email links: public — clicked from mail clients on
 			// devices without a Silo session; the single-use token (verify)
 			// or per-profile capability token (unsubscribe) authenticates the
 			// request. Static paths coexist with the authenticated
-			// /notifications subrouter below, same as the Discord callback.
+			// /notifications subrouter below.
 			deps.Notifications.SetPublicURL(deps.PublicURL)
 			emailLinkHandler := handlers.NewEmailLinkHandler(deps.Notifications)
 			r.Get("/notifications/email/verify", emailLinkHandler.HandleVerify)
@@ -3531,17 +3511,6 @@ func newChiRouter(deps Dependencies) chi.Router {
 					notificationsHandler.SetApplePushDisplayTokenIssuer(jwtService)
 					r.With(apimw.RequireProfile).Post("/events/ws-ticket", notificationsHandler.HandleMintWSTicket)
 					r.With(apimw.RequireProfile).Post("/devices/push/apple", notificationsHandler.HandleRegisterApplePushDevice)
-					// Discord DM channel: the linked identity and mode hang off
-					// the login account. Writes require the household manager
-					// in the handler; the optional profile routes stay outside
-					// the RequireProfile subrouter below (static paths coexist
-					// with it, same as the public email-link routes above).
-					if discordNotificationsHandler != nil {
-						r.Get("/notifications/discord-preferences", discordNotificationsHandler.HandleGetPreferences)
-						r.Put("/notifications/discord-preferences", discordNotificationsHandler.HandleUpdatePreferences)
-						r.Delete("/notifications/discord-link", discordNotificationsHandler.HandleUnlink)
-						r.Post("/notifications/discord/link/init", discordNotificationsHandler.HandleLinkInit)
-					}
 					r.Route("/notifications", func(r chi.Router) {
 						r.Use(apimw.RequireProfile)
 						r.Get("/", notificationsHandler.HandleList)
@@ -3566,12 +3535,6 @@ func newChiRouter(deps Dependencies) chi.Router {
 							r.Delete("/{id}", notificationsHandler.HandleDeleteWebhook)
 							r.Post("/{id}/rotate-secret", notificationsHandler.HandleRotateWebhookSecret)
 							r.Post("/{id}/test", notificationsHandler.HandleTestWebhook)
-						})
-						r.Route("/web-push", func(r chi.Router) {
-							r.Get("/subscriptions", notificationsHandler.HandleWebPushList)
-							r.Post("/subscriptions", notificationsHandler.HandleWebPushSubscribe)
-							r.Delete("/subscriptions/{id}", notificationsHandler.HandleWebPushDelete)
-							r.Post("/unsubscribe", notificationsHandler.HandleWebPushUnsubscribe)
 						})
 						r.Get("/{id}", notificationsHandler.HandleGet)
 						r.Post("/{id}/read", notificationsHandler.HandleMarkRead)
@@ -4422,9 +4385,6 @@ func newChiRouter(deps Dependencies) chi.Router {
 							if settingsRepo != nil {
 								r.Post("/email/test", emailHandler.HandleTest)
 							}
-							if discordNotificationsHandler != nil {
-								r.Post("/notifications/discord/test", discordNotificationsHandler.HandleAdminTest)
-							}
 							if deps.Notifications != nil || settingsRepo != nil {
 								applePushHandler := handlers.NewAdminApplePushHandler(deps.Notifications, settingsRepo)
 								if deps.Notifications != nil {
@@ -4435,17 +4395,6 @@ func newChiRouter(deps Dependencies) chi.Router {
 									r.Post("/notifications/push/relay/register", applePushHandler.HandleRegisterRelay)
 									r.Delete("/notifications/push/relay", applePushHandler.HandleClearRelay)
 								}
-							}
-							if deps.Notifications != nil && deps.Notifications.ServerChannels != nil {
-								serverChannelsHandler := handlers.NewAdminServerChannelsHandler(deps.Notifications)
-								r.Route("/notifications/server-channels", func(r chi.Router) {
-									r.Get("/", serverChannelsHandler.HandleList)
-									r.Post("/", serverChannelsHandler.HandleCreate)
-									r.Put("/{id}", serverChannelsHandler.HandleUpdate)
-									r.Delete("/{id}", serverChannelsHandler.HandleDelete)
-									r.Post("/{id}/rotate-secret", serverChannelsHandler.HandleRotateSecret)
-									r.Post("/{id}/test", serverChannelsHandler.HandleTest)
-								})
 							}
 							if adminIntroHandler != nil {
 								r.Post("/items/{id}/refresh-markers", adminIntroHandler.HandleRefreshEpisodeMarkers)
@@ -5432,14 +5381,6 @@ func newPersonalAPIKeyHandler(
 ) *handlers.APIKeyHandler {
 	h := handlers.NewAPIKeyHandler(repo)
 	h.Stores = stores
-	h.ProfileTokens = tokens
-	return h
-}
-
-// Both API versions use the same household authority dependencies.
-func newDiscordNotificationsHandler(deps Dependencies, tokens *access.ProfileTokenService) *handlers.DiscordNotificationsHandler {
-	h := handlers.NewDiscordNotificationsHandler(deps.Notifications, deps.PublicURL)
-	h.Stores = deps.UserStoreProvider
 	h.ProfileTokens = tokens
 	return h
 }

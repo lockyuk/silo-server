@@ -3186,23 +3186,6 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/api/v2/admin/notifications/discord/test": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Verify the stored Discord bot credential without sending a message. */
-    post: operations["testAdminDiscordNotification"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   "/api/v2/admin/notifications/email-alerts": {
     parameters: {
       query?: never;
@@ -3454,76 +3437,6 @@ export interface paths {
     put?: never;
     /** Register or rotate the configured push relay credential. */
     post: operations["registerAdminNotificationRelay"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v2/admin/notifications/server-channels": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** List server notification channels. */
-    get: operations["listAdminNotificationServerChannels"];
-    put?: never;
-    /** Create a server notification channel and reveal its signing secret once. */
-    post: operations["createAdminNotificationServerChannel"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v2/admin/notifications/server-channels/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    /** Update channel configuration and atomically reset dispatch state on URL replacement or re-enabling. Never replay an uncertain update. */
-    put: operations["updateAdminNotificationServerChannel"];
-    post?: never;
-    /** Delete the exact server notification channel and its row-local delivery bookkeeping. Does not recall already-dispatched provider work. */
-    delete: operations["deleteAdminNotificationServerChannel"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v2/admin/notifications/server-channels/{id}/rotate-secret": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Replace the generic server channel signing secret and reveal it once. Never replay an uncertain rotation. */
-    post: operations["rotateAdminNotificationServerChannelSecret"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v2/admin/notifications/server-channels/{id}/test": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Send one synchronous sample to a server notification channel. */
-    post: operations["testAdminNotificationServerChannel"];
     delete?: never;
     options?: never;
     head?: never;
@@ -9364,84 +9277,6 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/api/v2/notifications/discord-link": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    post?: never;
-    /**
-     * Unlink the account's current Discord identity and turn delivery off. Send once; replay can unlink a later connection.
-     * @description Discord delivery is account-wide, so only the account's household manager may change it. X-Profile-Id must name the account's primary profile, with X-Profile-Token when that profile is PIN-protected (without it the request is 403 profile_verification_required); naming any other profile is 403 permission_denied, including on an admin account. A request without X-Profile-Id is accepted only from an admin account's API key, or from an admin account's login session while no profile on the account is PIN-protected or access-restricted; otherwise it is 403 permission_denied.
-     */
-    delete: operations["unlinkNotificationDiscord"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v2/notifications/discord-preferences": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Read the login account's Discord notification preferences. */
-    get: operations["getNotificationDiscordPreferences"];
-    /**
-     * Set the login account's Discord delivery mode.
-     * @description Discord delivery is account-wide, so only the account's household manager may change it. X-Profile-Id must name the account's primary profile, with X-Profile-Token when that profile is PIN-protected (without it the request is 403 profile_verification_required); naming any other profile is 403 permission_denied, including on an admin account. A request without X-Profile-Id is accepted only from an admin account's API key, or from an admin account's login session while no profile on the account is PIN-protected or access-restricted; otherwise it is 403 permission_denied.
-     */
-    put: operations["updateNotificationDiscordPreferences"];
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v2/notifications/discord/link/callback": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Consume Discord OAuth state and redirect to notification settings. */
-    get: operations["completeNotificationDiscordLink"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v2/notifications/discord/link/init": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Begin one account-bound Discord consent flow.
-     * @description Discord delivery is account-wide, so only the account's household manager may change it. X-Profile-Id must name the account's primary profile, with X-Profile-Token when that profile is PIN-protected (without it the request is 403 profile_verification_required); naming any other profile is 403 permission_denied, including on an admin account. A request without X-Profile-Id is accepted only from an admin account's API key, or from an admin account's login session while no profile on the account is PIN-protected or access-restricted; otherwise it is 403 permission_denied.
-     */
-    post: operations["beginNotificationDiscordLink"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   "/api/v2/notifications/email-preferences": {
     parameters: {
       query?: never;
@@ -9710,13 +9545,37 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * List the series whose new episodes can notify the acting profile.
-     * @description Every series the profile favorited, put on its watchlist, is partway through, or waits on a next episode of, and every series it muted, filtered and sorted as asked (by title by default). Each carries its reasons, which of them the profile's notification preferences let notify, and whether the profile muted it. Series the viewer may not see are omitted.
+     * List the series the acting profile follows or muted.
+     * @description Every series the profile follows and every series it muted, filtered and sorted as asked (by title by default). Each says whether the profile follows it and whether it muted it. Series the viewer may not see are omitted.
      */
     get: operations["listNotificationSeries"];
     put?: never;
     post?: never;
     delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/notifications/series/{series_id}/follow": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Follow one series for new-episode notifications.
+     * @description The acting profile gets a notification for each new episode of the series, whether or not it asked for everything new. Following lifts any mute of the series. Following a series already followed succeeds and changes nothing. A series the viewer may not see, or an item that is not a series, is 404.
+     */
+    put: operations["followNotificationSeries"];
+    post?: never;
+    /**
+     * Stop following one series.
+     * @description The series no longer notifies the acting profile unless it asked for everything new, in which case it notifies it like any other series. Unfollowing a series that is not followed succeeds and changes nothing. No access check runs, so a profile can unfollow a series it can no longer see.
+     */
+    delete: operations["unfollowNotificationSeries"];
     options?: never;
     head?: never;
     patch?: never;
@@ -9732,13 +9591,13 @@ export interface paths {
     get?: never;
     /**
      * Mute new-episode notifications for one series.
-     * @description The acting profile gets no new-episode notification for the series on any channel, whatever its reasons, until it unmutes. Favorites, the watchlist, Home, and watch history are unchanged, and other profiles are unaffected. Muting a series already muted succeeds and changes nothing. A series the viewer may not see, or an item that is not a series, is 404.
+     * @description The acting profile gets no new-episode notification for the series on any channel, whether or not it follows it or asked for everything new, until it unmutes. Following a series lifts its mute. Other profiles are unaffected. Muting a series already muted succeeds and changes nothing. A series the viewer may not see, or an item that is not a series, is 404.
      */
     put: operations["muteNotificationSeries"];
     post?: never;
     /**
      * Unmute new-episode notifications for one series.
-     * @description The series notifies the acting profile again for its active reasons. The mute applies when notification delivery evaluates a new episode, normally within a minute of it arriving: an episode evaluated while the series was muted is not announced later, and one still waiting to be evaluated when the profile unmutes is announced. Unmuting a series that is not muted succeeds and changes nothing. No access check runs, so a profile can lift a mute on a series it can no longer see.
+     * @description The series notifies the acting profile again. The mute applies when notification delivery evaluates a new episode, normally within a minute of it arriving: an episode evaluated while the series was muted is not announced later, and one still waiting to be evaluated when the profile unmutes is announced. Unmuting a series that is not muted succeeds and changes nothing. No access check runs, so a profile can lift a mute on a series it can no longer see.
      */
     delete: operations["unmuteNotificationSeries"];
     options?: never;
@@ -9774,58 +9633,6 @@ export interface paths {
     get: operations["getNotificationUnreadCount"];
     put?: never;
     post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v2/notifications/web-push/subscriptions": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Manage the acting profile's notification inbox. */
-    get: operations["listNotificationWebPushSubscriptions"];
-    put?: never;
-    /** Register or reassign a browser endpoint to the current profile. Send once; replay can replace newer intent or re-enable delivery. */
-    post: operations["subscribeNotificationWebPush"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v2/notifications/web-push/subscriptions/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    post?: never;
-    /** Remove a server subscription belonging to the current profile. Does not unsubscribe the browser or order concurrent registration intents. */
-    delete: operations["deleteNotificationWebPushSubscription"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v2/notifications/web-push/unsubscribe": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Remove the account's current registration for a browser endpoint. Send once; a retry can delete a newer registration. */
-    post: operations["unsubscribeNotificationWebPush"];
     delete?: never;
     options?: never;
     head?: never;
@@ -17122,12 +16929,6 @@ export interface components {
       /** Format: uri-reference */
       url?: string;
     };
-    AdminNotificationDiscordTestResult: {
-      /** Format: int64 */
-      duration_ms: number;
-      message: string;
-      ok: boolean;
-    };
     AdminNotificationPushTestInputBody: {
       /**
        * @description Opaque identifier
@@ -22725,21 +22526,9 @@ export interface components {
       has_more: boolean;
       ordered_ids: string[];
     };
-    CollectionNotificationServerChannel: {
-      /** @description The page's items; empty, never null */
-      items: components["schemas"]["NotificationServerChannel"][];
-      /** @description Cursor state; absent for bounded unpaginated collections */
-      page?: components["schemas"]["PageInfo"];
-    };
     CollectionNotificationWebhookDestination: {
       /** @description The page's items; empty, never null */
       items: components["schemas"]["NotificationWebhookDestination"][];
-      /** @description Cursor state; absent for bounded unpaginated collections */
-      page?: components["schemas"]["PageInfo"];
-    };
-    CollectionNotificationWebPushSubscription: {
-      /** @description The page's items; empty, never null */
-      items: components["schemas"]["NotificationWebPushSubscription"][];
       /** @description Cursor state; absent for bounded unpaginated collections */
       page?: components["schemas"]["PageInfo"];
     };
@@ -25608,10 +25397,6 @@ export interface components {
       total: number;
       unit: string;
     };
-    KeysStruct: {
-      auth: string;
-      p256dh: string;
-    };
     Library: {
       /**
        * @description Translate descriptions when providers lack the language
@@ -27216,7 +27001,6 @@ export interface components {
       allowed: boolean;
       android_push: components["schemas"]["NotificationPushCapability"];
       apple_push: components["schemas"]["NotificationPushCapability"];
-      discord: components["schemas"]["NotificationAccountChannelCapability"];
       email: components["schemas"]["NotificationAccountChannelCapability"];
       in_app: components["schemas"]["NotificationInAppCapability"];
       /** @description Opaque revision of this document */
@@ -27227,12 +27011,7 @@ export interface components {
        * @enum {string}
        */
       state: "available" | "disabled" | "not_configured" | "unsupported";
-      web_push: components["schemas"]["NotificationWebPushCapability"];
       webhooks: components["schemas"]["NotificationWebhookCapability"];
-    };
-    NotificationChannelModeInputBody: {
-      /** @enum {string} */
-      mode: "off" | "per_episode" | "daily_digest" | "per_episode_and_digest" | "weekly_digest";
     };
     NotificationCountOutputBody: {
       /** Format: int64 */
@@ -27257,17 +27036,6 @@ export interface components {
       http_status?: number;
       message?: string;
       ok: boolean;
-    };
-    NotificationDiscordLink: {
-      /** Format: uri */
-      url: string;
-    };
-    NotificationDiscordPreferences: {
-      discord_username?: string;
-      link_failure?: string;
-      linked: boolean;
-      /** @enum {string} */
-      mode: "off" | "per_episode" | "daily_digest" | "per_episode_and_digest" | "weekly_digest";
     };
     NotificationEmailPreferences: {
       can_edit_address: boolean;
@@ -27369,18 +27137,6 @@ export interface components {
        */
       verification_id: string;
     };
-    NotificationEpisodeRef: {
-      /**
-       * Format: int64
-       * @example 9
-       */
-      episode_number: number;
-      /**
-       * Format: int64
-       * @example 2
-       */
-      season_number: number;
-    };
     NotificationInAppCapability: {
       enabled: boolean;
     };
@@ -27468,14 +27224,10 @@ export interface components {
     };
     NotificationPreferences: {
       enabled: boolean;
-      notify_continue_watching: boolean;
-      notify_favorites: boolean;
       /** @description Every new episode the profile can open, followed or not. */
       notify_new_episodes: boolean;
       /** @description Every new movie the profile can open. */
       notify_new_movies: boolean;
-      notify_next_up: boolean;
-      notify_watchlist: boolean;
       /**
        * @description Opaque identifier
        * @example 1
@@ -27488,12 +27240,8 @@ export interface components {
     };
     NotificationPreferencesPatch: {
       enabled?: boolean;
-      notify_continue_watching?: boolean;
-      notify_favorites?: boolean;
       notify_new_episodes?: boolean;
       notify_new_movies?: boolean;
-      notify_next_up?: boolean;
-      notify_watchlist?: boolean;
       push_enabled?: boolean;
       push_library_ids?: number[];
     };
@@ -27582,18 +27330,12 @@ export interface components {
       relay_url: string;
     };
     NotificationSeries: {
-      /** @description The reasons the profile's notification preferences let notify; all false when they silence the series */
-      active_reasons: components["schemas"]["NotificationSeriesReasons"];
+      /** @description The profile follows the series: its new episodes notify the profile */
+      followed: boolean;
       /** @description The series as a catalog card */
       item: components["schemas"]["CatalogItem"];
-      /** @description The profile muted the series: it gets no new-episode notification for it, whatever the reasons, until it unmutes. active_reasons still names the reasons that would notify once unmuted. */
+      /** @description The profile muted the series: the profile hears nothing about it, followed or not, until it unmutes */
       muted: boolean;
-      /** @description With an active Next Up reason, the last episode the profile finished: on that reason alone, only a new episode after it notifies */
-      next_up_after?: components["schemas"]["NotificationEpisodeRef"];
-      /** @description True when at least one reason is active and the profile has not muted the series */
-      notifies: boolean;
-      /** @description The profile's relationships to the series */
-      reasons: components["schemas"]["NotificationSeriesReasons"];
     };
     NotificationSeriesCapability: {
       /** @description GET /notifications/series lists the series whose new episodes can notify the profile */
@@ -27606,87 +27348,6 @@ export interface components {
       items: components["schemas"]["NotificationSeries"][];
       /** @description Cursor state; absent for bounded unpaginated collections */
       page?: components["schemas"]["PageInfo"];
-    };
-    NotificationSeriesReasons: {
-      /** @description The profile is partway through the series */
-      continue_watching: boolean;
-      /** @description The series is one of the profile's favorites */
-      favorite: boolean;
-      /** @description The profile finished an episode and waits for the next */
-      next_up: boolean;
-      /** @description The series is on the profile's watchlist */
-      watchlist: boolean;
-    };
-    NotificationServerChannel: {
-      /** Format: int64 */
-      consecutive_failures: number;
-      /**
-       * Format: date-time
-       * @description RFC 3339 instant in UTC with millisecond precision
-       */
-      created_at: string;
-      disabled_reason: string | null;
-      enabled: boolean;
-      /**
-       * @description Opaque identifier
-       * @example 1
-       */
-      id: string;
-      /**
-       * Format: date-time
-       * @description RFC 3339 instant in UTC with millisecond precision, or null
-       */
-      last_failure_at: string | null;
-      last_failure_message: string | null;
-      /** Format: int64 */
-      last_failure_status: number | null;
-      /**
-       * Format: date-time
-       * @description RFC 3339 instant in UTC with millisecond precision, or null
-       */
-      last_success_at: string | null;
-      name: string;
-      notify_new_audiobooks: boolean;
-      notify_new_ebooks: boolean;
-      notify_new_episodes: boolean;
-      notify_new_movies: boolean;
-      notify_request_approved: boolean;
-      notify_request_declined: boolean;
-      notify_request_fulfilled: boolean;
-      notify_request_submitted: boolean;
-      /** @enum {string} */
-      type: "discord" | "generic";
-      url_host: string;
-    };
-    NotificationServerChannelCreateInputBody: {
-      enabled?: boolean;
-      name: string;
-      notify_new_audiobooks?: boolean;
-      notify_new_ebooks?: boolean;
-      notify_new_episodes?: boolean;
-      notify_new_movies?: boolean;
-      notify_request_approved?: boolean;
-      notify_request_declined?: boolean;
-      notify_request_fulfilled?: boolean;
-      notify_request_submitted?: boolean;
-      /** @enum {string} */
-      type?: "discord" | "generic";
-      /** Format: uri */
-      url: string;
-    };
-    NotificationServerChannelUpdateInputBody: {
-      enabled?: boolean;
-      name?: string;
-      notify_new_audiobooks?: boolean;
-      notify_new_ebooks?: boolean;
-      notify_new_episodes?: boolean;
-      notify_new_movies?: boolean;
-      notify_request_approved?: boolean;
-      notify_request_declined?: boolean;
-      notify_request_fulfilled?: boolean;
-      notify_request_submitted?: boolean;
-      /** Format: uri */
-      url?: string;
     };
     NotificationSyncOutputBody: {
       initial_snapshot: boolean;
@@ -27706,12 +27367,8 @@ export interface components {
     };
     NotificationWebhookCreateInputBody: {
       name: string;
-      notify_continue_watching?: boolean;
-      notify_favorites?: boolean;
       notify_new_releases?: boolean;
-      notify_next_up?: boolean;
       notify_requests?: boolean;
-      notify_watchlist?: boolean;
       /** @enum {string} */
       type?: "discord" | "generic";
       /** Format: uri */
@@ -27743,12 +27400,8 @@ export interface components {
        */
       last_success_at: string | null;
       name: string;
-      notify_continue_watching: boolean;
-      notify_favorites: boolean;
       notify_new_releases: boolean;
-      notify_next_up: boolean;
       notify_requests: boolean;
-      notify_watchlist: boolean;
       /** @enum {string} */
       type: "discord" | "generic";
       url_host: string;
@@ -27759,54 +27412,10 @@ export interface components {
     NotificationWebhookUpdateInputBody: {
       enabled?: boolean;
       name?: string;
-      notify_continue_watching?: boolean;
-      notify_favorites?: boolean;
       notify_new_releases?: boolean;
-      notify_next_up?: boolean;
       notify_requests?: boolean;
-      notify_watchlist?: boolean;
       /** Format: uri */
       url?: string;
-    };
-    NotificationWebPushCapability: {
-      available: boolean;
-      public_key?: string;
-    };
-    NotificationWebPushSubscribeInputBody: {
-      device_name?: string;
-      /** Format: uri */
-      endpoint: string;
-      keys: components["schemas"]["KeysStruct"];
-    };
-    NotificationWebPushSubscription: {
-      /**
-       * Format: date-time
-       * @description RFC 3339 instant in UTC with millisecond precision
-       */
-      created_at: string;
-      device_name?: string;
-      enabled: boolean;
-      /** Format: uri-reference */
-      endpoint: string;
-      /**
-       * @description Opaque identifier
-       * @example 1
-       */
-      id: string;
-      /**
-       * Format: date-time
-       * @description RFC 3339 instant in UTC with millisecond precision, or null
-       */
-      last_failure_at: string | null;
-      /**
-       * Format: date-time
-       * @description RFC 3339 instant in UTC with millisecond precision, or null
-       */
-      last_success_at: string | null;
-    };
-    NotificationWebPushUnsubscribeInputBody: {
-      /** Format: uri */
-      endpoint: string;
     };
     NotInterestedCapability: {
       /** @description Whether the current principal may use the capability */
@@ -62963,112 +62572,6 @@ export interface operations {
       };
     };
   };
-  testAdminDiscordNotification: {
-    parameters: {
-      query?: never;
-      header?: {
-        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
-        "X-Profile-Id"?: string;
-        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-        "X-Profile-Token"?: string;
-      };
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["AdminNotificationDiscordTestResult"];
-        };
-      };
-      /** @description Bad Request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unauthorized */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Forbidden */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Acceptable */
-      406: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unprocessable Entity */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Too Many Requests */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Internal Server Error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Service Unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-    };
-  };
   getAdminEmailAlerts: {
     parameters: {
       query?: never;
@@ -65199,716 +64702,6 @@ export interface operations {
       };
       /** @description Unsupported Media Type */
       415: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unprocessable Entity */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Too Many Requests */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Internal Server Error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Service Unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-    };
-  };
-  listAdminNotificationServerChannels: {
-    parameters: {
-      query?: {
-        cursor?: string;
-        /** @description Page size; default 50, maximum 200 */
-        limit?: number;
-      };
-      header?: {
-        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
-        "X-Profile-Id"?: string;
-        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-        "X-Profile-Token"?: string;
-      };
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["CollectionNotificationServerChannel"];
-        };
-      };
-      /** @description Bad Request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unauthorized */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Forbidden */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Acceptable */
-      406: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unprocessable Entity */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Too Many Requests */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Internal Server Error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Service Unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-    };
-  };
-  createAdminNotificationServerChannel: {
-    parameters: {
-      query?: never;
-      header?: {
-        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
-        "X-Profile-Id"?: string;
-        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-        "X-Profile-Token"?: string;
-      };
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["NotificationServerChannelCreateInputBody"];
-      };
-    };
-    responses: {
-      /** @description Created */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["NotificationDestinationCreated"];
-        };
-      };
-      /** @description Bad Request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unauthorized */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Forbidden */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Acceptable */
-      406: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Request Timeout */
-      408: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Request Entity Too Large */
-      413: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unsupported Media Type */
-      415: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unprocessable Entity */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Too Many Requests */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Internal Server Error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Service Unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-    };
-  };
-  updateAdminNotificationServerChannel: {
-    parameters: {
-      query?: never;
-      header?: {
-        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
-        "X-Profile-Id"?: string;
-        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-        "X-Profile-Token"?: string;
-      };
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["NotificationServerChannelUpdateInputBody"];
-      };
-    };
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["NotificationServerChannel"];
-        };
-      };
-      /** @description Bad Request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unauthorized */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Forbidden */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Acceptable */
-      406: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Request Timeout */
-      408: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Request Entity Too Large */
-      413: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unsupported Media Type */
-      415: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unprocessable Entity */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Too Many Requests */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Internal Server Error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Service Unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-    };
-  };
-  deleteAdminNotificationServerChannel: {
-    parameters: {
-      query?: never;
-      header?: {
-        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
-        "X-Profile-Id"?: string;
-        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-        "X-Profile-Token"?: string;
-      };
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description No Content */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Bad Request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unauthorized */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Forbidden */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Acceptable */
-      406: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unprocessable Entity */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Too Many Requests */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Internal Server Error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Service Unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-    };
-  };
-  rotateAdminNotificationServerChannelSecret: {
-    parameters: {
-      query?: never;
-      header?: {
-        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
-        "X-Profile-Id"?: string;
-        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-        "X-Profile-Token"?: string;
-      };
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          "Cache-Control"?: string;
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["NotificationWebhookSecretOutputBody"];
-        };
-      };
-      /** @description Bad Request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unauthorized */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Forbidden */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Acceptable */
-      406: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unprocessable Entity */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Too Many Requests */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Internal Server Error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Service Unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-    };
-  };
-  testAdminNotificationServerChannel: {
-    parameters: {
-      query?: never;
-      header?: {
-        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
-        "X-Profile-Id"?: string;
-        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-        "X-Profile-Token"?: string;
-      };
-      path: {
-        /** @description Opaque identifier */
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["NotificationDestinationTestResult"];
-        };
-      };
-      /** @description Bad Request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unauthorized */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Forbidden */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Acceptable */
-      406: {
         headers: {
           [name: string]: unknown;
         };
@@ -117673,493 +116466,6 @@ export interface operations {
       };
     };
   };
-  unlinkNotificationDiscord: {
-    parameters: {
-      query?: never;
-      header?: {
-        /** @description Optional. When present, it must name a profile of the authenticated account. */
-        "X-Profile-Id"?: string;
-        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-        "X-Profile-Token"?: string;
-      };
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description No Content */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Bad Request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unauthorized */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Forbidden */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Acceptable */
-      406: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unprocessable Entity */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Too Many Requests */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Internal Server Error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Service Unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-    };
-  };
-  getNotificationDiscordPreferences: {
-    parameters: {
-      query?: never;
-      header?: {
-        /** @description Optional. When present, it must name a profile of the authenticated account. */
-        "X-Profile-Id"?: string;
-        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-        "X-Profile-Token"?: string;
-      };
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["NotificationDiscordPreferences"];
-        };
-      };
-      /** @description Bad Request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unauthorized */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Forbidden */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Acceptable */
-      406: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unprocessable Entity */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Too Many Requests */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Internal Server Error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Service Unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-    };
-  };
-  updateNotificationDiscordPreferences: {
-    parameters: {
-      query?: never;
-      header?: {
-        /** @description Optional. When present, it must name a profile of the authenticated account. */
-        "X-Profile-Id"?: string;
-        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-        "X-Profile-Token"?: string;
-      };
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["NotificationChannelModeInputBody"];
-      };
-    };
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["NotificationDiscordPreferences"];
-        };
-      };
-      /** @description Bad Request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unauthorized */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Forbidden */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Acceptable */
-      406: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Request Timeout */
-      408: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Request Entity Too Large */
-      413: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unsupported Media Type */
-      415: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unprocessable Entity */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Too Many Requests */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Internal Server Error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Service Unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-    };
-  };
-  completeNotificationDiscordLink: {
-    parameters: {
-      query?: {
-        code?: string;
-        error?: string;
-        state?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Consent outcome redirect to notification settings */
-      302: {
-        headers: {
-          Location?: string;
-          [name: string]: unknown;
-        };
-        content: {
-          "text/html": string;
-        };
-      };
-      /** @description Service Unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-    };
-  };
-  beginNotificationDiscordLink: {
-    parameters: {
-      query?: never;
-      header?: {
-        /** @description Optional. When present, it must name a profile of the authenticated account. */
-        "X-Profile-Id"?: string;
-        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-        "X-Profile-Token"?: string;
-      };
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["NotificationDiscordLink"];
-        };
-      };
-      /** @description Bad Request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unauthorized */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Forbidden */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Acceptable */
-      406: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unprocessable Entity */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Too Many Requests */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Internal Server Error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Service Unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-    };
-  };
   getNotificationEmailPreferences: {
     parameters: {
       query?: never;
@@ -120177,8 +118483,6 @@ export interface operations {
         poster_width?: number;
         /** @description Keeps the series whose title or sort title contains this text, case-insensitively */
         q?: string;
-        /** @description Keeps the series with this reason, whether or not the preferences let it notify; absent keeps every reason */
-        reason?: "favorite" | "watchlist" | "continue_watching" | "next_up";
         /** @description One field, descending with a leading '-'. added_at is when the series joined the catalog; latest_episode_added when it last gained an episode. A series without a year or an episode sorts last either way; ties order by title. */
         sort?:
           | "title"
@@ -120189,8 +118493,8 @@ export interface operations {
           | "-added_at"
           | "latest_episode_added"
           | "-latest_episode_added";
-        /** @description active keeps the series that notify; inactive keeps the ones that do not, because the profile's preferences silence every reason or the profile muted the series */
-        status?: "all" | "active" | "inactive";
+        /** @description followed keeps the series the profile follows; muted keeps the ones it muted */
+        status?: "all" | "followed" | "muted";
         /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };
@@ -120213,6 +118517,220 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["NotificationSeriesCollection"];
         };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  followNotificationSeries: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The household profile acting for this request; it must belong to the authenticated account. */
+        "X-Profile-Id": string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        /** @description Catalog item identifier of the series */
+        series_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  unfollowNotificationSeries: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The household profile acting for this request; it must belong to the authenticated account. */
+        "X-Profile-Id": string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        /** @description Catalog item identifier of the series */
+        series_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Bad Request */
       400: {
@@ -120682,494 +119200,6 @@ export interface operations {
       };
       /** @description Not Acceptable */
       406: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unprocessable Entity */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Too Many Requests */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Internal Server Error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Service Unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-    };
-  };
-  listNotificationWebPushSubscriptions: {
-    parameters: {
-      query?: {
-        cursor?: string;
-        /** @description Page size; default 50, maximum 200 */
-        limit?: number;
-      };
-      header: {
-        /** @description The household profile acting for this request; it must belong to the authenticated account. */
-        "X-Profile-Id": string;
-        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-        "X-Profile-Token"?: string;
-      };
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["CollectionNotificationWebPushSubscription"];
-        };
-      };
-      /** @description Bad Request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unauthorized */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Forbidden */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Acceptable */
-      406: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unprocessable Entity */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Too Many Requests */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Internal Server Error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Service Unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-    };
-  };
-  subscribeNotificationWebPush: {
-    parameters: {
-      query?: never;
-      header: {
-        /** @description The household profile acting for this request; it must belong to the authenticated account. */
-        "X-Profile-Id": string;
-        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-        "X-Profile-Token"?: string;
-      };
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["NotificationWebPushSubscribeInputBody"];
-      };
-    };
-    responses: {
-      /** @description Created */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["NotificationWebPushSubscription"];
-        };
-      };
-      /** @description Bad Request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unauthorized */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Forbidden */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Acceptable */
-      406: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Request Timeout */
-      408: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Request Entity Too Large */
-      413: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unsupported Media Type */
-      415: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unprocessable Entity */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Too Many Requests */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Internal Server Error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Service Unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-    };
-  };
-  deleteNotificationWebPushSubscription: {
-    parameters: {
-      query?: never;
-      header: {
-        /** @description The household profile acting for this request; it must belong to the authenticated account. */
-        "X-Profile-Id": string;
-        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-        "X-Profile-Token"?: string;
-      };
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description No Content */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Bad Request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unauthorized */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Forbidden */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Acceptable */
-      406: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unprocessable Entity */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Too Many Requests */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Internal Server Error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Service Unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-    };
-  };
-  unsubscribeNotificationWebPush: {
-    parameters: {
-      query?: never;
-      header: {
-        /** @description The household profile acting for this request; it must belong to the authenticated account. */
-        "X-Profile-Id": string;
-        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-        "X-Profile-Token"?: string;
-      };
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["NotificationWebPushUnsubscribeInputBody"];
-      };
-    };
-    responses: {
-      /** @description No Content */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Bad Request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unauthorized */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Forbidden */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Not Acceptable */
-      406: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Request Timeout */
-      408: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Request Entity Too Large */
-      413: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-      /** @description Unsupported Media Type */
-      415: {
         headers: {
           [name: string]: unknown;
         };

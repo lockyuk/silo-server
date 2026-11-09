@@ -49,15 +49,7 @@ const (
 	SettingEmailDigestHour      = "notifications.email.digest_hour"
 	SettingEmailDigestWeekday   = "notifications.email.digest_weekday"
 
-	SettingDiscordEnabled         = "notifications.discord_enabled"
-	SettingDiscordAllowPerEpisode = "notifications.discord.allow_per_episode"
-	SettingDiscordDigestHour      = "notifications.discord.digest_hour"
-	SettingDiscordDigestWeekday   = "notifications.discord.digest_weekday"
-	SettingDiscordPosterMode      = "notifications.discord.poster_mode"
-
-	SettingServerChannelsEnabled          = "notifications.server_channels_enabled"
-	SettingServerChannelsBatchSeconds     = "notifications.server_channels.batch_seconds"
-	SettingServerChannelMentionRequesters = "notifications.server_channels.mention_requesters"
+	SettingDiscordPosterMode = "notifications.discord.poster_mode"
 
 	SettingApplePushDeliveryEnabled   = "notifications.apple_push_delivery_enabled"
 	SettingAndroidPushDeliveryEnabled = "notifications.android_push_delivery_enabled"
@@ -67,13 +59,6 @@ const (
 	SettingPushRelayExpiresAt         = "notifications.push_relay_expires_at"
 	SettingPushRelayKeyPrefix         = "notifications.push_relay_key_prefix"
 	SettingPushRelayReregister        = "notifications.push_relay_reregistration_required"
-
-	// Discord application credentials live under the discord.* namespace
-	// (admin-configured, alongside email.smtp_*). The secret and bot token
-	// are registered in catalog.SensitiveSettingKeys and encrypted at rest.
-	SettingDiscordClientID     = "discord.client_id"
-	SettingDiscordClientSecret = "discord.client_secret"
-	SettingDiscordBotToken     = "discord.bot_token"
 )
 
 const (
@@ -87,14 +72,6 @@ const (
 	// (email, Discord).
 	defaultDigestHour = 8
 
-	// defaultServerChannelsBatchSeconds is the server-channel content batch
-	// window: how old a release event must be before the sweep reads it, so a
-	// season pack lands in one grouped post. The minimum must stay >= the
-	// availability detector's timeout (120s): an in-flight availability
-	// transaction can commit events whose created_at predates rows the sweep
-	// already passed, and the window is what keeps those visible.
-	defaultServerChannelsBatchSeconds = 300
-	minServerChannelsBatchSeconds     = 120
 	// DefaultPushRelayURL is the public Silo relay origin used when no
 	// notifications.push_relay_url override is stored.
 	DefaultPushRelayURL = "https://push.siloserver.org"
@@ -374,17 +351,6 @@ func (s *Settings) EmailExternalURL(ctx context.Context) string {
 	return strings.TrimRight(strings.TrimSpace(s.raw(ctx, "server.public_url")), "/")
 }
 
-// DiscordEnabled is the master switch for the Discord bot integration. Like
-// webhooks it is opt-in: while off, the channel never delivers, linking is
-// refused, and clients are told the channel is unavailable (which hides the
-// Discord section in user settings). Actual availability additionally
-// requires the configured bot credentials.
-// DiscordEnabled is always false on this server: Discord delivery is
-// switched off and has no controls.
-func (s *Settings) DiscordEnabled(ctx context.Context) bool {
-	return false
-}
-
 // Discord embed poster modes (SettingDiscordPosterMode values).
 const (
 	// DiscordPostersOff renders all Discord embeds without artwork.
@@ -410,48 +376,6 @@ func (s *Settings) DiscordPosterMode(ctx context.Context) string {
 	default:
 		return DiscordPostersProvider
 	}
-}
-
-// DiscordAllowPerEpisode controls whether users may choose per-episode
-// Discord DMs. When off, accounts set to per-episode are coerced to the daily
-// digest instead of going silent.
-func (s *Settings) DiscordAllowPerEpisode(ctx context.Context) bool {
-	return s.boolSetting(ctx, SettingDiscordAllowPerEpisode, true)
-}
-
-// DiscordDigestHour is the hour of day (0-23, server-local time) at which
-// daily digest DMs go out.
-func (s *Settings) DiscordDigestHour(ctx context.Context) int {
-	return s.intSetting(ctx, SettingDiscordDigestHour, defaultDigestHour, 0, 23)
-}
-
-// DiscordDigestWeekday is the day weekly Discord digests go out (0 = Sunday).
-func (s *Settings) DiscordDigestWeekday(ctx context.Context) time.Weekday {
-	return time.Weekday(s.intSetting(ctx, SettingDiscordDigestWeekday, 0, 0, 6))
-}
-
-// ServerChannelsEnabled gates the admin server-channel feature (kill switch).
-// Defaults to on: unlike profile webhooks, every destination is created by an
-// admin, so creating a channel is itself the opt-in act.
-// ServerChannelsEnabled is always false on this server: server channels are
-// switched off and have no controls.
-func (s *Settings) ServerChannelsEnabled(ctx context.Context) bool {
-	return false
-}
-
-// ServerChannelMentionRequesters controls whether server-channel request
-// posts to Discord destinations @mention the requesting user (when that
-// account has linked Discord). Opt-in: a mention pings the user, which an
-// admin must choose deliberately for a shared channel.
-func (s *Settings) ServerChannelMentionRequesters(ctx context.Context) bool {
-	return s.boolSetting(ctx, SettingServerChannelMentionRequesters, false)
-}
-
-// ServerChannelsBatchWindow is how old a release event must be before the
-// server-channel sweep reads it (content posts batch within this window).
-func (s *Settings) ServerChannelsBatchWindow(ctx context.Context) time.Duration {
-	return time.Duration(s.intSetting(ctx, SettingServerChannelsBatchSeconds,
-		defaultServerChannelsBatchSeconds, minServerChannelsBatchSeconds, 3600)) * time.Second
 }
 
 // DefaultPushDeliveryEnabled is the code default for both mobile push
@@ -530,20 +454,4 @@ func (s *Settings) PushRelayKeyPrefix(ctx context.Context) string {
 func (s *Settings) PushRelayReregistrationRequired(ctx context.Context) bool {
 	value, _ := strconv.ParseBool(strings.TrimSpace(s.raw(ctx, SettingPushRelayReregister)))
 	return value
-}
-
-// DiscordClientID is the Discord application's OAuth2 client ID.
-func (s *Settings) DiscordClientID(ctx context.Context) string {
-	return strings.TrimSpace(s.raw(ctx, SettingDiscordClientID))
-}
-
-// DiscordClientSecret is the Discord application's OAuth2 client secret.
-func (s *Settings) DiscordClientSecret(ctx context.Context) string {
-	return strings.TrimSpace(s.raw(ctx, SettingDiscordClientSecret))
-}
-
-// DiscordBotToken is the Discord bot token used to open DM channels and send
-// messages.
-func (s *Settings) DiscordBotToken(ctx context.Context) string {
-	return strings.TrimSpace(s.raw(ctx, SettingDiscordBotToken))
 }

@@ -1,10 +1,6 @@
 {
   "profile_id": "p-owner",
   "enabled": false,
-  "notify_favorites": true,
-  "notify_watchlist": true,
-  "notify_continue_watching": true,
-  "notify_next_up": true,
   "notify_new_episodes": true,
   "notify_new_movies": true,
   "push_enabled": true,

@@ -7,16 +7,18 @@ push-registration protocol retain their existing shapes.
 
 | Method and suffix | Result |
 | --- | --- |
-| `GET /capabilities` | Existing in-app, Apple/Android push, web push, webhook, email, and Discord availability |
+| `GET /capabilities` | In-app, Apple/Android push, webhook, and email availability |
 | `GET /` | Newest-first `items`, `page`, and signed `read_cutoff` |
 | `GET /sync` | Ascending `items`, `page`, `sync_cursor`, `unread_count`, and `initial_snapshot` |
 | `GET /{id}` | One delivery; another profile's delivery is 404 |
 | `GET /unread-count` | `{ "count": 0 }` |
 | `POST /{id}/read` | 204; already read succeeds, unknown delivery is 404 |
 | `POST /read-all` | 204; body requires `{ "through": "<read_cutoff>" }` |
-| `GET /preferences` | Profile ID and five preference booleans |
+| `GET /preferences` | Profile ID, the master switch, the everything-new switches, and the push settings |
 | `PUT /preferences` | Updated preferences; omitted fields retain their values |
-| `GET /series` | The series whose new episodes can notify the profile, as `items` and `page` |
+| `GET /series` | The series the profile follows or muted, as `items` and `page` |
+| `PUT /series/{series_id}/follow` | 204; follows the series and lifts any mute, already followed succeeds, a series the viewer may not see is 404 |
+| `DELETE /series/{series_id}/follow` | 204; unfollows the series, not followed succeeds |
 | `PUT /series/{series_id}/mute` | 204; mutes the series for the profile, already muted succeeds, a series the viewer may not see is 404 |
 | `DELETE /series/{series_id}/mute` | 204; unmutes the series, not muted succeeds |
 
@@ -42,33 +44,22 @@ retain their timestamps, and migration seeds the boundary from their maximum.
 ## Notified series
 
 `GET /series` (`listNotificationSeries`) lists every series the acting profile
-favorited, put on its watchlist, is partway through, or waits on a next episode
-of, and every series it muted. It reads the same interest index and mutes
-episode fanout reads, so it names exactly the series a new episode is evaluated
-for. A series in several libraries is one entry carrying every library's
-reasons.
+follows and every series it muted. Following is explicit: favorites, the
+watchlist and watch progress do not follow a series. A profile that turned on
+everything new (`notify_new_episodes`) is notified about every new episode it
+can open whether or not it follows; with that switch off it hears only about
+the series it follows.
 
-Each entry has the series as a catalog card in `item`, the profile's
-relationships in `reasons`, and in `active_reasons` the ones the profile's
-preferences let notify. `muted` is true when the profile muted the series.
-`notifies` is true when any reason is active and the series is not muted. A
-muted series keeps its `active_reasons`, so a client can say what would notify
-after an unmute, and it is listed even with no reason left, so the profile can
-still unmute it. With an
-active Next Up reason, `next_up_after` names the last episode the profile
-finished; on that reason alone, only a new episode after it notifies. It names
-the finished episode rather than the next one because the next may not exist
-yet: after a season finale, the following season's first episode notifies.
-The other reasons notify on any new episode. Delivery still skips an episode the profile was
-already notified about and a series the profile can no longer open.
+Each entry has the series as a catalog card in `item`, `followed` when the
+profile follows it, and `muted` when the profile muted it. A muted series gets
+no notification, followed or not, and is listed so the profile can still
+unmute it. Delivery still skips an episode the profile was already notified
+about and a series the profile can no longer open.
 
 Filters combine:
 
-- `status=active` keeps the series that notify, `status=inactive` the ones that
-  do not (the preferences silence every reason, or the profile muted the
-  series), and the default `all` keeps both.
-- `reason=favorite|watchlist|continue_watching|next_up` keeps the series with
-  that relationship, whether or not the preferences let it notify.
+- `status=followed` keeps the series the profile follows, `status=muted` the
+  ones it muted, and the default `all` keeps both.
 - `q` keeps the series whose title or sort title contains the text,
   case-insensitively.
 
@@ -86,22 +77,34 @@ check, so a cursor never names a hidden series. A page can still hold fewer
 than `limit` entries if access changes between that check and card resolution.
 `image_size` selects the card artwork variant.
 
-The interest index follows favorites, watchlist, and progress changes
-asynchronously, so a just-favorited series can take a moment to appear.
 `series.available` in `GET /capabilities` reports the operation.
+
+### Following one series
+
+`PUT /series/{series_id}/follow` (`followNotificationSeries`) follows one series
+for the acting profile: each new episode of it notifies the profile on every
+channel, whether or not the profile asked for everything new. Following lifts
+any mute of the series. Other profiles on the account are not affected.
+Following a series already followed succeeds and changes nothing. An ID that
+names no series, or a series the viewer may not see, is 404.
+
+`DELETE /series/{series_id}/follow` (`unfollowNotificationSeries`) stops
+following. Unfollowing a series that is not followed succeeds. Unfollow runs no
+access check, so a profile can unfollow a series it can no longer open. A
+profile that asked for everything new is notified about the series like any
+other until it mutes it.
 
 ### Muting one series
 
 `PUT /series/{series_id}/mute` (`muteNotificationSeries`) mutes one series for
 the acting profile: it gets no new-episode notification for that series on any
-channel, whatever its reasons, until it unmutes. Favorites, the watchlist, Home,
-and watch history do not change, and other profiles on the account are not
-affected. The mute does not lapse when the profile watches the series again.
+channel, followed or not, until it unmutes. Other profiles on the account are
+not affected. The mute does not lapse when the profile watches the series again.
 Muting a series already muted succeeds and changes nothing. An ID that names no
 series, or a series the viewer may not see, is 404.
 
 `DELETE /series/{series_id}/mute` (`unmuteNotificationSeries`) lifts the mute.
-The series notifies again for its active reasons. Fanout reads the mute when it
+The series notifies again as before the mute. Fanout reads the mute when it
 evaluates a new episode, after the release settle delay (30 seconds by
 default): an episode it evaluated while the series was muted is not announced
 later, and one still waiting for fanout when the profile unmutes is announced.
@@ -111,8 +114,8 @@ profile can lift a mute on a series it can no longer open.
 
 Notifications already delivered stay in the inbox, and a delivery fanout
 created before the mute committed can still reach its channels. Both writes
-answer 204 with no body. `series.mute` in `GET /capabilities` reports both
-operations and the `muted` field.
+answer 204 with no body. `series.mute` and `series.follow` in
+`GET /capabilities` report these operations.
 
 ## Fixed read cutoff
 
@@ -286,7 +289,7 @@ meaning. V1 response statuses, error codes, timestamp format, and headers remain
 unchanged. Native clients and Jellyfin compatibility do not manage relay
 credentials and need no consumer change.
 
-### API v2 email and Discord preferences
+### API v2 email preferences
 
 `GET` and `PUT /api/v2/notifications/email-preferences` read and set the acting
 profile's email mode. The response retains `mode`, `custom_email`,
@@ -295,55 +298,28 @@ address; there is no login-account email fallback. Address verification and
 removal remain separate bridge operations pending their durable dispatch and
 callback migration.
 
-`GET` and `PUT /api/v2/notifications/discord-preferences` read and set the login
-account's Discord mode. Reads keep their optional-profile behavior; a supplied
-profile passes the existing viewer/PIN gate. Mode writes require the existing
-[household-manager authority](architecture/api-contract.md#credential-continuity):
-the primary profile, with PIN verification when it has a PIN. The account's admin
-role never widens a selected secondary profile's authority. Responses retain `linked`, optional
-`discord_username` and `link_failure`, and `mode`. The underlying Discord user
-identifier and credentials are not returned.
-
-The same admission applies to v1 and v2 link initiation, mode changes, and
-unlinking, before creating consent state or calling the mutation backend. A
-profile-less non-admin session is denied. A profile-less admin session is allowed
-only while its household has no PIN or stored access restriction; a profile-less
-admin API key keeps its documented scoped exception. A key declaring a locked
-primary profile cannot use its skipped PIN check as verification. Missing authority
-wiring fails closed. Refusals reuse v1 `403 forbidden` and v2 `403 permission_denied`
-or `profile_verification_required`; storage errors remain `500`. The web shows
-Discord settings as read-only unless the selected profile is primary.
-
-Delivery remains account-wide. The public callback and the existing consent-state
-lifetime are unchanged; this admission rule does not cancel previously issued state.
-
-Both mode writes accept only `mode`: `off`, `per_episode`, `daily_digest`, or
-`per_episode_and_digest`. Existing allowance, verified-address, and linked-account
-checks still apply; rejected modes return a 422 problem. Writes call the existing
-setter once and then reread state. They are `non_retryable`: these setters also
-reset delivery backoff and can advance the delivery watermark. The v2 ports do
-not change those effects or present repeated writes as harmless. Web queries use
+The mode write accepts only `mode`: `off`, `per_episode`, `daily_digest`, or
+`per_episode_and_digest`. Existing allowance and verified-address checks still
+apply; rejected modes return a 422 problem. Writes call the existing setter once
+and then reread state. They are `non_retryable`: these setters also reset
+delivery backoff and can advance the delivery watermark. Web queries use
 captured-authority cache keys and mode writes disable automatic retries and
-401 authentication replay. No current native email/Discord preference caller was
-found; Jellyfin compatibility has no equivalent preference surface.
+401 authentication replay. Jellyfin compatibility has no equivalent preference
+surface.
 
 ### API v2 destination lists
 
-`GET /api/v2/notifications/web-push/subscriptions`,
-`GET /api/v2/notifications/webhooks`, and
-`GET /api/v2/admin/notifications/server-channels` return bounded
-`items`/`page` collections. Personal lists require the acting profile; server
-channels require an acting administrator. Signed cursors bind the operation,
+`GET /api/v2/notifications/webhooks` returns a bounded `items`/`page`
+collection of the acting profile's webhooks. Signed cursors bind the operation,
 account/profile authority, page size, and exact `(created_at, id)` boundary.
 Records retain creation order, with ID resolving timestamp ties. Deleting a
-previous boundary row does not invalidate continuation. Indexes support the
-profile-filtered and administrator paging queries.
+previous boundary row does not invalidate continuation. An index supports the
+profile-filtered paging query.
 
-Web-push metadata retains the endpoint needed to identify the current browser,
-but excludes subscription keys. Webhook and server-channel metadata exposes only
-`url_host`, never destination URL ciphertext or stored signing secrets. Delivery
-health fields remain readable, with nullable timestamps using the v2 UTC instant
-format. Reads do not reset backoff, mutate destinations, or dispatch a send.
+Webhook metadata exposes only `url_host`, never destination URL ciphertext or
+stored signing secrets. Delivery health fields remain readable, with nullable
+timestamps using the v2 UTC instant format. Reads do not reset backoff, mutate
+destinations, or dispatch a send.
 
 Existing web lists drain bounded pages under captured authority and use scoped
 cache keys. Missing/repeated continuations and authority changes fail explicitly
@@ -353,40 +329,20 @@ deletes, tests, and secret rotation remain separate bridge operations until thei
 own guarded mutation migration. No native destination-management caller exists;
 Jellyfin compatibility has no equivalent list surface.
 
-### API v2 administrator Discord credential test
-
-`POST /api/v2/admin/notifications/discord/test`
-(`testAdminDiscordNotification`) verifies the stored bot token by fetching the
-bot's own identity once. It sends no message and does not change Discord links.
-Acting-administrator authorization, demo restrictions, and no-store responses
-apply. There is no request body. HTTP 200 reports `ok`, nonnegative `duration_ms`,
-and `message`; a failed verification still returns this result. A missing token
-reports “Bot token is not configured”; provider failures use a generic message
-instead of exposing upstream diagnostics. An unavailable service returns 503.
-
-The operation is `non_retryable`. The existing administrator test button captures
-authority, prevents overlapping tests, disables authentication replay, and refuses
-stale results after an account/profile switch. Apple and Android have no caller;
-Jellyfin compatibility has no corresponding operation. Discord link initiation,
-OAuth callbacks, and unlinking retain their bridge routes pending their separate
-migration.
-
-### API v2 webhook and server-channel test delivery
+### API v2 webhook test delivery
 
 `POST /api/v2/notifications/webhooks/{id}/test` (`testNotificationWebhook`)
-requires the acting profile; `POST /api/v2/admin/notifications/server-channels/{id}/test`
-(`testAdminNotificationServerChannel`) requires an acting administrator. Both
-accept an opaque destination ID and no request body, enforce demo restrictions,
-and call the existing synchronous sample sender once. Personal webhook tests
-retain the administrator's webhooks-enabled gate and profile ownership check.
-Server-channel tests retain the existing administrator diagnostic behavior.
+requires the acting profile. It accepts an opaque destination ID and no request
+body, enforces demo restrictions, and calls the existing synchronous sample
+sender once. Personal webhook tests retain the administrator's webhooks-enabled
+gate and profile ownership check.
 
 HTTP 200 reports `ok`, optional `http_status`, nonnegative `duration_ms`, and an
 optional sanitized sender `message`. A destination's 429/5xx is a failed delivery
 result, not an API failure or an instruction to retry. Test sends neither enqueue
 retries nor update failure counters, auto-disable state, or delivery watermarks.
 Missing destinations return 404; disabled personal webhooks return 403; unavailable
-services return 503. Responses are no-store. Both operations are `non_retryable`.
+services return 503. Responses are no-store. The operation is `non_retryable`.
 
 Existing web cards capture authority, prevent overlapping test calls, disable
 authentication replay, and suppress stale results. Configuration changes and
@@ -421,41 +377,11 @@ working through the bridge release. Mail clients follow the emitted URLs;
 Apple and Android have no in-app callback consumer, and Jellyfin compatibility
 has no corresponding operation.
 
-### API v2 Discord account-link consent and callback
-
-`POST /api/v2/notifications/discord/link/init` (`beginNotificationDiscordLink`)
-starts one consent flow for the authenticated login account. A supplied profile
-still passes viewer/PIN checks, and initiation requires the same household-manager
-authority as Discord mode changes. Demo restrictions apply. The response contains `url`, using Discord's
-consent endpoint, the stored client ID, `identify` scope, a random one-time state,
-and the exact v2 callback URI. This operation is `non_retryable`; web captures
-authority, prevents overlapping initiation, disables authentication replay, and
-checks authority again before navigating.
-
-`GET /api/v2/notifications/discord/link/callback`
-(`completeNotificationDiscordLink`) is public and authenticates through the
-stored state rather than browser login headers. It retains the existing channel
-enabled check, consent-denied and malformed-callback handling, one-time state
-consumption, account lookup, and code exchange. The exchange uses the same
-`<public URL>/api/v2/notifications/discord/link/callback` redirect URI as consent.
-The result is HTTP 302 with Location pointing to notification settings and the
-existing success/error query fields, plus the usual HTML redirect body. It never
-invents a JSON 200 response. API v2 applies no-store/no-referrer headers.
-
-Register the exact v2 redirect URI in the Discord application's OAuth settings
-before using v2 linking. Keep the bridge redirect registered while bridge flows
-remain supported; their consent and exchange still use the v1 URI. This port
-preserves the existing link-state and account-link write semantics. It adds no
-generation guard for overlapping consent flows or unlinking; unlink migration
-remains separate. Apple and Android have no notification Discord-link callers,
-and Jellyfin compatibility has no equivalent operation.
-
 ### API v2 destination creation
 
 `POST /api/v2/notifications/webhooks` creates a webhook for the active profile.
-`POST /api/v2/admin/notifications/server-channels` creates a server channel for
-an acting administrator. Both require `name` and `url`; optional type and event
-flags retain the existing service defaults. Creation validates and stores the
+It requires `name` and `url`; optional type and the `notify_new_releases` and
+`notify_requests` switches retain the existing service defaults. Creation validates and stores the
 destination through the same service as the bridge and does not send a message.
 
 Destinations require HTTPS without embedded credentials. Registration resolves
@@ -468,8 +394,7 @@ resolved connection address again, including redirect hops; see
 A successful response is `201` with `id`, `name`, `type`, `url_host`, and an
 optional one-time `signing_secret`. It never returns the destination URL or
 stored credential ciphertext. Responses use `Cache-Control: no-store`.
-Disabled personal webhooks return `403`; administrators may prepare server
-channels while delivery is disabled. Invalid configuration or a quota limit
+Disabled personal webhooks return `403`. Invalid configuration or a quota limit
 returns `422`. Missing services return `503`.
 
 Creation is `non_retryable`: a lost response can leave a created destination
@@ -479,12 +404,6 @@ resubmitting creation. There is no durable creation receipt or secret recovery
 promise. The web forms capture request authority, prevent overlapping submissions,
 and suppress results after an account or profile change. Native clients have no
 destination-management caller; Jellyfin compatibility has no matching operation.
-
-### Unlink Discord
-
-`DELETE /api/v2/notifications/discord-link` (`unlinkNotificationDiscord`) unlinks the authenticated login account's Discord identity and turns its Discord delivery mode off. Unlinking requires the same household-manager authority as Discord mode changes. The demo guard applies. The operation returns bodyless `204`, including when there is no linked identity. An unavailable API service returns `503`; storage failure returns `500`.
-
-Unlink is **non-retryable**: a delayed repeat can clear an identity established by a subsequent OAuth relink. No generation precondition or cancellation of in-flight OAuth/provider work is provided. The existing identity, DM-channel and mode clearing behavior remains unchanged. The settings action captures authority, sends once without authentication replay, rejects stale receipts, and invalidates only its exact Discord preferences cache. A successful receipt does not prove that an already-dispatched Discord message was cancelled. Native caller closure is separate from this server and web operation.
 
 ### Clear the custom email address
 
@@ -499,12 +418,6 @@ The operation is **non-retryable**. A delayed repeat can clear an address reques
 A database sequence and insert/update trigger allocate a fresh revision for every row change, including legacy configuration and provider outcome writers. Revision allocation is not based on timestamps and never reuses a deleted identity's validator. Deletion locks the profile-owned row, evaluates its current validator, and deletes within that same transaction; a concurrent editor that commits first is preserved by a stale-delete refusal. Stored delivery attempts cascade only on a successful deletion. Deploy the revision migration before code that reads the new column. This does not change provider delivery or recall an already-dispatched request.
 
 The settings confirmation captures the list's original ID and validator when opened, and passes that immutable intent plus captured authority through the mutation's variables. It sends once without authentication replay. A stale/missing/failed response surfaces without a read, rebase, or automatic retry. The user must explicitly reload and reconsider the current row; returned conflict validators are never adopted automatically. Success invalidates only the captured authority's list. Administrator channel deletion remains a separate operation.
-
-### Delete an administrator server channel
-
-`DELETE /api/v2/admin/notifications/server-channels/{id}` (`deleteAdminNotificationServerChannel`) removes the exact global server channel under acting-admin authority and the demo guard. It returns bodyless `204`, including when absent; a non-admin receives `403`, an unavailable service `503`, and storage failure `500`. It does not use household-primary status as a substitute for administrator authority.
-
-Deletion removes the channel and its row-local watermark, last-attempt and outcome bookkeeping; server-generated identities are not reused. This operation naturally converges on absence but cannot recall already-dispatched provider work. The administrator action captures its ID and authority into mutation variables at invocation, sends once without authentication replay, refuses stale dispatch or receipts, and invalidates only the captured administrator channel-list cache. Personal webhook conditional deletion has a separate recorded contract.
 
 ### Rotate a personal webhook signing secret
 
@@ -521,24 +434,6 @@ This operation is non-retryable. The existing settings action captures ID and au
 The repository locks the profile's exact row, checks its current revision, applies existing validation and writes configuration in one transaction. URL replacement preserves type restrictions, destination validation and encrypted URL binding. URL changes and re-enabling retain the existing failure-reset behavior. The write does not copy secret, type or delivery outcome fields from an editor. The reviewed server-owned revision trigger remains required and covers provider bookkeeping and bridge writers; those changes can conservatively invalidate an editor. Legacy writers may still change the row after this operation commits. A successful response is an observation, not a lease.
 
 The settings editor retains the row selected when opened, including its original validator. The enabled toggle uses the displayed row's validator. Invocation captures a copy of the input and current authority before a possible offline pause. The client sends once without authentication replay, refuses stale dispatch/receipts and invalidates only the captured webhook list after success. It never reads a newer validator to rebase or automatically retries a conflict or uncertain result. The recorded natural-idempotent classification describes setting configuration values; it does not waive the required original precondition. No provider delivery is sent by this operation. The bridge update wire contract remains unchanged.
-
-### Rotate an administrator server-channel signing secret
-
-`POST /api/v2/admin/notifications/server-channels/{id}/rotate-secret` (`rotateAdminNotificationServerChannelSecret`) requires acting-admin authority and the demo guard. It targets the exact global channel ID. Only generic channels have signing secrets; Discord channels return `422`, missing IDs `404`, and unavailable service `503`. Success returns `200` with one-time `signing_secret` and `Cache-Control: no-store`, encrypted at rest with the existing server-channel-specific associated-data binding.
-
-The v2 write updates only the encrypted secret and timestamp. It preserves channel configuration, disabled/failure state and row-local watermark/last-attempt/outcome bookkeeping. It introduces no attempt table, revision protocol or provider send. The bridge rotation remains unchanged. Replacement is immediate with no dual-acceptance window or recoverable receipt; later rotations or legacy full-row configuration writes can supersede the returned secret, and in-flight delivery may use a previously captured secret.
-
-The operation is non-retryable. The existing administrator action captures ID and authority at invocation, refuses stale dispatch/receipt/disclosure, and sends once without authentication replay. It invalidates only the captured administrator channel-list cache after success. Uncertainty never triggers an automatic read, rebase, retry or compensating rotation. This operation does not establish a secret lease or fleet rollout readiness.
-
-### Update administrator server-channel configuration
-
-`PUT /api/v2/admin/notifications/server-channels/{id}` (`updateAdminNotificationServerChannel`) requires acting-admin authority and the demo guard. It updates the exact global channel ID. Name, URL, enabled state and event flags are optional; omitted values stay unchanged. Type and signing secret are not configuration fields. Success returns `200` with the stored channel; missing ID returns `404`, invalid configuration `422`, and unavailable service `503`.
-
-The v2 repository reads the current row under a lock and commits configuration and any required dispatch reset together. It excludes signing secret and type from its write. Existing URL validation, type restrictions and channel-bound encryption remain. Replacing the URL, or moving a stopped/auto-disabled channel into enabled delivery, clears failure backoff and last-attempt state and moves the watermark to the present, avoiding replay of the stopped interval. As in the bridge, editing an enabled but auto-disabled channel also resumes it. A disable or an already-delivering enable leaves the watermark unchanged. Reset time is sampled after any row-lock wait, so an old transaction start cannot rewind the reset watermark. Provider outcome fields remain intact.
-
-This is a non-retryable operation: resubmitting a URL replacement advances the watermark again and can skip intervening events. There is no conditional revision contract for this administrator row. The lock protects the transaction; it does not reject stale editor observations or prevent later bridge/configuration writes. The actual editor and enabled toggle capture a copy of input and authority at invocation, send once without authentication replay, refuse stale dispatch/receipt/cache/error publication and invalidate only the captured administrator list after success. No automatic read, rebase, retry or compensating write follows uncertainty.
-
-The bridge update wire and behavior remain unchanged. No provider delivery is sent by the update, and already-dispatched work cannot be recalled. No attempt table, secret lease, fleet rollout or enrollment guarantee is introduced.
 
 ## Ordered Apple registration storage
 

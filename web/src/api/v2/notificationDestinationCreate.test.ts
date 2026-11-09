@@ -2,7 +2,6 @@ import { createElement } from "react";
 import { renderHook, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useCreateNotificationWebhook } from "@/hooks/queries/notificationWebhooks";
-import { useCreateServerNotificationChannel } from "@/hooks/queries/admin/serverNotificationChannels";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { setAccessToken, setRefreshToken, setProfileId, setProfileToken } from "@/api/client";
 import { stubPendingFetch } from "./pendingFetch.test-support";
@@ -17,7 +16,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-for (const useTest of [useCreateNotificationWebhook, useCreateServerNotificationChannel]) {
+for (const useTest of [useCreateNotificationWebhook]) {
   it("blocks a second click before React publishes pending state", async () => {
     const { fetch, finish } = stubPendingFetch();
     const client = new QueryClient();
@@ -55,7 +54,7 @@ for (const useTest of [useCreateNotificationWebhook, useCreateServerNotification
   });
 }
 
-for (const useCreate of [useCreateNotificationWebhook, useCreateServerNotificationChannel]) {
+for (const useCreate of [useCreateNotificationWebhook]) {
   it("suppresses a one-time secret after authority changes", async () => {
     const { finish } = stubPendingFetch();
     const client = new QueryClient();

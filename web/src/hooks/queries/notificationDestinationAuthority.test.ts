@@ -1,17 +1,12 @@
-// Webhook and server-channel hooks each carry their own authority fence, so
-// every hook keeps its own row.
+// Webhook hooks each carry their own authority fence, so every hook keeps its
+// own row.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider, onlineManager } from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { setAccessToken, setProfileId, setProfileToken, setRefreshToken } from "@/api/client";
 import { captureNotificationAuthority, notificationScope } from "@/api/v2/notifications";
-import { adminKeys, notificationKeys } from "./keys";
-import {
-  useDeleteServerNotificationChannel,
-  useRotateServerNotificationChannelSecret,
-  useUpdateServerNotificationChannel,
-} from "./admin/serverNotificationChannels";
+import { notificationKeys } from "./keys";
 import {
   useRotateNotificationWebhookSecret,
   useUpdateNotificationWebhook,
@@ -31,12 +26,6 @@ afterEach(() => {
 });
 
 describe.each([
-  {
-    name: "server channel",
-    useRotate: useRotateServerNotificationChannelSecret,
-    base: adminKeys.serverNotificationChannels(),
-    path: "/api/v2/admin/notifications/server-channels/row-one/rotate-secret",
-  },
   {
     name: "webhook",
     useRotate: useRotateNotificationWebhookSecret,
@@ -109,15 +98,10 @@ function row<T extends Mutation>(useHook: () => T, send: (hook: T) => Promise<un
   return { name: useHook.name, useHook, send: send as (hook: Mutation) => Promise<unknown> };
 }
 it.each([
-  row(useRotateServerNotificationChannelSecret, (h) => h.mutateAsync("original-id")),
   row(useRotateNotificationWebhookSecret, (h) => h.mutateAsync("original-id")),
-  row(useUpdateServerNotificationChannel, (h) =>
-    h.mutateAsync({ id: "original-id", name: "updated" }),
-  ),
   row(useUpdateNotificationWebhook, (h) =>
     h.mutateAsync({ id: "original-id", etag: '"original"', name: "updated" }),
   ),
-  row(useDeleteServerNotificationChannel, (h) => h.mutateAsync("original-id")),
 ])("$name refuses a paused mutation after authority replacement", async ({ useHook, send }) => {
   const client = new QueryClient();
   const fetch = vi.fn();

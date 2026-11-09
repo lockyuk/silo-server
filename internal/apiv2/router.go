@@ -183,14 +183,12 @@ type Dependencies struct {
 	DownloadProxyDelivery         func() bool
 	WebhookReceiver               WebhookReceiverService
 	SubtitleAIReads               SubtitleAIReadService
-	NotificationDiscordLinks      NotificationDiscordLinkService
 	NotificationEmailLinks        NotificationEmailLinkService
 	NotificationEmailAlertLinks   NotificationEmailAlertLinkService
 	NotificationDestinationTests  NotificationDestinationTestService
 	AdminDevices                  AdminDeviceService
 	UserLibraries                 UserLibraryService
 	EbookAnnotations              EbookAnnotationService
-	AdminNotificationDiscord      AdminNotificationDiscordService
 	NotificationDestinations      NotificationDestinationService
 	EbookFiles                    EbookFileService
 	EbookConfig                   EbookConfigService
@@ -232,7 +230,6 @@ type Dependencies struct {
 	NotificationEmailArtwork      NotificationEmailArtworkService
 	AdminEmailAlerts              AdminEmailAlertsService
 	AdminPushStyle                AdminPushStyleService
-	NotificationDiscordManagement NotificationDiscordManagementService
 	NotificationRelay             NotificationRelayService
 	AdminNotificationPush         AdminNotificationPushService
 	NotificationInbox             NotificationInboxService

@@ -23,10 +23,6 @@ func (f *fakeNotificationDestinationTests) TestNotificationWebhook(_ context.Con
 	f.id = id
 	return &notifications.WebhookTestResult{OK: false, HTTPStatus: 429, DurationMS: 2, Message: "429 Too Many Requests"}, f.err
 }
-func (f *fakeNotificationDestinationTests) TestNotificationServerChannel(ctx context.Context, id string) (*notifications.WebhookTestResult, error) {
-	return f.TestNotificationWebhook(ctx, 0, "", id)
-}
-
 func TestNotificationDestinationDispatch(t *testing.T) {
 	fake := new(fakeNotificationDestinationTests)
 	deps := pilotDeps(nil, nil)
@@ -39,7 +35,6 @@ func TestNotificationDestinationDispatch(t *testing.T) {
 		missing, disabled   error
 	}{
 		{"webhook", Prefix + "/notifications/webhooks/hook/test", "p-owner", 1, profileOwner(), notifications.ErrWebhookNotFound, notifications.ErrWebhooksDisabled},
-		{"server-channel", Prefix + "/admin/notifications/server-channels/hook/test", "", 0, bearer(adminToken), notifications.ErrServerChannelNotFound, notifications.ErrServerChannelsDisabled},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			*fake = fakeNotificationDestinationTests{}
@@ -83,6 +78,5 @@ func TestNotificationDestinationDispatch(t *testing.T) {
 func notificationDestinationTestFixtureCases() []fixtureCase {
 	return []fixtureCase{
 		{name: "notification_webhook_test", operationID: testNotificationWebhookOperation, method: "POST", path: Prefix + "/notifications/webhooks/hook/test", headers: profileOwner(), status: 200, schema: "#/components/schemas/NotificationDestinationTestResult", assertHeaders: []string{"Content-Type", "Cache-Control"}, scenario: "A synchronous synthetic webhook send reports429 without scheduling a retry."},
-		{name: "notification_server_channel_test", operationID: testNotificationServerChannelOperation, method: "POST", path: Prefix + "/admin/notifications/server-channels/hook/test", headers: bearer(adminToken), status: 200, schema: "#/components/schemas/NotificationDestinationTestResult", assertHeaders: []string{"Content-Type", "Cache-Control"}, scenario: "An administrator's synthetic server-channel test preserves the sender's diagnostic outcome."},
 	}
 }

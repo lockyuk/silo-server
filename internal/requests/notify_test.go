@@ -88,12 +88,7 @@ type fakeNotifier struct {
 	requestIDs []string
 	contentIDs []string
 	followers  [][]Follower
-	announced  []string
 	err        error
-}
-
-func (f *fakeNotifier) AnnounceFulfilled(_ context.Context, req Request) {
-	f.announced = append(f.announced, req.ID)
 }
 
 func (f *fakeNotifier) NotifyFulfilled(_ context.Context, req Request, contentID string) error {

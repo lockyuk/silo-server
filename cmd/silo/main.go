@@ -2656,7 +2656,7 @@ func main() {
 			WithWatchState(watchstate.NewService(userStoreProvider).WithStableIdentityResolver(historyIdentity)).
 			WithUserStoreProvider(userStoreProvider).
 			WithRatingStore(catalog.NewRatingsRepo(deps.DB)).
-			WithDroppedStore(notifications.TrackDroppedSeries(catalog.NewDroppedSeriesRepo(deps.DB), notificationSystem))
+			WithDroppedStore(catalog.NewDroppedSeriesRepo(deps.DB))
 		backgroundInit = append(backgroundInit, func(ctx context.Context) {
 			if compatTerminalRecoveryReady != nil {
 				select {
@@ -3346,7 +3346,6 @@ func main() {
 		}
 		if notificationSystem != nil {
 			taskMgr.Register(tasks.NewSeedContentAvailabilityTask(notificationSystem))
-			taskMgr.Register(tasks.NewRebuildReleaseInterestTask(notificationSystem))
 			maintenanceSteps = append(maintenanceSteps, tasks.NewNotificationsRetentionTask(notificationSystem))
 		}
 		if userStoreProvider != nil {

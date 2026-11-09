@@ -340,8 +340,6 @@ notification goes out, it is also sent to the request's followers, marked
 `follower` so its wording does not say "your request", and those follows are
 then cleared. A dispatch failure leaves the follows for the retry; each
 recipient's delivery is deduplicated, so a retry tells only those not yet told.
-The server-channel announcement has no such guard, so it goes out once, after
-the request is stamped as notified, from the pass whose stamp took.
 
 Request state carries `following` (the viewer requested or follows the title)
 and `requested_by_viewer` (the viewing profile made the request, so there is

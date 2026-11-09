@@ -55,17 +55,17 @@ function pluginState(o: Overview) {
   return {
     settings: o.settings,
     defaults: o.defaults,
-    recipients: o.recipients.map((r) => ({
+    recipients: (o.recipients ?? []).map((r) => ({
       ...r,
       id: r.key,
       source: r.kind === "profile" ? "user" : "admin",
       libraries: (r.library_ids ?? []).map(String),
     })),
-    libraries: o.libraries.map((l) => ({ ...l, id: String(l.id) })),
+    libraries: (o.libraries ?? []).map((l) => ({ ...l, id: String(l.id) })),
     max_age_options: o.max_age_options,
-    problems: o.problems,
+    problems: o.problems ?? [],
     report: o.report ? pluginReport(o.report) : null,
-    log: o.log.map((l) => ({
+    log: (o.log ?? []).map((l) => ({
       time: l.sent_at,
       recipient: l.email,
       mode: l.leg,
@@ -113,7 +113,7 @@ export default function EmailAlertsPanel() {
     // does not show.
     const contentByKey = new Map<string, "followed" | "all">();
     const remember = (o: Overview) => {
-      for (const r of o.recipients) contentByKey.set(r.key, r.content);
+      for (const r of o.recipients ?? []) contentByKey.set(r.key, r.content);
       return pluginState(o);
     };
 

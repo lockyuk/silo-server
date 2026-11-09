@@ -934,7 +934,10 @@ func (a *EmailAlerts) State(ctx context.Context) (*EmailAlertsState, error) {
 	if err != nil {
 		return nil, err
 	}
-	var problems []string
+	problems := []string{}
+	if log == nil {
+		log = []EmailAlertLogEntry{}
+	}
 	if !a.settings.EmailEnabled(ctx) {
 		problems = append(problems, "Email notifications are switched off in Notifications settings.")
 	}

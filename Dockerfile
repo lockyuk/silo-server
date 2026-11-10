@@ -36,6 +36,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends libvips-dev && 
 WORKDIR /app
 COPY go.mod go.sum ./
 COPY internal/compat/zishang520-webtransport-go/ internal/compat/zishang520-webtransport-go/
+COPY internal/compat/silo-plugin-sdk/ internal/compat/silo-plugin-sdk/
 RUN go mod download
 COPY internal/ internal/
 COPY migrations/ migrations/

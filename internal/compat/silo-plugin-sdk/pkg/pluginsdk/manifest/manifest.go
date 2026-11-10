@@ -1,0 +1,760 @@
+package manifest
+
+import (
+	"encoding/json"
+	"fmt"
+	"io/fs"
+	"net/url"
+	"os"
+	"regexp"
+	"slices"
+	"strings"
+	"unicode"
+	"unicode/utf8"
+
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/structpb"
+
+	pluginv1 "github.com/Silo-Server/silo-plugin-sdk/pkg/pluginproto/silo/plugin/v1"
+	"github.com/Silo-Server/silo-plugin-sdk/pkg/pluginsdk/capability"
+)
+
+// knownCapabilityTypes is the set of capability type strings recognised by
+// the manifest validator. Add new capability types here as they are defined.
+//
+// Note: capability types are recorded purely for discovery — the host exposes
+// them via the admin plugins API so SPAs can filter by them client-side.
+// They do not drive any dispatch behavior on the server side.
+var (
+	knownCapabilityTypes = knownCapabilityTypeSet()
+	watchSyncSlugPattern = regexp.MustCompile(`^[a-z0-9]+(?:[._-][a-z0-9]+)*$`)
+)
+
+const (
+	maxPresentationDisplayNameRunes = 120
+	maxPresentationSummaryRunes     = 240
+	maxPresentationMarkdownBytes    = 32 << 10
+	maxPresentationURLBytes         = 2048
+	maxPresentationIdentityRunes    = 120
+)
+
+// Auth modes this SDK knows for an auth_provider.v1 capability's auth_modes.
+// An empty list means password only. The vocabulary is open: Validate accepts
+// other non-empty modes so a plugin built against a newer SDK still loads on
+// an older host, which ignores modes it does not recognize.
+const (
+	AuthModePassword = "password"
+	AuthModeOAuth2   = "oauth2"
+	// AuthModeNetwork signs people in from the overlay network the plugin's
+	// network_access_provider.v1 capability fronts (NetworkIdentityAuth). It
+	// cannot be combined with password or oauth2, and the manifest must also
+	// declare network_access_provider.v1.
+	AuthModeNetwork = "network"
+)
+
+// AuthProviderConnectionTestKey is the auth_provider.v1 capability metadata
+// key that declares support for AuthProviderChecks.TestConnection. Its value
+// must be a boolean.
+const AuthProviderConnectionTestKey = "connection_test"
+
+func knownCapabilityTypeSet() map[string]struct{} {
+	out := make(map[string]struct{}, len(capability.KnownTypes))
+	for _, typ := range capability.KnownTypes {
+		out[typ] = struct{}{}
+	}
+	return out
+}
+
+func Load(data []byte) (*pluginv1.PluginManifest, error) {
+	manifest, err := decode(data)
+	if err != nil {
+		return nil, err
+	}
+	if err := Validate(manifest); err != nil {
+		return nil, err
+	}
+	return manifest, nil
+}
+
+func MustLoad(data []byte) *pluginv1.PluginManifest {
+	manifest, err := Load(data)
+	if err != nil {
+		panic(err)
+	}
+	return manifest
+}
+
+func LoadFromDisk(path string) (*pluginv1.PluginManifest, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read plugin manifest %q: %w", path, err)
+	}
+	manifest, err := Load(data)
+	if err != nil {
+		return nil, fmt.Errorf("load plugin manifest %q: %w", path, err)
+	}
+	return manifest, nil
+}
+
+func decode(data []byte) (*pluginv1.PluginManifest, error) {
+	var manifest pluginv1.PluginManifest
+	// Use DiscardUnknown so that fields defined outside the proto schema do
+	// not cause a decode error. The proto-schema fields are still fully
+	// decoded.
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(data, &manifest); err != nil {
+		return nil, fmt.Errorf("decode plugin manifest: %w", err)
+	}
+	return &manifest, nil
+}
+
+// Validate validates the proto plugin manifest.
+func Validate(manifest *pluginv1.PluginManifest) error {
+	if manifest == nil {
+		return fmt.Errorf("plugin manifest is required")
+	}
+	if manifest.PluginId == "" {
+		return fmt.Errorf("plugin manifest plugin_id is required")
+	}
+	if manifest.Version == "" {
+		return fmt.Errorf("plugin manifest version is required")
+	}
+	if err := validatePresentation(manifest.GetPresentation()); err != nil {
+		return err
+	}
+	for _, capability := range manifest.Capabilities {
+		if capability.Type == "" {
+			return fmt.Errorf("plugin capability type is required")
+		}
+		if capability.Id == "" {
+			return fmt.Errorf("plugin capability id is required")
+		}
+		if _, ok := knownCapabilityTypes[capability.Type]; !ok {
+			return fmt.Errorf("plugin capability %q: unknown type %q", capability.Id, capability.Type)
+		}
+		if err := validateWatchSyncCapability(capability); err != nil {
+			return err
+		}
+		if err := validateNetworkAccessCapability(capability); err != nil {
+			return err
+		}
+		if err := validateRequestRouterCapability(capability); err != nil {
+			return err
+		}
+		if err := validateAuthProviderCapability(capability); err != nil {
+			return err
+		}
+	}
+	if err := validateNetworkAuthPairing(manifest); err != nil {
+		return err
+	}
+	for _, schema := range manifest.GlobalConfigSchema {
+		if err := validateConfigSchema(schema); err != nil {
+			return err
+		}
+	}
+	for _, schema := range manifest.UserConfigSchema {
+		if err := validateConfigSchema(schema); err != nil {
+			return err
+		}
+	}
+	for _, c := range manifest.GetCapabilities() {
+		for _, cs := range c.GetConfigSchema() {
+			if err := validateConfigSchema(cs); err != nil {
+				return fmt.Errorf("capability %q config schema: %w", c.GetId(), err)
+			}
+		}
+	}
+	return nil
+}
+
+func validateWatchSyncCapability(descriptor *pluginv1.CapabilityDescriptor) error {
+	watchSync := descriptor.GetWatchSyncProvider()
+	if descriptor.GetType() != capability.WatchSyncProvider {
+		if watchSync != nil {
+			return fmt.Errorf("plugin capability %q: watch_sync_provider descriptor requires type %q", descriptor.GetId(), capability.WatchSyncProvider)
+		}
+		return nil
+	}
+	if !watchSyncSlugPattern.MatchString(descriptor.GetId()) {
+		return fmt.Errorf("plugin capability %q: watch sync capability id must be a path-safe lowercase slug", descriptor.GetId())
+	}
+	if watchSync == nil {
+		return fmt.Errorf("plugin capability %q: watch_sync_provider descriptor is required", descriptor.GetId())
+	}
+	if len(watchSync.GetAuthMethods()) == 0 {
+		return fmt.Errorf("plugin capability %q: at least one watch sync auth method is required", descriptor.GetId())
+	}
+	for _, method := range watchSync.GetAuthMethods() {
+		if method == pluginv1.WatchSyncAuthMethod_WATCH_SYNC_AUTH_METHOD_UNSPECIFIED {
+			return fmt.Errorf("plugin capability %q: watch sync auth method cannot be unspecified", descriptor.GetId())
+		}
+	}
+	if !watchSync.GetExportWatched() && !watchSync.GetExportUnwatched() &&
+		!watchSync.GetImportWatched() && !watchSync.GetImportProgress() &&
+		!watchSync.GetImportFavorites() && !watchSync.GetExportFavorites() &&
+		!watchSync.GetRemoveFavorites() && !watchSync.GetImportWatchlist() &&
+		!watchSync.GetExportWatchlist() && !watchSync.GetRemoveWatchlist() &&
+		!watchSync.GetScrobblePlayback() &&
+		!watchSync.GetImportRatings() && !watchSync.GetExportRatings() &&
+		!watchSync.GetSyncDropped() {
+		return fmt.Errorf("plugin capability %q: at least one watch sync operation is required", descriptor.GetId())
+	}
+	if watchSync.GetProvidesWatchlistOrder() && !watchSync.GetImportWatchlist() {
+		return fmt.Errorf("plugin capability %q: watchlist order requires watchlist import", descriptor.GetId())
+	}
+	if watchSync.GetMaxBatchSize() < 1 || watchSync.GetMaxBatchSize() > MaxWatchSyncBatchSize {
+		return fmt.Errorf("plugin capability %q: watch sync max_batch_size must be between 1 and %d", descriptor.GetId(), MaxWatchSyncBatchSize)
+	}
+	if len(watchSync.GetSupportedMediaTypes()) == 0 {
+		return fmt.Errorf("plugin capability %q: at least one supported media type is required", descriptor.GetId())
+	}
+	for _, mediaType := range watchSync.GetSupportedMediaTypes() {
+		if mediaType == pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_UNSPECIFIED {
+			return fmt.Errorf("plugin capability %q: watch sync media type cannot be unspecified", descriptor.GetId())
+		}
+	}
+	// supported_media_types is non-empty here; an empty list is rejected above.
+	if (watchSync.GetImportRatings() || watchSync.GetExportRatings()) &&
+		!watchSyncSupportsRatedMediaType(watchSync.GetSupportedMediaTypes()) {
+		return fmt.Errorf("plugin capability %q: watch sync ratings require a MOVIE or SERIES supported media type", descriptor.GetId())
+	}
+	if watchSync.GetSyncDropped() && !watchSyncSupportsMediaType(watchSync.GetSupportedMediaTypes(),
+		pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_SERIES) {
+		return fmt.Errorf("plugin capability %q: watch sync dropped shows require the SERIES supported media type", descriptor.GetId())
+	}
+	if len(watchSync.GetRatingExportRequiresWatched()) > 0 && !watchSync.GetExportRatings() {
+		return fmt.Errorf("plugin capability %q: rating_export_requires_watched requires export_ratings", descriptor.GetId())
+	}
+	for _, mediaType := range watchSync.GetRatingExportRequiresWatched() {
+		if !watchSyncSupportsMediaType(watchSync.GetSupportedMediaTypes(), mediaType) {
+			return fmt.Errorf("plugin capability %q: rating_export_requires_watched media type %s is not a supported media type", descriptor.GetId(), mediaType)
+		}
+	}
+	for _, namespace := range watchSync.GetExternalIdNamespaces() {
+		if !watchSyncSlugPattern.MatchString(namespace) {
+			return fmt.Errorf("plugin capability %q: invalid external id namespace %q", descriptor.GetId(), namespace)
+		}
+	}
+	return validateWatchSyncConnectionSettings(descriptor.GetId(), watchSync.GetConnectionSettings())
+}
+
+// validateWatchSyncConnectionSettings checks the per-connection settings a
+// watch sync descriptor declares. A type newer than this SDK is accepted so
+// an older SDK can still load the manifest; hosts skip settings whose type
+// they do not know. That includes UNSPECIFIED: decoding a manifest drops an
+// enum name the SDK does not know, which leaves the type unset.
+func validateWatchSyncConnectionSettings(capabilityID string, settings []*pluginv1.WatchSyncConnectionSetting) error {
+	seen := make(map[string]struct{}, len(settings))
+	for _, setting := range settings {
+		if setting == nil {
+			continue
+		}
+		key := setting.GetKey()
+		if !watchSyncSlugPattern.MatchString(key) {
+			return fmt.Errorf("plugin capability %q: connection setting key %q must be a lowercase slug", capabilityID, key)
+		}
+		if _, exists := seen[key]; exists {
+			return fmt.Errorf("plugin capability %q: connection setting %q is duplicated", capabilityID, key)
+		}
+		seen[key] = struct{}{}
+		if strings.TrimSpace(setting.GetLabel()) == "" {
+			return fmt.Errorf("plugin capability %q: connection setting %q requires a label", capabilityID, key)
+		}
+		switch setting.GetType() {
+		case pluginv1.WatchSyncConnectionSettingType_WATCH_SYNC_CONNECTION_SETTING_TYPE_BOOLEAN:
+			if defaultValue := setting.GetDefaultValue(); defaultValue != nil {
+				if _, ok := defaultValue.AsInterface().(bool); !ok {
+					return fmt.Errorf("plugin capability %q: connection setting %q default_value must be boolean", capabilityID, key)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// watchSyncSupportsMediaType reports whether want is a declared media type.
+// UNSPECIFIED is never declared; validation rejects it above.
+func watchSyncSupportsMediaType(mediaTypes []pluginv1.WatchSyncMediaType, want pluginv1.WatchSyncMediaType) bool {
+	return want != pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_UNSPECIFIED && slices.Contains(mediaTypes, want)
+}
+
+// watchSyncSupportsRatedMediaType reports whether a ratings-capable provider
+// lists a media type the host can rate. A value this SDK does not define counts
+// as rateable so that a descriptor built against a newer SDK stays valid here.
+func watchSyncSupportsRatedMediaType(mediaTypes []pluginv1.WatchSyncMediaType) bool {
+	for _, mediaType := range mediaTypes {
+		switch mediaType {
+		case pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_MOVIE,
+			pluginv1.WatchSyncMediaType_WATCH_SYNC_MEDIA_TYPE_SERIES:
+			return true
+		}
+		if _, known := pluginv1.WatchSyncMediaType_name[int32(mediaType)]; !known {
+			return true
+		}
+	}
+	return false
+}
+
+func validateNetworkAccessCapability(descriptor *pluginv1.CapabilityDescriptor) error {
+	networkAccess := descriptor.GetNetworkAccessProvider()
+	if descriptor.GetType() != capability.NetworkAccessProvider {
+		if networkAccess != nil {
+			return fmt.Errorf("plugin capability %q: network_access_provider descriptor requires type %q", descriptor.GetId(), capability.NetworkAccessProvider)
+		}
+		return nil
+	}
+	if networkAccess == nil {
+		return fmt.Errorf("plugin capability %q: network_access_provider descriptor is required", descriptor.GetId())
+	}
+	if !watchSyncSlugPattern.MatchString(networkAccess.GetProvider()) {
+		return fmt.Errorf("plugin capability %q: network access provider must be a path-safe lowercase slug", descriptor.GetId())
+	}
+	return nil
+}
+
+// validateRequestRouterCapability keeps the descriptor optional so request
+// routers built before it existed stay valid.
+func validateRequestRouterCapability(descriptor *pluginv1.CapabilityDescriptor) error {
+	if descriptor.GetType() != capability.RequestRouter && descriptor.GetRequestRouter() != nil {
+		return fmt.Errorf("plugin capability %q: request_router descriptor requires type %q", descriptor.GetId(), capability.RequestRouter)
+	}
+	if err := ValidateRequestRouterWording(descriptor.GetRequestRouter().GetWording()); err != nil {
+		return fmt.Errorf("plugin capability %q: %w", descriptor.GetId(), err)
+	}
+	return nil
+}
+
+// MaxWatchSyncBatchSize is the largest max_batch_size a watch sync provider
+// may declare. A host sends at most max_batch_size events in one ApplyEvents
+// call and asks ListRemoteState for pages of that size.
+const MaxWatchSyncBatchSize = 1000
+
+// Limits on RequestRouterWording values, in characters.
+const (
+	MaxRequestWordingLabelRunes  = 24
+	MaxRequestWordingDetailRunes = 140
+)
+
+// ValidateRequestRouterWording checks that every wording value is a single
+// line within its limit, with no leading or trailing whitespace. An absent
+// wording is valid. Hosts may call it on stored descriptors and fall back to
+// their own words when it fails.
+func ValidateRequestRouterWording(wording *pluginv1.RequestRouterWording) error {
+	if wording == nil {
+		return nil
+	}
+	if err := validateWordingValue("step", wording.GetStep(), MaxRequestWordingLabelRunes); err != nil {
+		return err
+	}
+	if err := validateStatusWording("queued.", wording.GetQueued()); err != nil {
+		return err
+	}
+	return validateStatusWording("downloading.", wording.GetDownloading())
+}
+
+// ValidateRequestStatusWording checks one status's wording against the same
+// rules as ValidateRequestRouterWording. Hosts call it on the wording a
+// plugin reports for a target and drop wording that fails.
+func ValidateRequestStatusWording(wording *pluginv1.RequestStatusWording) error {
+	return validateStatusWording("", wording)
+}
+
+func validateStatusWording(prefix string, wording *pluginv1.RequestStatusWording) error {
+	if err := validateWordingValue(prefix+"label", wording.GetLabel(), MaxRequestWordingLabelRunes); err != nil {
+		return err
+	}
+	return validateWordingValue(prefix+"detail", wording.GetDetail(), MaxRequestWordingDetailRunes)
+}
+
+func validateWordingValue(name, value string, limit int) error {
+	if value != strings.TrimSpace(value) {
+		return fmt.Errorf("request_router wording %s must not have leading or trailing whitespace", name)
+	}
+	if utf8.RuneCountInString(value) > limit {
+		return fmt.Errorf("request_router wording %s exceeds %d characters", name, limit)
+	}
+	if hasDisallowedControl(value, false) {
+		return fmt.Errorf("request_router wording %s contains control characters", name)
+	}
+	// Unicode line and paragraph separators break a line without being
+	// control characters.
+	if strings.ContainsFunc(value, func(r rune) bool { return unicode.In(r, unicode.Zl, unicode.Zp) }) {
+		return fmt.Errorf("request_router wording %s must be a single line", name)
+	}
+	return nil
+}
+
+// validateAuthProviderCapability checks the auth_provider.v1 fields the host
+// acts on. Other capability types keep their free-form metadata.
+func validateAuthProviderCapability(descriptor *pluginv1.CapabilityDescriptor) error {
+	if descriptor.GetType() != capability.AuthProvider {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(descriptor.GetAuthModes()))
+	for _, mode := range descriptor.GetAuthModes() {
+		if strings.TrimSpace(mode) == "" {
+			return fmt.Errorf("plugin capability %q: empty auth mode", descriptor.GetId())
+		}
+		// Unknown modes are allowed, but a case variant of a known one is a
+		// typo the host would silently ignore.
+		for _, known := range []string{AuthModePassword, AuthModeOAuth2, AuthModeNetwork} {
+			if mode != known && strings.EqualFold(mode, known) {
+				return fmt.Errorf("plugin capability %q: auth mode %q must be spelled %q", descriptor.GetId(), mode, known)
+			}
+		}
+		if _, dup := seen[mode]; dup {
+			return fmt.Errorf("plugin capability %q: duplicate auth mode %q", descriptor.GetId(), mode)
+		}
+		seen[mode] = struct{}{}
+	}
+	// A network provider never takes a password or runs a browser flow. Only
+	// the modes this SDK knows are refused beside it, so a newer mode that a
+	// later SDK allows with network still loads here.
+	if _, network := seen[AuthModeNetwork]; network {
+		for _, credentials := range []string{AuthModePassword, AuthModeOAuth2} {
+			if _, ok := seen[credentials]; ok {
+				return fmt.Errorf("plugin capability %q: auth mode %q cannot be combined with %q", descriptor.GetId(), AuthModeNetwork, credentials)
+			}
+		}
+	}
+	if value, ok := descriptor.GetMetadata().GetFields()[AuthProviderConnectionTestKey]; ok {
+		if _, isBool := value.GetKind().(*structpb.Value_BoolValue); !isBool {
+			return fmt.Errorf("plugin capability %q: metadata %q must be a boolean", descriptor.GetId(), AuthProviderConnectionTestKey)
+		}
+	}
+	return nil
+}
+
+// validateNetworkAuthPairing requires a manifest with a "network" auth mode
+// to declare network_access_provider.v1 too: the host only hands a network
+// provider peers that arrived through the plugin's own overlay listeners.
+func validateNetworkAuthPairing(manifest *pluginv1.PluginManifest) error {
+	var networkAuth *pluginv1.CapabilityDescriptor
+	hasNetworkAccess := false
+	for _, descriptor := range manifest.GetCapabilities() {
+		if AuthProviderUsesNetworkIdentity(descriptor) && networkAuth == nil {
+			networkAuth = descriptor
+		}
+		if descriptor.GetType() == capability.NetworkAccessProvider {
+			hasNetworkAccess = true
+		}
+	}
+	if networkAuth != nil && !hasNetworkAccess {
+		return fmt.Errorf("plugin capability %q: auth mode %q requires a %q capability in the same manifest",
+			networkAuth.GetId(), AuthModeNetwork, capability.NetworkAccessProvider)
+	}
+	return nil
+}
+
+// AuthProviderUsesNetworkIdentity reports whether an auth_provider.v1
+// capability declares the "network" auth mode, so the host reaches it through
+// NetworkIdentityAuth and never sends it a password.
+func AuthProviderUsesNetworkIdentity(descriptor *pluginv1.CapabilityDescriptor) bool {
+	if descriptor.GetType() != capability.AuthProvider {
+		return false
+	}
+	return slices.Contains(descriptor.GetAuthModes(), AuthModeNetwork)
+}
+
+// AuthProviderSupportsConnectionTest reports whether an auth_provider.v1
+// capability declares AuthProviderChecks.TestConnection support through its
+// "connection_test" metadata. Hosts should call TestConnection only when this
+// is true.
+func AuthProviderSupportsConnectionTest(descriptor *pluginv1.CapabilityDescriptor) bool {
+	if descriptor.GetType() != capability.AuthProvider {
+		return false
+	}
+	return descriptor.GetMetadata().GetFields()[AuthProviderConnectionTestKey].GetBoolValue()
+}
+
+// ValidateCatalogPresentation applies the stricter presentation contract used
+// by curated catalogs. The general manifest validator keeps presentation
+// optional so older and directly uploaded plugins remain compatible.
+func ValidateCatalogPresentation(manifest *pluginv1.PluginManifest, expectedSourceURL string) error {
+	if err := Validate(manifest); err != nil {
+		return err
+	}
+	presentation := manifest.GetPresentation()
+	if presentation == nil {
+		return fmt.Errorf("plugin presentation is required for catalog publishing")
+	}
+
+	requiredFields := []struct {
+		name  string
+		value string
+	}{
+		{name: "display_name", value: presentation.GetDisplayName()},
+		{name: "summary", value: presentation.GetSummary()},
+		{name: "description_markdown", value: presentation.GetDescriptionMarkdown()},
+		{name: "setup_markdown", value: presentation.GetSetupMarkdown()},
+		{name: "homepage_url", value: presentation.GetHomepageUrl()},
+		{name: "source_url", value: presentation.GetSourceUrl()},
+		{name: "support_url", value: presentation.GetSupportUrl()},
+		{name: "changelog_url", value: presentation.GetChangelogUrl()},
+		{name: "publisher_name", value: presentation.GetPublisherName()},
+		{name: "publisher_url", value: presentation.GetPublisherUrl()},
+		{name: "license_spdx", value: presentation.GetLicenseSpdx()},
+	}
+	for _, field := range requiredFields {
+		if strings.TrimSpace(field.value) == "" {
+			return fmt.Errorf("plugin presentation %s is required for catalog publishing", field.name)
+		}
+	}
+
+	if expectedSourceURL != "" && !equalCanonicalURL(presentation.GetSourceUrl(), expectedSourceURL) {
+		return fmt.Errorf("plugin presentation source_url %q must match catalog repository %q", presentation.GetSourceUrl(), expectedSourceURL)
+	}
+	return nil
+}
+
+func validatePresentation(presentation *pluginv1.PluginPresentation) error {
+	if presentation == nil {
+		return nil
+	}
+
+	singleLineFields := []struct {
+		name  string
+		value string
+		limit int
+	}{
+		{name: "display_name", value: presentation.GetDisplayName(), limit: maxPresentationDisplayNameRunes},
+		{name: "summary", value: presentation.GetSummary(), limit: maxPresentationSummaryRunes},
+		{name: "publisher_name", value: presentation.GetPublisherName(), limit: maxPresentationIdentityRunes},
+		{name: "license_spdx", value: presentation.GetLicenseSpdx(), limit: maxPresentationIdentityRunes},
+	}
+	for _, field := range singleLineFields {
+		if field.value != "" && field.value != strings.TrimSpace(field.value) {
+			return fmt.Errorf("plugin presentation %s must not have leading or trailing whitespace", field.name)
+		}
+		if utf8.RuneCountInString(field.value) > field.limit {
+			return fmt.Errorf("plugin presentation %s exceeds %d characters", field.name, field.limit)
+		}
+		if hasDisallowedControl(field.value, false) {
+			return fmt.Errorf("plugin presentation %s contains control characters", field.name)
+		}
+	}
+
+	markdownFields := []struct {
+		name  string
+		value string
+	}{
+		{name: "description_markdown", value: presentation.GetDescriptionMarkdown()},
+		{name: "setup_markdown", value: presentation.GetSetupMarkdown()},
+	}
+	for _, field := range markdownFields {
+		if len(field.value) > maxPresentationMarkdownBytes {
+			return fmt.Errorf("plugin presentation %s exceeds %d bytes", field.name, maxPresentationMarkdownBytes)
+		}
+		if hasDisallowedControl(field.value, true) {
+			return fmt.Errorf("plugin presentation %s contains control characters", field.name)
+		}
+	}
+
+	urlFields := []struct {
+		name  string
+		value string
+	}{
+		{name: "homepage_url", value: presentation.GetHomepageUrl()},
+		{name: "source_url", value: presentation.GetSourceUrl()},
+		{name: "support_url", value: presentation.GetSupportUrl()},
+		{name: "changelog_url", value: presentation.GetChangelogUrl()},
+		{name: "publisher_url", value: presentation.GetPublisherUrl()},
+	}
+	for _, field := range urlFields {
+		if err := validatePresentationURL(field.value); err != nil {
+			return fmt.Errorf("plugin presentation %s: %w", field.name, err)
+		}
+	}
+	return nil
+}
+
+func validatePresentationURL(raw string) error {
+	if raw == "" {
+		return nil
+	}
+	if len(raw) > maxPresentationURLBytes {
+		return fmt.Errorf("exceeds %d bytes", maxPresentationURLBytes)
+	}
+	if raw != strings.TrimSpace(raw) || strings.ContainsAny(raw, " \t\r\n") || hasDisallowedControl(raw, false) {
+		return fmt.Errorf("contains whitespace or control characters")
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("must be a valid absolute http or https URL: %w", err)
+	}
+	if (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return fmt.Errorf("must be an absolute http or https URL")
+	}
+	if parsed.User != nil {
+		return fmt.Errorf("must not contain user credentials")
+	}
+	return nil
+}
+
+func equalCanonicalURL(left, right string) bool {
+	return strings.EqualFold(strings.TrimSuffix(left, "/"), strings.TrimSuffix(right, "/"))
+}
+
+func hasDisallowedControl(value string, allowMarkdownWhitespace bool) bool {
+	for _, char := range value {
+		if !unicode.IsControl(char) {
+			continue
+		}
+		if allowMarkdownWhitespace && (char == '\n' || char == '\r' || char == '\t') {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func validateConfigSchema(schema *pluginv1.ConfigSchema) error {
+	if schema == nil {
+		return nil
+	}
+	form := schema.GetAdminForm()
+	if form == nil {
+		return nil
+	}
+
+	var parsed struct {
+		Type       string `json:"type"`
+		Properties map[string]struct {
+			Type string `json:"type"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal([]byte(schema.GetJsonSchema()), &parsed); err != nil {
+		return fmt.Errorf("plugin config schema %q has invalid json_schema: %w", schema.GetKey(), err)
+	}
+	if parsed.Type != "object" {
+		return fmt.Errorf("plugin config schema %q admin_form requires an object json_schema", schema.GetKey())
+	}
+
+	seen := make(map[string]struct{}, len(form.GetFields()))
+	for _, field := range form.GetFields() {
+		if field == nil {
+			continue
+		}
+		key := field.GetKey()
+		if key == "" {
+			return fmt.Errorf("plugin config schema %q admin_form field key is required", schema.GetKey())
+		}
+		if _, exists := seen[key]; exists {
+			return fmt.Errorf("plugin config schema %q admin_form field %q is duplicated", schema.GetKey(), key)
+		}
+		seen[key] = struct{}{}
+		property, ok := parsed.Properties[key]
+		if !ok {
+			return fmt.Errorf("plugin config schema %q admin_form field %q is not declared in json_schema", schema.GetKey(), key)
+		}
+		switch field.GetControl() {
+		case pluginv1.AdminFormControl_ADMIN_FORM_CONTROL_MULTI_SELECT:
+			if property.Type != "array" {
+				return fmt.Errorf("plugin config schema %q admin_form field %q multi_select control requires an array json_schema property", schema.GetKey(), key)
+			}
+			// A static multi_select must enumerate its options. A field declaring
+			// dynamic_options is exempt: the plugin supplies options at runtime
+			// via ListConfigOptions, so it legitimately carries no static set.
+			if !field.GetDynamicOptions() && len(field.GetOptions()) == 0 {
+				return fmt.Errorf("plugin config schema %q admin_form field %q select control requires options", schema.GetKey(), key)
+			}
+		case pluginv1.AdminFormControl_ADMIN_FORM_CONTROL_SELECT:
+			// A static select must enumerate its options. A field declaring
+			// dynamic_options is exempt: the plugin supplies options at runtime
+			// via ListConfigOptions, so it legitimately carries no static set.
+			// No type constraint: SELECT value may be string or numeric.
+			if !field.GetDynamicOptions() && len(field.GetOptions()) == 0 {
+				return fmt.Errorf("plugin config schema %q admin_form field %q select control requires options", schema.GetKey(), key)
+			}
+		}
+		if defaultValue := field.GetDefaultValue(); defaultValue != nil {
+			switch property.Type {
+			case "boolean":
+				if _, ok := defaultValue.AsInterface().(bool); !ok {
+					return fmt.Errorf("plugin config schema %q admin_form field %q default_value must be boolean", schema.GetKey(), key)
+				}
+			case "integer", "number":
+				switch defaultValue.AsInterface().(type) {
+				case float64:
+				default:
+					return fmt.Errorf("plugin config schema %q admin_form field %q default_value must be numeric", schema.GetKey(), key)
+				}
+			case "string":
+				if _, ok := defaultValue.AsInterface().(string); !ok {
+					return fmt.Errorf("plugin config schema %q admin_form field %q default_value must be string", schema.GetKey(), key)
+				}
+			}
+		}
+	}
+
+	// Cross-field references are validated in a second pass so a field may
+	// reference another declared later (e.g. show_when pointing at a field below).
+	hasReference := func(key string) bool {
+		if _, ok := seen[key]; ok {
+			return true
+		}
+		_, ok := parsed.Properties[key]
+		return ok
+	}
+	for _, field := range form.GetFields() {
+		if field == nil {
+			continue
+		}
+		key := field.GetKey()
+		for _, cond := range field.GetShowWhen() {
+			if cond.GetField() == "" {
+				return fmt.Errorf("plugin config schema %q admin_form field %q show_when.field is required", schema.GetKey(), key)
+			}
+			if !hasReference(cond.GetField()) {
+				return fmt.Errorf("plugin config schema %q admin_form field %q show_when references unknown field %q", schema.GetKey(), key, cond.GetField())
+			}
+		}
+		if eg := field.GetExclusiveGroupField(); eg != "" {
+			if !hasReference(eg) {
+				return fmt.Errorf("plugin config schema %q admin_form field %q exclusive_group_field references unknown field %q", schema.GetKey(), key, eg)
+			}
+		}
+	}
+	for _, section := range form.GetSections() {
+		if section == nil {
+			continue
+		}
+		for _, fk := range section.GetFieldKeys() {
+			if _, ok := seen[fk]; !ok {
+				return fmt.Errorf("plugin config schema %q admin_form section %q references unknown field %q", schema.GetKey(), section.GetKey(), fk)
+			}
+		}
+		for _, cond := range section.GetShowWhen() {
+			if cond.GetField() == "" {
+				return fmt.Errorf("plugin config schema %q admin_form section %q show_when.field is required", schema.GetKey(), section.GetKey())
+			}
+			if !hasReference(cond.GetField()) {
+				return fmt.Errorf("plugin config schema %q admin_form section %q show_when references unknown field %q", schema.GetKey(), section.GetKey(), cond.GetField())
+			}
+		}
+	}
+	return nil
+}
+
+func RegisterHTTPRoutes(manifest *pluginv1.PluginManifest, routes ...*pluginv1.HttpRouteDescriptor) error {
+	if err := Validate(manifest); err != nil {
+		return err
+	}
+	manifest.HttpRoutes = append(manifest.HttpRoutes, routes...)
+	return nil
+}
+
+func RegisterAssets(manifest *pluginv1.PluginManifest, assets ...*pluginv1.PackagedAsset) error {
+	if err := Validate(manifest); err != nil {
+		return err
+	}
+	manifest.Assets = append(manifest.Assets, assets...)
+	return nil
+}
+
+func Asset(path string, filesystem fs.FS) (*pluginv1.PackagedAsset, error) {
+	if _, err := fs.Stat(filesystem, path); err != nil {
+		return nil, fmt.Errorf("plugin asset %q: %w", path, err)
+	}
+	return &pluginv1.PackagedAsset{Path: path}, nil
+}

@@ -1,0 +1,348 @@
+syntax = "proto3";
+
+package silo.plugin.v1;
+
+option go_package = "github.com/Silo-Server/silo-plugin-sdk/pkg/pluginproto/silo/plugin/v1;pluginv1";
+
+import "google/protobuf/struct.proto";
+
+service MetadataProvider {
+  rpc Search(SearchMetadataRequest) returns (SearchMetadataResponse);
+  rpc GetMetadata(GetMetadataRequest) returns (GetMetadataResponse);
+  rpc GetPersonDetail(GetPersonDetailRequest) returns (GetPersonDetailResponse);
+  // GetPersonCredits returns every movie and TV title a person worked on.
+  // Hosts treat UNIMPLEMENTED as a provider without credits.
+  rpc GetPersonCredits(GetPersonCreditsRequest) returns (GetPersonCreditsResponse);
+  rpc GetSeasons(GetSeasonsRequest) returns (GetSeasonsResponse);
+  rpc GetEpisodes(GetEpisodesRequest) returns (GetEpisodesResponse);
+  rpc GetImages(GetImagesRequest) returns (GetImagesResponse);
+  rpc ResolveImageURL(ResolveImageURLRequest) returns (ResolveImageURLResponse);
+  rpc ResolveImageURLs(ResolveImageURLsRequest) returns (ResolveImageURLsResponse);
+}
+
+service ImageResolver {
+  rpc ResolveImageURL(ResolveImageURLRequest) returns (ResolveImageURLResponse);
+  rpc ResolveImageURLs(ResolveImageURLsRequest) returns (ResolveImageURLsResponse);
+}
+
+// TitleAlias is a provider-confirmed title for the same work. Kind is an open
+// lowercase value (currently "original", "localized", or "alternate") so
+// newer plugins can add alias classes without breaking older hosts.
+message TitleAlias {
+  string title = 1;
+  // BCP 47 / ISO language tag. Empty means the provider did not identify it.
+  string language = 2;
+  string kind = 3;
+}
+
+message ProviderSearchResult {
+  string provider_id = 1;
+  string item_type = 2;
+  string title = 3;
+  string original_title = 4;
+  int32 year = 5;
+  string overview = 6;
+  google.protobuf.Struct provider_ids = 7;
+  string image_url = 8;
+  repeated TitleAlias title_aliases = 9;
+  string title_language = 10;
+  bool title_is_fallback = 11;
+  string original_language = 12;
+}
+
+message SearchMetadataRequest {
+  string query = 1;
+  string item_type = 2;
+  int32 year = 3;
+  google.protobuf.Struct provider_ids = 4;
+  string language = 5;
+}
+
+message SearchMetadataResponse {
+  repeated ProviderSearchResult results = 1;
+}
+
+message PersonRecord {
+  string name = 1;
+  string kind = 2;
+  string character = 3;
+  int32 sort_order = 4;
+  string tmdb_id = 5;
+  string tvdb_id = 6;
+  string imdb_id = 7;
+  string plex_guid = 8;
+  string photo_path = 9;
+  string photo_thumbhash = 10;
+}
+
+// VideoRecord describes a remote promotional/supplemental video (trailer,
+// teaser, featurette, ...) hosted on an external site. `kind` and `site` are
+// lowercase snake_case strings rather than enums so plugins can emit values
+// newer than the host's vocabulary; unknown kinds degrade to "other" host-side.
+message VideoRecord {
+  // Provider-native video id, used by the host as a stable dedup key.
+  string provider_key = 1;
+  // "trailer", "teaser", "featurette", "clip", "behind_the_scenes",
+  // "bloopers", or "other".
+  string kind = 2;
+  // Hosting site, e.g. "youtube".
+  string site = 3;
+  // Site-native video key (e.g. the YouTube video id).
+  string site_key = 4;
+  string name = 5;
+  // ISO 639-1 language code, empty when unknown.
+  string language = 6;
+  bool is_official = 7;
+  // Vertical resolution hint (e.g. 1080), 0 when unknown.
+  int32 size_hint = 8;
+  // RFC 3339 publication timestamp, empty when unknown.
+  string published_at = 9;
+}
+
+message MetadataItem {
+  string provider_id = 1;
+  string item_type = 2;
+  string title = 3;
+  string original_title = 4;
+  int32 year = 5;
+  string overview = 6;
+  repeated string genres = 7;
+  google.protobuf.Struct provider_ids = 8;
+  google.protobuf.Struct ratings = 9;
+  google.protobuf.Struct legacy_people = 10 [deprecated = true];
+  google.protobuf.Struct metadata = 11;
+  string sort_title = 12;
+  string tagline = 13;
+  int32 runtime = 14;
+  repeated string studios = 15;
+  repeated string networks = 16;
+  repeated string countries = 17;
+  string original_language = 18;
+  string content_rating = 19;
+  string poster_path = 20;
+  string poster_thumbhash = 21;
+  string backdrop_path = 22;
+  string backdrop_thumbhash = 23;
+  string logo_path = 24;
+  int32 season_count = 25;
+  string first_air_date = 26;
+  string last_air_date = 27;
+  repeated PersonRecord people = 28;
+  string release_date = 29;
+  string air_time = 30;
+  // Publication/airing status of the work (e.g. "Continuing", "Ended").
+  // Metadata sources with native status (AniList RELEASING/FINISHED,
+  // MangaDex ongoing/completed) normalize into these two forms.
+  string status = 31;
+  // Remote promotional/supplemental videos (trailers, teasers, ...).
+  repeated VideoRecord videos = 32;
+  repeated TitleAlias title_aliases = 33;
+  string title_language = 34;
+  bool title_is_fallback = 35;
+  // True only when title_aliases is an authoritative, complete snapshot for
+  // this provider response. Older plugins decode as false, so hosts must merge
+  // rather than delete aliases when completeness is unknown.
+  bool title_aliases_complete = 36;
+  // ISO 639-1 language of overview and tagline. Empty means the text is in the
+  // requested language or the plugin cannot tell; set it when the provider
+  // had no text in the requested language and returned another language's.
+  string overview_language = 37;
+}
+
+message GetMetadataRequest {
+  string provider_id = 1;
+  string item_type = 2;
+  google.protobuf.Struct provider_ids = 3;
+  string language = 4;
+  string file_path = 5;
+}
+
+message GetMetadataResponse {
+  MetadataItem item = 1;
+}
+
+message GetPersonDetailRequest {
+  google.protobuf.Struct provider_ids = 1;
+  string language = 2;
+}
+
+message PersonDetailRecord {
+  string name = 1;
+  string sort_name = 2;
+  string bio = 3;
+  string birth_date = 4;
+  string death_date = 5;
+  string birthplace = 6;
+  string homepage = 7;
+  string photo_path = 8;
+  string photo_thumbhash = 9;
+  google.protobuf.Struct provider_ids = 10;
+}
+
+message GetPersonDetailResponse {
+  PersonDetailRecord person = 1;
+}
+
+message GetPersonCreditsRequest {
+  // The person's provider IDs, as GetPersonDetailRequest carries them.
+  google.protobuf.Struct provider_ids = 1;
+  string language = 2;
+}
+
+// PersonCredit is one title a person worked on. A person credited several
+// times on one title (for example as actor and director) has one credit per
+// role.
+message PersonCredit {
+  // "movie" or "series". An open vocabulary: hosts skip values they do not
+  // recognize.
+  string item_type = 1;
+  // The provider's ID for the title, and every ID it knows for it, so hosts
+  // can match the title against their library.
+  string provider_id = 2;
+  google.protobuf.Struct provider_ids = 3;
+  string title = 4;
+  string original_title = 5;
+  // First release or air date, YYYY-MM-DD. Empty when unknown.
+  string release_date = 6;
+  string overview = 7;
+  // Provider-relative image paths, resolved like other artwork with
+  // ResolveImageURL(s).
+  string poster_path = 8;
+  string backdrop_path = 9;
+  // "Acting" for a cast credit; the crew department otherwise, such as
+  // "Directing" or "Writing".
+  string department = 10;
+  // The role played, for cast credits.
+  string character = 11;
+  // The job, for crew credits, such as "Director".
+  string job = 12;
+  // Episodes the person appears in, for series credits. Zero when unknown.
+  int32 episode_count = 13;
+  double vote_average = 14;
+  double popularity = 15;
+  // The provider's ID for this credit, stable across requests.
+  string credit_id = 16;
+}
+
+message GetPersonCreditsResponse {
+  repeated PersonCredit credits = 1;
+}
+
+message SeasonRecord {
+  int32 season_number = 1;
+  string title = 2;
+  string overview = 3;
+  string air_date = 4;
+  string poster_path = 5;
+  google.protobuf.Struct metadata = 6;
+  string provider_id = 7;
+  google.protobuf.Struct provider_ids = 8;
+  // ISO 639-1 languages of title and overview, with MetadataItem's
+  // overview_language semantics: empty means the requested language or unknown.
+  string title_language = 9;
+  string overview_language = 10;
+  // The season's landscape background art, like poster_path. Empty means the
+  // provider has none; a host may then clear a backdrop an earlier refresh
+  // stored, unless an admin locked the series' artwork.
+  string backdrop_path = 11;
+}
+
+message GetSeasonsRequest {
+  string series_provider_id = 1;
+  google.protobuf.Struct provider_ids = 2;
+  string language = 3;
+}
+
+message GetSeasonsResponse {
+  repeated SeasonRecord seasons = 1;
+}
+
+message EpisodeRecord {
+  int32 season_number = 1;
+  int32 episode_number = 2;
+  string title = 3;
+  string overview = 4;
+  string air_date = 5;
+  int32 runtime = 6;
+  string still_path = 7;
+  google.protobuf.Struct provider_ids = 8;
+  google.protobuf.Struct ratings = 9;
+  google.protobuf.Struct metadata = 10;
+  string provider_id = 11;
+  // ISO 639-1 languages of title and overview, with MetadataItem's
+  // overview_language semantics: empty means the requested language or unknown.
+  string title_language = 12;
+  string overview_language = 13;
+}
+
+message GetEpisodesRequest {
+  string series_provider_id = 1;
+  int32 season_number = 2;
+  google.protobuf.Struct provider_ids = 3;
+  string language = 4;
+}
+
+message GetEpisodesResponse {
+  repeated EpisodeRecord episodes = 1;
+}
+
+message ImageRecord {
+  string kind = 1;
+  string url = 2;
+  string language = 3;
+  int32 width = 4;
+  int32 height = 5;
+  google.protobuf.Struct metadata = 6;
+  // Present only when the image is confirmed to belong to one exact season.
+  // Season zero represents Specials, so presence must not be inferred from the
+  // numeric value. Plugins should populate this field whenever the season is
+  // known, even when the request was already season-scoped.
+  optional int32 season_number = 7;
+}
+
+message GetImagesRequest {
+  string provider_id = 1;
+  string item_type = 2;
+  google.protobuf.Struct provider_ids = 3;
+  string language = 4;
+  // Present only when requesting artwork for a specific TV season.
+  // Season zero represents Specials, so presence must not be inferred from
+  // the numeric value. This scope is a request, not a guarantee: plugins that
+  // can filter by season should do so, but hosts must verify season attribution
+  // via ImageRecord.season_number rather than assume a filtered response.
+  optional int32 season_number = 5;
+}
+
+message GetImagesResponse {
+  repeated ImageRecord images = 1;
+}
+
+message ResolveImageURLRequest {
+  string path = 1;
+  // Semantic size hint, not an exact pixel contract. Canonical values, smallest
+  // to largest: "card", "featured", "large", "full", "original". Empty means
+  // the plugin default. The vocabulary is open and grows additively, so a
+  // plugin receiving an unknown variant must degrade gracefully to its nearest
+  // supported size and must not return an error. See
+  // pkg/pluginsdk/imagevariant for constants and the full rules.
+  string variant = 2;
+}
+
+message ResolveImageURLResponse {
+  string url = 1;
+}
+
+message ResolveImageURLsRequest {
+  repeated string paths = 1;
+  // Semantic size hint applied to every path in this request. Canonical values,
+  // smallest to largest: "card", "featured", "large", "full", "original". Empty
+  // means the plugin default. The vocabulary is open and grows additively, so a
+  // plugin receiving an unknown variant must degrade gracefully to its nearest
+  // supported size and must not return an error. See
+  // pkg/pluginsdk/imagevariant for constants and the full rules.
+  string variant = 2;
+}
+
+message ResolveImageURLsResponse {
+  map<string, string> urls = 1;
+}

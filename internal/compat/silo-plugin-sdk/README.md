@@ -1,0 +1,526 @@
+# silo-plugin-sdk
+
+Public Go SDK for building Silo plugins. **Not a runtime plugin** — this is a library that plugin authors depend on via `go.mod`.
+
+`silo-plugin-sdk` is the source of truth for the plugin authoring contract.
+First-party consumers—including the Silo host and the separate metadata,
+marker, autoscan, and watch-provider plugin repositories—pin tagged semantic
+versions. Local multi-repository workspaces may use `go.work`, but CI and
+release builds resolve the SDK from a published module tag.
+
+## Packages
+
+- `github.com/Silo-Server/silo-plugin-sdk/pkg/pluginproto/silo/plugin/v1` — generated protobuf code.
+- `github.com/Silo-Server/silo-plugin-sdk/pkg/pluginsdk/capability` — stable capability type constants for manifests and peer discovery.
+- `github.com/Silo-Server/silo-plugin-sdk/pkg/pluginsdk/config` — config-schema helpers.
+- `github.com/Silo-Server/silo-plugin-sdk/pkg/pluginsdk/convert` — type conversions.
+- `github.com/Silo-Server/silo-plugin-sdk/pkg/pluginsdk/httpclient` — credentialed JSON-over-HTTP client with bounded responses and typed status errors.
+- `github.com/Silo-Server/silo-plugin-sdk/pkg/pluginsdk/imagevariant` — canonical image-size variant strings.
+- `github.com/Silo-Server/silo-plugin-sdk/pkg/pluginsdk/manifest` — manifest loading/rendering.
+- `github.com/Silo-Server/silo-plugin-sdk/pkg/pluginsdk/runtime` — `manifest` subcommand + `Runtime` server scaffolding, including `ServeManifestWithOptions` options such as `WithConfigure` and `WithAuthProviderChecks`.
+- `github.com/Silo-Server/silo-plugin-sdk/pkg/pluginsdk/runtimedefault` — default `Runtime` implementation with `BindHostBroker` already wired; embed it to skip boilerplate.
+- `github.com/Silo-Server/silo-plugin-sdk/pkg/pluginsdk/runtimehost` — typed client for the host's `RuntimeHost` service, including event publishing, host info, catalog browsing, installed-plugin discovery, scoped streams, plugin-to-plugin HTTP calls, and plugin-owned config writes.
+
+## Capability families
+
+The SDK ships protobuf contracts for every capability the host understands:
+
+- `metadata_provider.v1`
+- `marker_provider.v1`
+- `media_analyzer.v1`
+- `image_resolver.v1`
+- `scheduled_task.v1`
+- `event_consumer.v1`
+- `auth_provider.v1`
+- `http_routes.v1`
+- `request_router.v1`
+- `scan_source.v1`
+- `watch_sync_provider.v1`
+- `network_access_provider.v1`
+- `audiobook_backend.v1`
+- `ebook_backend.v1`
+
+Plugins implement one or more, advertise them in `manifest.json`, and serve them over gRPC.
+
+## Author workflow
+
+A typical plugin:
+
+1. Defines a `manifest.json` using the protobuf-derived schema.
+2. Exposes a `Runtime` gRPC server plus one or more capability servers.
+3. Supports the `manifest` subcommand via `pkg/pluginsdk/runtime` so the host can introspect manifests without launching the plugin.
+4. Is installed either from a catalog or by uploading a trusted binary to a Silo server.
+
+For a minimal self-describing plugin, see [`examples/hello-scheduled-task`](examples/hello-scheduled-task). For a plugin that calls back into the host via `RuntimeHost` (publishing events, listing libraries), see [`examples/hello-runtime-host`](examples/hello-runtime-host). For a stub overlay-network provider, see [`examples/hello-network-access`](examples/hello-network-access). For an Autoscan source that reports changed paths, see [`examples/hello-scan-source`](examples/hello-scan-source).
+
+## Operator-facing presentation
+
+`PluginManifest.presentation` gives the Silo admin UI typed, plugin-level copy
+and canonical links. It is optional for backward compatibility, but cataloged
+plugins should provide a complete block:
+
+```json
+{
+  "presentation": {
+    "display_name": "Example Plugin",
+    "summary": "A one-sentence explanation for a homelab administrator.",
+    "description_markdown": "A longer description of what the plugin does and when to use it.",
+    "setup_markdown": "1. Install the plugin.\n2. Add the required connection.\n3. Enable it for the relevant library.",
+    "homepage_url": "https://example.com/plugin",
+    "source_url": "https://github.com/Silo-Server/example-plugin",
+    "support_url": "https://github.com/Silo-Server/example-plugin/issues",
+    "changelog_url": "https://github.com/Silo-Server/example-plugin/releases",
+    "publisher_name": "Silo",
+    "publisher_url": "https://github.com/Silo-Server",
+    "license_spdx": "AGPL-3.0-or-later"
+  }
+}
+```
+
+- `display_name` is limited to 120 characters and `summary` to 240 characters;
+  both are concise card copy without leading or trailing whitespace.
+- `description_markdown` and `setup_markdown` use CommonMark-style Markdown;
+  raw HTML is not part of the contract, and each field is limited to 32 KiB.
+- All URLs must be absolute `http` or `https` links and must not contain
+  embedded credentials; each URL is limited to 2048 bytes.
+- Publisher and source fields are self-declared identity information. Catalog
+  provenance and approval are assigned by the host/catalog, never by this block.
+  `publisher_name` is limited to 120 characters.
+- Use an SPDX license expression of at most 120 characters. Use `NOASSERTION`
+  when the repository has not declared a license rather than guessing one.
+
+Curated catalog tooling should call
+`manifest.ValidateCatalogPresentation(manifest, canonicalRepositoryURL)` to
+require the complete block and prevent a published `source_url` from drifting
+away from the repository that produced the release.
+
+## Calling back into the host
+
+Plugins talk to the host through the `RuntimeHost` service, accessed via `pkg/pluginsdk/runtimehost.Client`. The host invokes `Runtime.BindHostBroker` on startup so plugins can dial back over the shared broker; `runtimedefault` handles that step for you. Available RPCs:
+
+- `PublishEvent` / `PublishEventTo` / `PublishEventToInstallation` — fire events into the host's bus, broadcast, addressed to a stable `plugin_id`, or addressed to one specific installation.
+- `GetHostInfo` — read host URL metadata for callback URLs and external-facing plugin links.
+- `ListLibraries` — enumerate libraries the operator has configured.
+- `CheckMediaPresence` — ask whether a given external id is already in the catalog.
+- `ListInstalledPlugins` — discover sibling plugins (e.g. routers a request plugin can target).
+- `ListLibraryMedia` / `GetCatalogStats` — read public-safe catalog rows and aggregate counts.
+- `ResolveCatalogImageURLs` — resolve stored poster/backdrop image paths into host-generated browser URLs.
+- `MintScopedStream` — create short-lived, narrowly scoped stream grants for guest/public workflows.
+- `CallPluginHTTP` — invoke another installed plugin's `http_routes.v1` handler through the host control plane.
+- `SetGlobalConfigEntry` — persist plugin-owned config that admins didn't set via the manifest form.
+
+For plugin-to-plugin JSON calls, prefer the helper layer:
+
+```go
+plugins, err := host.ListInstalledPluginsByCapability(ctx, capability.RequestRouter)
+if err != nil || len(plugins) == 0 {
+    return err
+}
+
+var out struct {
+    Accepted bool `json:"accepted"`
+}
+err = host.CallPluginJSON(ctx, runtimehost.CallPluginJSONRequest{
+    InstallationID: int(plugins[0].GetInstallationId()),
+    Path:           "/api/request",
+    Request:        map[string]any{"title": "The Matrix"},
+    Response:       &out,
+})
+```
+
+## Auth providers
+
+`auth_provider.v1` lets people sign in with an account from an external
+identity provider, such as OIDC or LDAP. Password plugins implement
+`Authenticate`; OAuth plugins implement `InitAuthorize` and `ExchangeCode` and
+declare `"auth_modes": ["oauth2"]`. A network access provider can also sign
+people in from its overlay with `"auth_modes": ["network"]` and the separate
+`NetworkIdentityAuth` service (v0.23.0). All return `AuthenticateResponse`, which
+since v0.22.0 also carries typed identity fields (issuer, username,
+`email_verified`, groups, picture, managed role), opaque `refresh_state`, and a
+typed `denial` for refused sign-ins.
+
+The separate `AuthProviderChecks` service adds `TestConnection`, which tests
+staged settings for the admin UI, `CheckAccount`, which re-checks an account
+without the person present, and `EndSessionUrl`, which returns the provider's
+logout URL for web sign-out. Register it with `runtime.WithAuthProviderChecks`.
+Plugins served by `runtime.ServeManifestWithOptions` receive their settings
+through `runtime.WithConfigure`.
+
+See [docs/auth-provider.md](docs/auth-provider.md) for the manifest rules,
+field semantics, denials, and check statuses.
+
+## Request routers
+
+`request_router.v1` lets the host hand a media request to a download backend
+such as Sonarr, Radarr, or Seerr. The host owns the request lifecycle, policy,
+and quality governance; the plugin routes the request to a configured
+connection and reports its status.
+
+A series request may name seasons in `RequestDescriptor.seasons`. Season `0`
+is Specials, and an empty list means the whole series. A plugin that fulfils
+seasons individually declares it in its manifest:
+
+```json
+{
+  "type": "request_router.v1",
+  "id": "arr",
+  "request_router": { "supports_seasons": true }
+}
+```
+
+A declaring plugin must acquire only the requested seasons. When the series
+already exists upstream, it adds those seasons to what is already tracked and
+leaves the other seasons alone, so a request for season 4 never stops tracking
+seasons 1–3. Repeating a request must converge rather than add the series
+again. `CheckStatus` receives the same descriptor, so status can cover the
+requested seasons.
+
+Plugins without the flag, including every plugin built before it existed, keep
+today's whole-series behaviour. The host requests only the missing seasons of a
+series it already has from plugins that declare `supports_seasons`, because
+any other plugin would add the whole series again.
+
+A plugin that can read the downstream download queue reports progress from
+`CheckStatus` in `TargetStatus.progress`, and declares it in its manifest:
+
+```json
+{
+  "type": "request_router.v1",
+  "id": "arr",
+  "request_router": { "supports_seasons": true, "reports_download_progress": true }
+}
+```
+
+The host notices a target's progress on its regular reconcile pass. From then
+on it asks a declaring plugin about that target every minute, as long as the
+target is `downloading` and the last answer carried `progress`. A target whose
+`progress` comes back unset drops back to the regular cadence. The host ignores
+`progress` from plugins that do not declare the flag, including every plugin
+built before the flag existed.
+
+Set `progress` only while the target's status is `queued` or `downloading` and
+the service has something in its download queue for it. Leave it unset
+otherwise, including for failed downloads; the host then clears the progress it
+last stored. One `DownloadProgress` covers all of a target's downloads:
+
+- `bytes_total` and `bytes_left` sum the target's distinct downloads. Count a
+  season pack once, even when the service lists it once per episode.
+  Both are 0 whenever any of those downloads has an unknown size, so the host
+  shows no percentage rather than an overstated one. Otherwise `bytes_left`
+  stays between 0 and `bytes_total`.
+- `estimated_completion` is the latest estimate across the downloads. Leave it
+  unset when no download has one.
+- `downloads` counts the distinct downloads in flight.
+- `phase` is one of the values below, and is required whenever `progress` is
+  set, including while the size is unknown. The host counts a `progress` with
+  an empty `phase` and a `bytes_total` of 0 as unset, and clears the progress
+  it last stored. When downloads differ, report the phase that ranks first in
+  `import_blocked` > `stalled` > `downloading` > `importing` > `paused` >
+  `queued`. If any download needs attention, the phase says so; otherwise it
+  stays `downloading` while anything is still downloading.
+
+| Phase | Meaning |
+|---|---|
+| `import_blocked` | Downloaded, but the import needs manual attention |
+| `stalled` | Downloading, but the service reports a warning or error |
+| `downloading` | Transferring |
+| `importing` | Downloaded and waiting for or running the import |
+| `paused` | Paused in the download client |
+| `queued` | Waiting to start, delayed, or waiting for an unavailable download client |
+
+`phase` is an open vocabulary. Hosts treat values they do not know as
+`downloading`, so a phase added later still shows as a download in progress on
+hosts that predate it.
+
+### API key and base URL
+
+An admin connects a server to a request router with a base URL and an API key,
+which the plugin receives in `RouterConnection`. By default the host needs
+both: its admin form won't save a server without them, and it never sends a
+request to a connection without a key. A plugin that works without them, for
+example one that talks to a local tool or authenticates some other way,
+declares it in its manifest:
+
+```json
+{
+  "type": "request_router.v1",
+  "id": "local",
+  "request_router": { "api_key_optional": true, "base_url_optional": true }
+}
+```
+
+- `api_key_optional`: the admin form saves and tests a server without a key,
+  and the host sends the plugin connections whose `api_key` is empty.
+- `base_url_optional`: the admin form saves and tests a server without a base
+  URL, and the plugin receives an empty `base_url`.
+
+An admin can still enter a key or URL, and the plugin receives them. Plugins
+without the flags, including every plugin built before they existed, need both.
+A host that predates the flags still skips a connection without a key, and
+refuses to install a bare plugin binary that declares them; see
+[docs/compatibility.md](docs/compatibility.md). The SDK's `httpclient` refuses
+an empty key or base URL, so a plugin that declares either flag needs its own
+client for connections without them.
+
+### Wording
+
+Silo clients draw a request as four steps: requested, approved, the router's
+step, and in the library. By default they describe the router's step in neutral
+words: the step is "In progress", a queued request reads "Queued", and a
+downloading one reads "In progress". A plugin can name its step and those two
+statuses in words that fit how it works:
+
+```json
+{
+  "type": "request_router.v1",
+  "id": "seerr",
+  "request_router": {
+    "wording": {
+      "step": "Processing",
+      "queued": { "label": "Sent to Seerr", "detail": "Seerr takes it from here." },
+      "downloading": { "label": "Processing", "detail": "Seerr is working on it." }
+    }
+  }
+}
+```
+
+- `step` names the router's step on the track.
+- `queued` describes a request whose live targets are all `queued`;
+  `downloading` describes one with a `downloading` target.
+- `label` is one to three words for cards, list rows and the current step.
+- `detail` is one sentence shown under the current step on the request's page.
+
+Every field is optional, and clients use their own words for any field left
+empty. `step` and `label` are at most 24 characters and `detail` at most 140;
+each is a single line without leading or trailing spaces, and
+`manifest.Validate` rejects a manifest that breaks these limits. Everyone who
+can see a request sees its wording, so write plain English and leave out release
+names, indexers, download clients and paths. The requested, approved and
+in-library steps are the host's, so a plugin cannot rename them.
+
+The manifest's words are the same for every request. When a plugin knows more
+about one request, it reports `wording` on that target from `Fulfill` or
+`CheckStatus`:
+
+```go
+&pluginv1.TargetStatus{
+    Status: "queued",
+    Wording: &pluginv1.RequestStatusWording{
+        Label:  "Not out yet",
+        Detail: "Radarr adds it once it's out, expected December 18, 2026.",
+    },
+}
+```
+
+It replaces the manifest's wording for the target's status: a `label` replaces
+both the label and the detail, and a `detail` alone replaces only the detail.
+Set it only while the target is `queued` or `downloading`. Each answer replaces
+the last, so leave it unset once it no longer applies. The same limits apply,
+and the host drops wording that breaks them. Hosts that predate the field
+ignore it.
+
+## Watch sync providers
+
+`watch_sync_provider.v1` lets external plugins participate in Silo's host-owned
+watch-provider pipeline. The host owns encrypted per-profile credentials,
+authorization-code and device-code flow state, durable desired-state events,
+retries, ordering, and reconciliation. Plugins are stateless protocol adapters:
+they receive secrets only for the duration of an RPC, map rich movie, episode,
+and series identity to an upstream service, and return typed apply or retry
+outcomes.
+
+Watch-sync plugins must not persist or log credentials, authorization codes,
+provider flow state, or secret configuration. `ApplyEvents` is an at-least-once
+contract; plugins must treat `event_id` as stable across retries and implement
+convergent desired-state updates rather than increments. That rule also applies
+to scrobble stops: replaying the same event ID must not create another play.
+For playback events, `completed` is the host's authoritative watched decision;
+plugins must not infer completion from `watch_history_id` or percentage alone.
+Metadata consumers must likewise check optional `season_number` presence: zero
+means Specials, while absence means no season scope. See
+[compatibility guidance](docs/compatibility.md#presence-sensitive-optional-fields)
+for the request and record rules.
+
+Authenticated RPCs receive the same host-owned capability, configuration, and
+credential data through `WatchSyncAuthenticatedContext`. The context exists
+only for one invocation and is never plugin configuration or plugin state.
+Credentials returned by any RPC are complete authoritative replacements, not
+patches. The host validates and persists them before consuming results, pages,
+or faults—even when the response contains a fault. If credential persistence
+fails, the host commits no other response data.
+
+Device-code plugins register both `WatchSyncProvider` and the separate
+`WatchSyncDeviceAuthorizationService`. Keeping device authorization in a
+second service preserves source compatibility for v0.12 Go providers that
+implemented `WatchSyncProviderServer` directly. Register it without changing
+the released `CapabilityServers` shape:
+
+```go
+runtime.ServeManifestWithOptions(manifestJSON, version, servers,
+    runtime.WithWatchSyncDeviceAuthorization(deviceAuthServer))
+```
+
+A pending poll may replace its opaque provider state, polling interval, and
+expiry; the host encrypts and persists those values before the next poll.
+Those updates remain part of the same user challenge, so the original user code
+and verification URL must stay valid until expiry. An explicitly empty
+`provider_state` clears the prior state; omitting it retains the prior state.
+
+`WatchSyncProviderConfig` is keyed by manifest config key and field, for example
+`provider.client_id`. Scalar values are sent as strings and structured values
+as JSON. Fields marked secret in the manifest are sent through `secret_values`;
+undeclared fields are treated as secret. Plugins must accept configuration from
+the RPC context rather than relying on process-global state.
+
+Descriptors and events use the shared `WatchSyncMediaType` enum so advertised
+support and delivered media cannot drift between string conventions. Apply
+results pair their delivery status with a typed fault: successful results omit
+the fault, temporary retries use `TEMPORARY`, rate limits use `RATE_LIMITED`
+with an optional delay, and rejected events use a non-retryable fault code.
+Connection-wide faults such as invalid credentials belong on the RPC response.
+
+A `SERIES` media item describes the show itself: `external_ids`, `title`, and
+`year` identify the series, and the `series_*`, season, and episode fields are
+unused.
+
+Ratings are integers from 1 to 10 in every rating field; the host owns
+conversion to its own display scale. Plugins convert between the provider's
+native scale and 1–10 by rounding half up and clamping to the valid range.
+`import_ratings` means `ListRemoteState` returns `RATING` states, and
+`export_ratings` means `ApplyEvents` handles both `SET_RATING` and
+`REMOVE_RATING`; there is no separate removal flag. `SET_RATING` carries the
+value in the event's `rating` field, where zero is never valid. Both operations
+are convergent desired-state writes: resending the same value, or removing a
+rating that is already absent, must return `APPLIED` or `NO_CHANGE`, never a
+fault. The host sends rating events only for media types listed in
+`supported_media_types`, and manifest validation requires that list to include
+`MOVIE` or `SERIES` when either ratings flag is set.
+
+On some providers, rating a title also marks it watched. A plugin lists those
+media types in `rating_export_requires_watched`, and the host then sends a new
+rating of that type only after the profile has a completed play of the title.
+Each listed type must also be a supported media type, and `export_ratings` must
+be set.
+
+`sync_dropped` covers series the account stopped watching. `ListRemoteState`
+returns `DROPPED` states for them, and `ApplyEvents` handles `MARK_DROPPED` and
+`UNMARK_DROPPED` for `SERIES` items. Both writes are convergent: dropping a
+series that is already dropped, or undropping one that is not, returns
+`APPLIED` or `NO_CHANGE`. Manifest validation requires `SERIES` in
+`supported_media_types` when the flag is set.
+
+`connection_settings` declares preferences a profile can change on its
+connection at any time, such as whether to log rewatches. Each setting has a
+lowercase slug `key`, a `label`, an optional `description`, a `type`, and an
+optional `default_value`. `BOOLEAN` is the only type so far; the host shows it
+as a switch with the connection's other sync options and stores its value per
+connection. Every authenticated RPC carries the values in
+`WatchSyncAuthenticatedContext.connection_settings`, keyed by setting key, as
+`"true"` or `"false"` for a `BOOLEAN`, with defaults applied for settings the
+profile has not changed. A host that predates the field sends an empty map, so
+a plugin uses its default when a key is absent. These settings differ from a
+capability's `config_schema`, which an API-key connection collects once when it
+is made.
+
+`ListRemoteState` returns provider-neutral typed subrecords. `watched` carries a
+play count and last-watched time; `progress` carries a fractional percentage and
+paused time; `favorite` and `watchlist` carry list membership; `rating` carries
+a 1–10 rating and when it was set; `dropped` carries when a series was dropped.
+An item may contain multiple state families. The host requests only the state families a sync phase needs, keeps that phase's
+`cursor` fixed while following ephemeral page tokens, commits each successful
+page, and only then persists the final `next_cursor`. `complete_snapshot=true`
+means the traversal is authoritative; when false, missing items are not
+deletions. In a complete `RATING` traversal, an item absent from the snapshot is
+unrated, and in a complete `DROPPED` traversal a series absent from the snapshot
+is not dropped. An incremental favorite, watchlist, rating, or dropped removal is
+an item whose corresponding state has `removed=true`; it may omit `media` when
+`provider_item_key` identifies a record previously returned to the host. When
+`provides_watchlist_order=true`, watchlist traversals must be complete snapshots
+and the order of returned watchlist states is the remote list order. Event
+`list_position` is presence-aware: an explicit zero means the first position,
+while omission means no requested ordering. A page may carry `warnings`,
+safe notes such as items skipped for missing identity, which the host shows
+with the sync run.
+
+## Marker providers
+
+`marker_provider.v1` fetches intro, credits, recap, and preview markers from a
+marker service and can submit the host's markers to it. Settings such as the
+starting fetch priority and contribution defaults travel in the capability's
+`metadata`. See [docs/marker-provider.md](docs/marker-provider.md) for those
+keys, the file facts the host sends, and absent segments.
+
+## Network access providers
+
+`network_access_provider.v1` lets a resident plugin give the deployment an
+overlay-network identity (Tailscale, NetBird) and reverse-proxy overlay
+traffic to the host's local listeners. The host starts these plugins at boot,
+restarts them on crash, stores their per-instance state encrypted, and
+aggregates status across the API server and proxy nodes. See
+[docs/network-access-provider.md](docs/network-access-provider.md) for the
+proxy contract, `GetHostInfo` fields, instance state, and enrollment rules.
+
+## Scan sources
+
+The `scan_source.v1` capability is for Autoscan providers. The host owns the
+poll timer, marker persistence, path rewrites, validation, dedupe, and scan
+enqueueing. The plugin only polls its upstream provider and returns changed
+absolute paths in that provider's source namespace. The host applies autoscan
+source rewrite rules before enqueueing scans.
+
+The host resolves the configured upstream connection and passes it to
+`PollChanges` for each poll. Plugins should treat request values such as API
+keys as transient secrets and avoid logging them without redaction.
+
+See [docs/scan-source.md](docs/scan-source.md) for the setup descriptor that
+drives the Add-source flow, per-source settings, marker rules, change scopes,
+and installation. [`examples/hello-scan-source`](examples/hello-scan-source)
+is a complete plugin with tests.
+
+## Self-describing binaries
+
+Direct binary upload works best when the plugin embeds a manifest template and computes its own executable checksum at runtime before returning `Runtime.GetManifest`. That keeps the plugin installable without requiring a checked-out Silo repository or a sibling `manifest.json` file at upload time. The example plugin shows the pattern.
+
+## Compatibility
+
+Compatibility and versioning expectations are documented in [`docs/compatibility.md`](docs/compatibility.md).
+
+## Releases
+
+SDK releases are cut from semver tags such as `v0.1.0` and published through GitHub Actions.
+
+- Additive public API changes belong in a new minor release.
+- Compatible fixes and documentation updates belong in a patch release.
+- Breaking public API, protobuf, or manifest contract changes require a new major version.
+
+Before downstream repos stop using local workspace overrides, the required SDK commit must be pushed and tagged here first.
+
+## Build & test
+
+```bash
+make proto       # regenerate protobuf code (installs tools under ./bin/ as needed)
+go test ./...
+```
+
+## Contributing
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and
+[docs/compatibility.md](docs/compatibility.md) before opening a pull request.
+Public Go, protobuf, runtime, and manifest changes should start as an issue and
+identify affected downstream repositories.
+
+## Naming and branding
+
+Give your plugin its own name and mention Silo in the summary, for example
+"Trakt sync plugin for Silo". Repository and package names such as
+`silo-plugin-trakt` are fine, since "silo" only describes what the code plugs
+into. Avoid "Silo[word]" product names such as SiloTrakt, which read as
+official, and do not use the Silo logo as your plugin's icon. Set
+`publisher_name` to yourself, not "Silo", unless the plugin is published by the
+project. The full guidance, including what needs no permission, is at
+<https://siloserver.org/brand>.
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).

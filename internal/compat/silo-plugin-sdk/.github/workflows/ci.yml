@@ -1,0 +1,13 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  ci:
+    uses: Silo-Server/silo-plugin-sdk/.github/workflows/trusted-linux-ci.yml@main
+    with:
+      self_hosted: false

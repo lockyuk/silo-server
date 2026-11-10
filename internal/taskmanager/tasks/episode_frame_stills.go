@@ -31,7 +31,7 @@ func NewGenerateEpisodeFrameStillsTask(generator EpisodeFrameStillGenerator, mea
 func (t *GenerateEpisodeFrameStillsTask) Key() string  { return "generate_episode_frame_stills" }
 func (t *GenerateEpisodeFrameStillsTask) Name() string { return "Episode Thumbnails From Video" }
 func (t *GenerateEpisodeFrameStillsTask) Description() string {
-	return "Measures episode thumbnails and, in libraries that ask for it, takes a frame from the video when no full-HD image exists"
+	return "Measures episode thumbnails and, in libraries that ask for it, takes a frame from the video when the image is below the library's quality target. Keeps going until nothing is left to do or you stop it"
 }
 func (t *GenerateEpisodeFrameStillsTask) Category() taskmanager.TaskCategory {
 	return taskmanager.TaskCategoryLibrary
@@ -45,13 +45,39 @@ func (t *GenerateEpisodeFrameStillsTask) DefaultTriggers() []taskmanager.Trigger
 	}
 }
 
+// Execute keeps generating, batch after batch, until a batch finds nothing
+// left to measure or decide, or the administrator stops the task. The 15
+// minute trigger only starts it again after it has run out of work. A batch
+// that makes no progress (for example, no transcode node could be reserved)
+// ends the run so it does not spin.
 func (t *GenerateEpisodeFrameStillsTask) Execute(ctx context.Context, progress taskmanager.ProgressReporter) error {
-	progress.Report(0, "Measuring episode thumbnails")
-	report, err := t.generator.Generate(ctx, t.measureLimit, t.frameLimit)
-	if err != nil {
-		return fmt.Errorf("episode thumbnails from video: %w", err)
+	var total episodeframes.Report
+	batches := 0
+	for {
+		progress.Report(0, fmt.Sprintf("Working through episode thumbnails (batch %d, %d frames saved so far)", batches+1, total.Framed))
+		report, err := t.generator.Generate(ctx, t.measureLimit, t.frameLimit)
+		total.Measured += report.Measured
+		total.Checked += report.Checked
+		total.Framed += report.Framed
+		total.ProviderOK += report.ProviderOK
+		total.Failed += report.Failed
+		batches++
+		if ctx.Err() != nil {
+			progress.Report(100, t.summary(total, batches, "stopped"))
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("episode thumbnails from video: %w", err)
+		}
+		if report.Measured+report.Framed+report.ProviderOK+report.Failed == 0 {
+			break
+		}
 	}
-	progress.Report(100, fmt.Sprintf("Measured %d thumbnails; checked %d episodes: %d frames saved, %d provider images kept, %d failed",
-		report.Measured, report.Checked, report.Framed, report.ProviderOK, report.Failed))
+	progress.Report(100, t.summary(total, batches, "finished"))
 	return nil
+}
+
+func (t *GenerateEpisodeFrameStillsTask) summary(total episodeframes.Report, batches int, how string) string {
+	return fmt.Sprintf("%s after %d batches: measured %d thumbnails; checked %d episodes: %d frames saved, %d provider images kept, %d failed",
+		how, batches, total.Measured, total.Checked, total.Framed, total.ProviderOK, total.Failed)
 }

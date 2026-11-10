@@ -215,7 +215,7 @@ export default function ItemCard({
         <ViewTransitionLink
           to={itemHref}
           aria-label={displayTitle}
-          className="media-card-frame block overflow-hidden rounded-xl"
+          className="block overflow-hidden rounded-xl"
         >
           <MediaCardArtwork
             src={item.poster_url}

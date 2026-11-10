@@ -34,7 +34,6 @@ import (
 	"github.com/Silo-Server/silo-server/internal/scanner"
 	"github.com/Silo-Server/silo-server/internal/scantrigger"
 	"github.com/Silo-Server/silo-server/internal/sections"
-	"github.com/Silo-Server/silo-server/internal/taskmanager"
 	"github.com/Silo-Server/silo-server/internal/userstore"
 )
 
@@ -64,16 +63,11 @@ type LibraryHandler struct {
 	StoreProvider         userstore.UserStoreProvider
 	ArtworkStore          blobstore.Store
 	ArtworkResolver       artworkurl.Resolver
-	// TaskStarter runs the automatic collections sync when a library's
-	// collection settings change; nil leaves it to the daily run.
-	TaskStarter interface {
-		StartTask(key string) (taskmanager.TaskInfo, error)
-	}
-	appCtx       context.Context
-	EventBus     cache.EventBus
-	EventsHub    *evt.Hub
-	ScanRegistry *evt.ScanRegistry
-	ScanQueue    libraryScanQueuer
+	appCtx                context.Context
+	EventBus              cache.EventBus
+	EventsHub             *evt.Hub
+	ScanRegistry          *evt.ScanRegistry
+	ScanQueue             libraryScanQueuer
 	// RealtimeMonitor, when set, reconciles real-time library monitoring
 	// right after a library create, update or delete handled on this node.
 	RealtimeMonitor libraryMonitorPoker
@@ -255,10 +249,6 @@ type updateLibraryRequest struct {
 	EpisodeFrameStills   *string `json:"-"`
 	EpisodeFramePosition *int    `json:"-"`
 	EpisodeStillQuality  *string `json:"-"`
-	// AutoCollectionsEnabled and CollectionArtworkEnabled are set only by
-	// the v2 updateLibrary operation.
-	AutoCollectionsEnabled   *bool `json:"-"`
-	CollectionArtworkEnabled *bool `json:"-"`
 }
 
 // affectsTrickplay reports whether the update can change which of the
@@ -328,10 +318,6 @@ type libraryResponse struct {
 	EpisodeFrameStills   string `json:"-"`
 	EpisodeFramePosition int    `json:"-"`
 	EpisodeStillQuality  string `json:"-"`
-	// AutoCollectionsEnabled and CollectionArtworkEnabled are read by the v2
-	// library view only.
-	AutoCollectionsEnabled   bool `json:"-"`
-	CollectionArtworkEnabled bool `json:"-"`
 }
 
 type libraryMountCheckRootResponse struct {
@@ -477,8 +463,6 @@ func toLibraryResponse(f *models.MediaFolder) libraryResponse {
 		EpisodeFrameStills:         f.EpisodeFrameStills,
 		EpisodeFramePosition:       f.EpisodeFramePosition,
 		EpisodeStillQuality:        f.EpisodeStillQuality,
-		AutoCollectionsEnabled:     f.AutoCollectionsEnabled,
-		CollectionArtworkEnabled:   f.CollectionArtworkEnabled,
 	}
 }
 

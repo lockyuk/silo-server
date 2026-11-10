@@ -3397,10 +3397,6 @@ export interface Library {
   episode_frame_position?: number;
   /** The episode thumbnail size the library asks for. */
   episode_still_quality?: EpisodeStillQuality;
-  /** Build a collection for each TMDB collection the library holds two or more films of. */
-  auto_collections_enabled?: boolean;
-  /** Automatic collections use TMDB's poster and backdrop; off, a collage. */
-  collection_artwork_enabled?: boolean;
   /** Allow-list of video kinds fetched during metadata refresh; empty disables. */
   trailer_kinds: string[];
   /**
@@ -3557,9 +3553,6 @@ export interface CreateLibraryRequest {
   episode_frame_stills?: EpisodeFrameStills;
   episode_frame_position?: number;
   episode_still_quality?: EpisodeStillQuality;
-  /** Update only; sent only when changed. */
-  auto_collections_enabled?: boolean;
-  collection_artwork_enabled?: boolean;
   trailer_kinds?: string[];
   /** Omitted on create means on. */
   realtime_monitoring?: boolean;

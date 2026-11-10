@@ -42,8 +42,6 @@ type Library struct {
 	EpisodeFrameStills         string   `json:"episode_frame_stills" enum:"off,missing,below_full_hd" doc:"When an episode's thumbnail is taken from a frame of its video: never, only when no provider has an image, or also when the provider image is smaller than full HD (1920x1080)" example:"off"`
 	EpisodeStillQuality        string   `json:"episode_still_quality" enum:"hd,full_hd,uhd" doc:"The episode thumbnail size the library asks for: hd (1280x720), full_hd (1920x1080) or uhd (3840x2160). A provider image below it falls through to the next source, then to a frame of the video when the library takes frames; if nothing reaches the target the largest image found is kept." example:"full_hd"`
 	EpisodeFramePosition       int      `json:"episode_frame_position" minimum:"5" maximum:"90" doc:"How far into the episode, in percent, a frame thumbnail is taken" example:"20"`
-	AutoCollectionsEnabled     bool     `json:"auto_collections_enabled" doc:"Build a collection for each TMDB collection (franchise) the library holds two or more films of, kept in sync daily. Movie libraries only." example:"false"`
-	CollectionArtworkEnabled   bool     `json:"collection_artwork_enabled" doc:"Give automatic collections TMDB's poster and backdrop; off, they get a collage of their films' posters" example:"true"`
 	EpisodeStillSource         string   `json:"episode_still_source" enum:"provider_order,high_quality" doc:"Where episode stills come from: provider_order follows the provider chain; high_quality prefers TMDB's full-HD stills over TVDB's low-resolution screencaps" example:"provider_order"`
 	RealtimeMonitoring         bool     `json:"realtime_monitoring" doc:"Scan automatically when files in the library's folders change. Takes effect only while the server-wide scanner.realtime_monitoring setting is on." example:"true"`
 	SortOrder                  int      `json:"sort_order" doc:"Position among libraries, lowest first" example:"0"`
@@ -83,8 +81,6 @@ type LibraryUpdate struct {
 	EpisodeFrameStills       *string   `json:"episode_frame_stills,omitempty" nullable:"false" enum:"off,missing,below_full_hd" doc:"When an episode's thumbnail is taken from a frame of its video; taking fewer queues a full metadata refresh that restores provider images" example:"below_full_hd"`
 	EpisodeFramePosition     *int      `json:"episode_frame_position,omitempty" nullable:"false" minimum:"5" maximum:"90" doc:"How far into the episode, in percent, new frame thumbnails are taken" example:"20"`
 	EpisodeStillQuality      *string   `json:"episode_still_quality,omitempty" nullable:"false" enum:"hd,full_hd,uhd" doc:"The episode thumbnail size the library asks for: hd (1280x720), full_hd (1920x1080) or uhd (3840x2160)"`
-	AutoCollectionsEnabled   *bool     `json:"auto_collections_enabled,omitempty" nullable:"false" doc:"Build a collection for each TMDB collection the library holds two or more films of; turning it off removes them. A change starts the collections sync" example:"true"`
-	CollectionArtworkEnabled *bool     `json:"collection_artwork_enabled,omitempty" nullable:"false" doc:"Use TMDB's poster and backdrop for automatic collections instead of a collage" example:"true"`
 	EpisodeStillSource       *string   `json:"episode_still_source,omitempty" nullable:"false" enum:"provider_order,high_quality" doc:"Where episode stills come from; a change queues a full metadata refresh" example:"high_quality"`
 	RealtimeMonitoring       *bool     `json:"realtime_monitoring,omitempty" nullable:"false" doc:"Scan automatically when files in the library's folders change. Takes effect only while the server-wide scanner.realtime_monitoring setting is on." example:"true"`
 }
@@ -1142,8 +1138,6 @@ func (reg *Registry) updateLibrary(ctx context.Context, in *LibraryUpdateInput) 
 		EpisodeFrameStills:       in.Body.EpisodeFrameStills,
 		EpisodeFramePosition:     in.Body.EpisodeFramePosition,
 		EpisodeStillQuality:      in.Body.EpisodeStillQuality,
-		AutoCollectionsEnabled:   in.Body.AutoCollectionsEnabled,
-		CollectionArtworkEnabled: in.Body.CollectionArtworkEnabled,
 	})
 	if err != nil {
 		return nil, libraryProblem(err)
@@ -1575,8 +1569,6 @@ func libraryOf(v handlers.LibraryView) Library {
 		EpisodeFrameStills:         cmp.Or(v.EpisodeFrameStills, models.EpisodeFrameStillsOff),
 		EpisodeFramePosition:       cmp.Or(v.EpisodeFramePosition, 20),
 		EpisodeStillQuality:        cmp.Or(v.EpisodeStillQuality, models.EpisodeStillQualityFullHD),
-		AutoCollectionsEnabled:     v.AutoCollectionsEnabled,
-		CollectionArtworkEnabled:   v.CollectionArtworkEnabled,
 		RealtimeMonitoring:         v.RealtimeMonitoring,
 		SortOrder:                  v.SortOrder,
 		PosterURL:                  v.PosterURL,

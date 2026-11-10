@@ -96,12 +96,9 @@ type ExternalIDs struct {
 // implicitly a movie. The Parts slice preserves TMDB's ordering, which is
 // curated and (for most franchises) chronological by release date.
 type Collection struct {
-	ID           int
-	Name         string
-	Overview     string
-	PosterPath   string // TMDB image path ("/abc.jpg"); empty when TMDB has none
-	BackdropPath string
-	Parts        []CollectionPart
+	ID    int
+	Name  string
+	Parts []CollectionPart
 }
 
 // CollectionPart is a single movie inside a TMDB collection.
@@ -113,23 +110,13 @@ type CollectionPart struct {
 }
 
 // collectionResponse is the wire format of /collection/{id}. Fields we don't
-// use (original_name, the parts' artwork, etc.) are omitted.
+// use (overview, poster_path, backdrop_path, original_name, etc.) are
+// intentionally omitted so we don't drag unused decoding work into the
+// library-collection sync hot path.
 type collectionResponse struct {
-	ID           int                      `json:"id"`
-	Name         string                   `json:"name"`
-	Overview     string                   `json:"overview"`
-	PosterPath   string                   `json:"poster_path"`
-	BackdropPath string                   `json:"backdrop_path"`
-	Parts        []collectionResponsePart `json:"parts"`
-}
-
-// movieCollectionResponse is the slice of /movie/{id} that names the TMDB
-// collection a movie belongs to; belongs_to_collection is null for most.
-type movieCollectionResponse struct {
-	BelongsToCollection *struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
-	} `json:"belongs_to_collection"`
+	ID    int                      `json:"id"`
+	Name  string                   `json:"name"`
+	Parts []collectionResponsePart `json:"parts"`
 }
 
 type collectionResponsePart struct {

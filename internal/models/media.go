@@ -70,12 +70,6 @@ type MediaFolder struct {
 	// (EpisodeStillQuality*): a provider image below it goes on to the next
 	// source, then a frame of the video, and the largest image found stays.
 	EpisodeStillQuality string
-	// AutoCollectionsEnabled has the automatic sync build one collection per
-	// TMDB collection (franchise) the library holds two or more films of.
-	AutoCollectionsEnabled bool
-	// CollectionArtworkEnabled gives those collections TMDB's poster and
-	// backdrop; off, they get the generated collage instead.
-	CollectionArtworkEnabled bool
 	PosterPath               string     // S3 key for library poster image
 	LastScannedAt            *time.Time // nullable
 	ScanWarningCode          *string

@@ -196,10 +196,6 @@ export function useLibraryForm({
     useState<EpisodeStillQuality>(savedStillQuality);
   const savedFramePosition = library?.episode_frame_position ?? 20;
   const [episodeFramePosition, setEpisodeFramePosition] = useState(savedFramePosition);
-  const savedAutoCollections = library?.auto_collections_enabled ?? false;
-  const [autoCollectionsEnabled, setAutoCollectionsEnabled] = useState(savedAutoCollections);
-  const savedCollectionArtwork = library?.collection_artwork_enabled ?? true;
-  const [collectionArtworkEnabled, setCollectionArtworkEnabled] = useState(savedCollectionArtwork);
   const savedTrickplay = library?.trickplay_enabled ?? false;
   const [trickplayEnabled, setTrickplayEnabled] = useState(savedTrickplay);
   // A new library follows its type's default until the switch is set:
@@ -371,12 +367,6 @@ export function useLibraryForm({
     if (library && episodeFramePosition !== savedFramePosition) {
       body.episode_frame_position = episodeFramePosition;
     }
-    if (library && autoCollectionsEnabled !== savedAutoCollections) {
-      body.auto_collections_enabled = autoCollectionsEnabled;
-    }
-    if (library && collectionArtworkEnabled !== savedCollectionArtwork) {
-      body.collection_artwork_enabled = collectionArtworkEnabled;
-    }
 
     if (library) {
       updateMutation.mutate(
@@ -448,10 +438,6 @@ export function useLibraryForm({
     setEpisodeFramePosition,
     episodeStillQuality,
     setEpisodeStillQuality,
-    autoCollectionsEnabled,
-    setAutoCollectionsEnabled,
-    collectionArtworkEnabled,
-    setCollectionArtworkEnabled,
     introDetectionEnabled,
     setIntroDetectionEnabled,
     trailerKinds,

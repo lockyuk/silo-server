@@ -2405,10 +2405,6 @@ html[data-navigation-direction]::view-transition-new(main-content) {
     :root[data-admin-shell] {
       --app-sidebar-offset: 240px;
     }
-    /* The TV-style top bar has no left column. */
-    :root[data-app-shell][data-top-menu] {
-      --app-sidebar-offset: 0px;
-    }
   }
 
   .impersonation-banner {

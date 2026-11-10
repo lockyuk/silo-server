@@ -44,6 +44,7 @@ import type {
 } from "@/api/types";
 import { notificationKeys } from "./keys";
 import { toast } from "sonner";
+import { codeNumber, t } from "@/i18n";
 
 const NOTIFICATIONS_PAGE_SIZE = 25;
 
@@ -145,16 +146,20 @@ export function useSetNotificationSeriesMuted() {
     },
     onSuccess: (_data, variables) => {
       if (!variables.muted) return;
-      toast.success(`Muted ${variables.title}`, {
+      toast.success(t("web.notifications.queries.muted", { title: variables.title }), {
         action: {
-          label: "Undo",
+          label: t("web.notifications.queries.undo"),
           onClick: () => mutation.mutate({ ...variables, muted: false }),
         },
       });
     },
     onError: (error, variables) => {
       if (error instanceof StaleApiRequestContextError) return;
-      toast.error(variables.muted ? "Failed to mute the series" : "Failed to unmute the series");
+      toast.error(
+        variables.muted
+          ? t("web.notifications.queries.muteFailed")
+          : t("web.notifications.queries.unmuteFailed"),
+      );
     },
   });
   return mutation;
@@ -230,7 +235,7 @@ export function useMarkNotificationRead() {
       applyNotificationRead(queryClient, { profile_id: context.profileId, id });
     },
     onError: () => {
-      toast.error("Failed to mark notification read");
+      toast.error(t("web.notifications.queries.markReadFailed"));
       invalidateInbox(queryClient, notificationScope(context));
     },
   });
@@ -243,7 +248,7 @@ export function useMarkAllNotificationsRead() {
     retry: false,
     onSuccess: () => invalidateInbox(queryClient, notificationScope(context)),
     onError: () => {
-      toast.error("Failed to mark notifications read");
+      toast.error(t("web.notifications.queries.markAllReadFailed"));
       invalidateInbox(queryClient, notificationScope(context));
     },
   });
@@ -272,7 +277,7 @@ export function useUpdateNotificationPreferences() {
           queryKey: notificationInboxKeys.series(status, scope),
         });
     },
-    onError: () => toast.error("Failed to save notification preferences"),
+    onError: () => toast.error(t("web.notifications.queries.savePreferencesFailed")),
   });
 }
 
@@ -303,7 +308,9 @@ export function useUpdateEmailNotificationPreferences() {
     },
     onError: (error) => {
       if (error instanceof StaleApiRequestContextError) return;
-      toast.error(error instanceof Error ? error.message : "Failed to save email preferences");
+      toast.error(
+        error instanceof Error ? error.message : t("web.notifications.queries.saveEmailFailed"),
+      );
     },
   });
 }
@@ -344,13 +351,15 @@ export function useRequestEmailNotificationAddress() {
       });
       toast.success(
         receipt.current
-          ? "Verification request queued."
-          : "This verification request is no longer pending.",
+          ? t("web.notifications.queries.verificationQueued")
+          : t("web.notifications.queries.verificationNotPending"),
       );
     },
     onError: (error, intent) => {
       if (!current(intent) || error instanceof StaleApiRequestContextError) return;
-      toast.error(error instanceof Error ? error.message : "Failed to queue verification request");
+      toast.error(
+        error instanceof Error ? error.message : t("web.notifications.queries.verificationFailed"),
+      );
     },
   });
   type Options = NonNullable<Parameters<typeof mutation.mutate>[1]>;
@@ -417,7 +426,9 @@ export function useClearEmailNotificationAddress() {
         return;
       }
       if (error instanceof StaleApiRequestContextError) return;
-      toast.error(error instanceof Error ? error.message : "Failed to remove the custom address");
+      toast.error(
+        error instanceof Error ? error.message : t("web.notifications.queries.removeAddressFailed"),
+      );
     },
   });
   // Pending mutations can receive new observer options after a rerender.
@@ -568,5 +579,8 @@ export function formatEpisodeCode(
   if (notification.season_number == null || notification.episode_number == null) {
     return null;
   }
-  return `S${notification.season_number}E${notification.episode_number}`;
+  return t("web.notifications.queries.episodeCode", {
+    season: codeNumber(notification.season_number),
+    episode: codeNumber(notification.episode_number),
+  });
 }

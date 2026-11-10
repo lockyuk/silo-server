@@ -52,6 +52,9 @@ export function libraryFromV2(library: LibraryV2): Library {
     episode_frame_stills: library.episode_frame_stills,
     episode_frame_position: library.episode_frame_position,
     episode_still_quality: library.episode_still_quality,
+    box_sets_enabled: library.box_sets_enabled,
+    box_set_min_movies: library.box_set_min_movies,
+    box_sets_in_search: library.box_sets_in_search,
     trailer_kinds: library.trailer_kinds,
     realtime_monitoring: library.realtime_monitoring,
     sort_order: library.sort_order,
@@ -81,6 +84,13 @@ export function libraryCreateToV2(body: CreateLibraryRequest): V2Body<"POST /api
       ? {}
       : { intro_detection_enabled: body.intro_detection_enabled }),
     ...(body.trickplay_enabled === undefined ? {} : { trickplay_enabled: body.trickplay_enabled }),
+    ...(body.box_sets_enabled === undefined ? {} : { box_sets_enabled: body.box_sets_enabled }),
+    ...(body.box_set_min_movies === undefined
+      ? {}
+      : { box_set_min_movies: body.box_set_min_movies }),
+    ...(body.box_sets_in_search === undefined
+      ? {}
+      : { box_sets_in_search: body.box_sets_in_search }),
     ...(body.trailer_kinds === undefined ? {} : { trailer_kinds: body.trailer_kinds }),
     ...(body.realtime_monitoring === undefined
       ? {}

@@ -211,11 +211,13 @@ var _ userstore.SettingMutationTransactioner = (*interestTrackingStoreWithDevice
 // on the backing store, so they live on the wrapper types above rather than
 // being forwarded unconditionally.
 var _ userstore.WatchedBatchWriter = (*interestTrackingStore)(nil)
+var _ userstore.ItemViewerStateQueuer = (*interestTrackingStore)(nil)
 var _ userstore.VisibleHistoryAdder = (*interestTrackingStore)(nil)
 var _ userstore.HistoryVisibilityStore = (*interestTrackingStore)(nil)
 var _ userstore.WatchedBatchWriter = (*interestTrackingStoreWithDevices)(nil)
 var _ userstore.VisibleHistoryAdder = (*interestTrackingStoreWithDevices)(nil)
 var _ userstore.HistoryVisibilityStore = (*interestTrackingStoreWithDevices)(nil)
+var _ userstore.ItemUserFlagStore = (*interestTrackingStore)(nil)
 var _ userstore.SeriesEpisodeRollupStore = (*interestTrackingStoreWithRollup)(nil)
 var _ userstore.SeriesEpisodeRollupStore = (*interestTrackingStoreWithDevicesAndRollup)(nil)
 var _ userstore.DeviceRegistry = (*interestTrackingStoreWithDevicesAndRollup)(nil)
@@ -329,11 +331,29 @@ func (s *interestTrackingStore) VisibleHistoryTimestamps(ctx context.Context, pr
 func (s *interestTrackingStore) DeleteProfile(ctx context.Context, id string) error {
 	err := s.UserStore.DeleteProfile(ctx, id)
 	if err == nil {
-		purgeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-		defer cancel()
-		if purgeErr := s.system.PurgeProfile(purgeCtx, s.userID, id); purgeErr != nil {
-			slog.WarnContext(ctx, "notifications: profile purge failed", "component", "notifications", "profile_id", id, "error", purgeErr)
-		}
+		s.purgeProfile(ctx, id)
+	}
+	return err
+}
+
+func (s *interestTrackingStore) purgeProfile(ctx context.Context, id string) {
+	purgeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	if purgeErr := s.system.PurgeProfile(purgeCtx, s.userID, id); purgeErr != nil {
+		slog.WarnContext(ctx, "notifications: profile purge failed", "component", "notifications", "profile_id", id, "error", purgeErr)
+	}
+}
+
+// DeleteProfileAudited is DeleteProfile through the wrapped store's audited
+// delete. A backend without one deletes the profile without an audit row.
+func (s *interestTrackingStore) DeleteProfileAudited(ctx context.Context, id string, audit func(pgx.Tx, *userstore.Profile) error) error {
+	deleter, ok := s.UserStore.(userstore.AuditedProfileDeleter)
+	if !ok {
+		return s.DeleteProfile(ctx, id)
+	}
+	err := deleter.DeleteProfileAudited(ctx, id, audit)
+	if err == nil {
+		s.purgeProfile(ctx, id)
 	}
 	return err
 }
@@ -396,6 +416,13 @@ func preserveDeviceSettings(wrapped, inner userstore.UserStore) userstore.UserSt
 func (p *interestTrackingProvider) SupportsAtomicSectionProfileReset(pool *pgxpool.Pool) bool {
 	provider, ok := p.inner.(userstore.SectionProfileResetProvider)
 	return ok && provider.SupportsAtomicSectionProfileReset(pool)
+}
+
+// The decorator hooks writes only, so reading the shared tables directly
+// misses nothing it does.
+func (p *interestTrackingProvider) StoresAccountsIn(pool *pgxpool.Pool) bool {
+	provider, ok := p.inner.(interface{ StoresAccountsIn(*pgxpool.Pool) bool })
+	return ok && provider.StoresAccountsIn(pool)
 }
 
 func (s *interestTrackingStore) ListAdminSettingValuesPage(ctx context.Context, after userstore.SettingIdentity, limit int) ([]userstore.SettingValue, bool, error) {

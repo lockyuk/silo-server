@@ -12,6 +12,7 @@ import (
 	"net/textproto"
 	"net/url"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 
@@ -88,54 +89,58 @@ type Dependencies struct {
 	// is fully registered. It cannot mutate or recover the sealed router.
 	ObserveRoutes func([]streamtelemetry.WalkedRoute)
 
-	DirectDownloads                  *DirectDownloadHandlers
-	DirectDownloadLinks              DirectDownloadLinkService
-	ViewerSubtitleDelete             ViewerSubtitleDeleteService
-	OrderedApplePush                 OrderedApplePushService
-	ApplePushRetirement              ApplePushRetirementService
-	NotificationEmailVerification    NotificationEmailVerificationService
-	AdminAutoscanSourceDeletes       AdminAutoscanSourceDeleteService
-	AdminAutoscanSourceWrites        AdminAutoscanSourceWriteService
-	WatchTogetherSocket              WatchTogetherSocketService
-	WatchTogetherCreate              WatchTogetherCreateService
-	AdminAutoscanEvents              AdminAutoscanEventsService
-	AdminAutoscanScans               AdminAutoscanScansService
-	WatchTogetherSuggestionPromote   WatchTogetherSuggestionPromoteService
-	WatchTogetherSuggestionCreate    WatchTogetherSuggestionCreateService
-	AdminAutoscanConnectionDeletes   AdminAutoscanConnectionDeleteService
-	AdminAutoscanConnectionUpdate    AdminAutoscanConnectionUpdateService
-	AdminAutoscanConnectionCreation  AdminAutoscanConnectionCreationService
-	AdminAutoscanRewrites            AdminAutoscanRewritesService
-	AdminAutoscanAvailableSources    AdminAutoscanAvailableSourcesService
-	AdminAuditLogs                   AdminAuditLogsService
-	ExternalSignIn                   ExternalSignInService
-	AdminOperationalLogs             AdminOperationalLogsService
-	AdminJellyfinCompatSettings      AdminJellyfinCompatSettingsService
-	OrderedAndroidPush               OrderedAndroidPushService
-	AndroidPushRetirement            AndroidPushRetirementService
-	WatchTogetherSuggestionDelete    WatchTogetherSuggestionDeleteService
-	WatchTogetherClose               WatchTogetherCloseService
-	WatchTogetherRoomRead            WatchTogetherRoomReadService
-	WatchTogetherPolicy              WatchTogetherPolicyService
-	WatchTogetherJoin                WatchTogetherJoinService
-	WatchTogetherSelection           WatchTogetherSelectionService
-	WatchTogetherSourceFallback      WatchTogetherSourceFallbackService
-	WatchTogetherStage               WatchTogetherStageService
-	WatchTogetherStart               WatchTogetherStartService
-	WatchTogetherStop                WatchTogetherStopService
-	WatchTogetherSelectionMode       WatchTogetherSelectionModeService
-	WatchTogetherMemberState         WatchTogetherMemberStateService
-	WatchTogetherPicker              WatchTogetherPickerService
-	WatchTogetherCapability          WatchTogetherCapabilityService
-	WatchTogetherSuggestions         WatchTogetherSuggestionService
-	AdminDashboardStats              AdminDashboardStatsService
-	AdminHardwareAcceleration        AdminHardwareAccelerationService
-	AdminDashboardLayout             AdminDashboardLayoutService
-	AdminDashboardLayoutResets       AdminDashboardLayoutResetService
-	AdminDashboardLayoutSaves        AdminDashboardLayoutSaveService
-	ScanControls                     ScanControlService
-	AuthProviderIconPublic           AuthProviderIconPublic
-	AdminPlaybackSessions            AdminPlaybackSessionService
+	DirectDownloads                 *DirectDownloadHandlers
+	DirectDownloadLinks             DirectDownloadLinkService
+	ViewerSubtitleDelete            ViewerSubtitleDeleteService
+	OrderedApplePush                OrderedApplePushService
+	ApplePushRetirement             ApplePushRetirementService
+	ApplePushReset                  ApplePushResetService
+	NotificationEmailVerification   NotificationEmailVerificationService
+	AdminAutoscanSourceDeletes      AdminAutoscanSourceDeleteService
+	AdminAutoscanSourceWrites       AdminAutoscanSourceWriteService
+	WatchTogetherSocket             WatchTogetherSocketService
+	WatchTogetherCreate             WatchTogetherCreateService
+	AdminAutoscanEvents             AdminAutoscanEventsService
+	AdminAutoscanScans              AdminAutoscanScansService
+	WatchTogetherSuggestionPromote  WatchTogetherSuggestionPromoteService
+	WatchTogetherSuggestionCreate   WatchTogetherSuggestionCreateService
+	AdminAutoscanConnectionDeletes  AdminAutoscanConnectionDeleteService
+	AdminAutoscanConnectionUpdate   AdminAutoscanConnectionUpdateService
+	AdminAutoscanConnectionCreation AdminAutoscanConnectionCreationService
+	AdminAutoscanRewrites           AdminAutoscanRewritesService
+	AdminAutoscanAvailableSources   AdminAutoscanAvailableSourcesService
+	AdminAuditLogs                  AdminAuditLogsService
+	ExternalSignIn                  ExternalSignInService
+	AdminOperationalLogs            AdminOperationalLogsService
+	AdminJellyfinCompatSettings     AdminJellyfinCompatSettingsService
+	OrderedAndroidPush              OrderedAndroidPushService
+	AndroidPushRetirement           AndroidPushRetirementService
+	WatchTogetherSuggestionDelete   WatchTogetherSuggestionDeleteService
+	WatchTogetherClose              WatchTogetherCloseService
+	WatchTogetherRoomRead           WatchTogetherRoomReadService
+	WatchTogetherPolicy             WatchTogetherPolicyService
+	WatchTogetherJoin               WatchTogetherJoinService
+	WatchTogetherSelection          WatchTogetherSelectionService
+	WatchTogetherSourceFallback     WatchTogetherSourceFallbackService
+	WatchTogetherStage              WatchTogetherStageService
+	WatchTogetherStart              WatchTogetherStartService
+	WatchTogetherStop               WatchTogetherStopService
+	WatchTogetherSelectionMode      WatchTogetherSelectionModeService
+	WatchTogetherMemberState        WatchTogetherMemberStateService
+	WatchTogetherPicker             WatchTogetherPickerService
+	WatchTogetherCapability         WatchTogetherCapabilityService
+	WatchTogetherSuggestions        WatchTogetherSuggestionService
+	AdminDashboardStats             AdminDashboardStatsService
+	AdminHardwareAcceleration       AdminHardwareAccelerationService
+	AdminDashboardLayout            AdminDashboardLayoutService
+	AdminDashboardLayoutResets      AdminDashboardLayoutResetService
+	AdminDashboardLayoutSaves       AdminDashboardLayoutSaveService
+	ScanControls                    ScanControlService
+	AuthProviderIconPublic          AuthProviderIconPublic
+	AdminPlaybackSessions           AdminPlaybackSessionService
+	// PlaybackLifecycleEvents reports that this server announces session.*
+	// lifecycle events on the admin sessions channel.
+	PlaybackLifecycleEvents          bool
 	AdminDownloadPreparations        AdminDownloadPreparationService
 	AdminDownloadPreparationControls AdminDownloadPreparationControlService
 	AdminDownloadStorage             AdminDownloadStorageService
@@ -169,6 +174,7 @@ type Dependencies struct {
 	ServerConnections             ServerConnections
 	NotificationDestinationCreate NotificationDestinationCreateService
 	AdminUnmatchedFiles           AdminUnmatchedFilesService
+	AdminCatalogItems             AdminCatalogItemsService
 	AdminCatalogImages            AdminCatalogImagesService
 	AdminCatalogMatch             AdminCatalogMatchService
 	AdminCatalogSplit             AdminCatalogSplitService
@@ -199,8 +205,15 @@ type Dependencies struct {
 	AdminDiagnosticDownloads      AdminDiagnosticDownloadService
 	AdminJobArtifacts             AdminJobArtifactService
 	AdminJobArtifactSigner        *artworkurl.Signer
+	AdminBackups                  AdminBackupService
+	// AdminBackupSigner signs backup object links for destinations that
+	// cannot presign.
+	AdminBackupSigner *artworkurl.Signer
+	// ProfileTransfer exports and imports the acting profile's own data.
+	ProfileTransfer               ProfileTransferService
 	AdminDiagnosticReads          AdminDiagnosticReadsService
 	AdminDashboardInsights        AdminDashboardInsightsService
+	AdminAPIClients               AdminAPIClientsService
 	AdminNodesRead                AdminNodesReadService
 	AdminNodeCommands             AdminNodeCommandsService
 	AdminNodeDrain                AdminNodeDrainService
@@ -410,6 +423,10 @@ type Dependencies struct {
 	// NotInterested reads and edits a profile's Not interested marks
 	// (*handlers.PersonalDataHandler).
 	NotInterested NotInterestedService
+	// TitleAllowances keeps the movies, series and collections a household's
+	// primary profile allowed limited profiles above their maturity limits
+	// (*handlers.TitleAllowanceHandler).
+	TitleAllowances TitleAllowanceService
 	// WatchlistTitles keeps a profile's watchlist entries for titles the
 	// library doesn't have (*handlers.PersonalDataHandler).
 	WatchlistTitles WatchlistTitleService
@@ -444,6 +461,7 @@ type Dependencies struct {
 	PersonalAPIKeys                    PersonalAPIKeyService
 	PolicyCapability                   PolicyCapabilityService
 	Branding                           BrandingService
+	OverlayImages                      OverlayImageService
 	ArtworkStore                       blobstore.Store
 	ArtworkBackend                     string
 	ArtworkSigner                      *artworkurl.Signer
@@ -482,10 +500,15 @@ type Dependencies struct {
 	People PeopleService
 	// LiteraryWorks answers literary works (*handlers.LiteraryWorkHandler).
 	LiteraryWorks LiteraryWorkService
+	// BoxSets answers box set search and detail (*handlers.CatalogHandler).
+	BoxSets BoxSetService
 
 	// bodyReadTimeout overrides BodyReadTimeout; tests use it to exercise the
 	// 408 boundary without waiting for the production deadline.
 	bodyReadTimeout time.Duration
+	// uploadPartReadTimeout overrides the backup upload part's read
+	// deadline, for the same reason.
+	uploadPartReadTimeout time.Duration
 	// testRegister registers probe operations; tests only.
 	testRegister func(*Registry)
 }
@@ -802,6 +825,10 @@ func (b *bufferedWriter) flush() {
 		// so the listener leaves that to the server.
 		b.w.Header().Del("Content-Type")
 		b.body.Reset()
+	} else if b.w.Header().Get("Content-Length") == "" {
+		// The whole body is known, so it goes out unchunked, and the
+		// listener's compressor can leave a body too short to gain identity.
+		b.w.Header().Set("Content-Length", strconv.Itoa(b.body.Len()))
 	}
 	b.w.WriteHeader(b.status)
 	_, _ = b.w.Write(b.body.Bytes())
@@ -836,7 +863,7 @@ func (reg *Registry) methodNotAllowed(w http.ResponseWriter, r *http.Request) {
 type AccountService interface {
 	AccountPasswordCapability(context.Context, *auth.Claims, string) (handlers.AccountPasswordCapabilityView, error)
 	AuthorizePasswordChange(context.Context, *auth.Claims, string) error
-	ChangePassword(context.Context, *auth.Claims, string, string) error
+	ChangePassword(ctx context.Context, claims *auth.Claims, currentPassword, newPassword string, signOutOtherSessions bool) error
 	NeedsSetup(ctx context.Context) (bool, error)
 	SetupWizardCompleted(ctx context.Context) (bool, error)
 	CurrentUser(ctx context.Context, claims *auth.Claims) (handlers.UserView, error)
@@ -854,6 +881,7 @@ type ProgressService interface {
 // operations use.
 type ProfileService interface {
 	ListProfiles(ctx context.Context, userID int) (handlers.ProfileListView, error)
+	GetProfile(ctx context.Context, userID int, profileID string) (handlers.ProfileView, error)
 	CreateProfile(ctx context.Context, cmd handlers.ProfileCreateCommand) (handlers.ProfileView, error)
 	UpdateProfile(ctx context.Context, cmd handlers.ProfileUpdateCommand) (handlers.ProfileView, error)
 	DeleteProfile(ctx context.Context, cmd handlers.ProfileDeleteCommand) error
@@ -978,7 +1006,7 @@ type LibraryAdminService interface {
 // LibrarySectionService is the slice of *handlers.SectionHandler the
 // viewer-facing library section reads use.
 type LibrarySectionService interface {
-	LibraryLayout(ctx context.Context, libraryID int) (handlers.SectionLayoutView, error)
+	LibraryLayout(ctx context.Context, libraryID int, viewer handlers.SectionViewer) (handlers.SectionLayoutView, error)
 	LibrarySections(ctx context.Context, libraryID int, viewer handlers.SectionViewer) (handlers.SectionsView, error)
 	LibrarySectionItems(ctx context.Context, libraryID int, sectionID string, viewer handlers.SectionViewer) (handlers.SectionView, error)
 }
@@ -1052,13 +1080,15 @@ type PersonalListService interface {
 // RatingService is the slice of *handlers.RatingsHandler the ratings
 // operations use.
 type RatingService interface {
-	// ListRatingsPage answers at most limit of the profile's ratings ordered
-	// by (rated_at DESC, media_item_id DESC) strictly after the key (nil =
-	// from the most recently rated).
-	ListRatingsPage(ctx context.Context, userID int, profileID string, after *mediacatalog.RatingKey, limit int) ([]mediacatalog.UserRating, error)
-	// GetRating answers the profile's rating of the item; found is false
-	// when the profile has not rated it.
-	GetRating(ctx context.Context, userID int, profileID, itemID string) (rating mediacatalog.UserRating, found bool, err error)
+	// ListRatingsPage answers at most limit of the profile's ratings of items
+	// the access filter admits, ordered by (rated_at DESC, media_item_id
+	// DESC) strictly after the key (nil = from the most recently rated). The
+	// store applies the filter, so fewer than limit rows means no more follow.
+	ListRatingsPage(ctx context.Context, userID int, profileID string, access mediacatalog.AccessFilter, after *mediacatalog.RatingKey, limit int) ([]mediacatalog.UserRating, error)
+	// GetRating answers the profile's rating of an item the access filter
+	// admits; found is false when the profile has not rated it, and an item
+	// outside the filter is a 404 error.
+	GetRating(ctx context.Context, userID int, profileID, itemID string, access mediacatalog.AccessFilter) (rating mediacatalog.UserRating, found bool, err error)
 	// SetRating records a validated rating of an item the access filter
 	// admits; an item outside it is a 404 error.
 	SetRating(ctx context.Context, userID int, profileID, itemID string, access mediacatalog.AccessFilter, rating int) error
@@ -1090,8 +1120,8 @@ type RecommendationService interface {
 // handlers.RequestService) the profile-facing request operations use.
 type MediaRequestService interface {
 	Search(ctx context.Context, viewer mediarequests.Viewer, query string, mediaType mediarequests.MediaType, page int) (*mediarequests.MediaPage, error)
-	Discover(ctx context.Context, viewer mediarequests.Viewer, section string, page int) (*mediarequests.DiscoverySection, error)
-	DiscoverAll(ctx context.Context, viewer mediarequests.Viewer) ([]mediarequests.DiscoverySection, error)
+	DiscoverRows(ctx context.Context, viewer mediarequests.Viewer) (*mediarequests.DiscoverLayoutPage, error)
+	DiscoverRow(ctx context.Context, viewer mediarequests.Viewer, rowID string, page int) (*mediarequests.DiscoverySection, error)
 	GetDetail(ctx context.Context, viewer mediarequests.Viewer, mediaType mediarequests.MediaType, tmdbID int) (*mediarequests.MediaDetail, error)
 	CreateRequest(ctx context.Context, viewer mediarequests.Viewer, input mediarequests.CreateRequestInput) (*mediarequests.Request, error)
 	ListMine(ctx context.Context, viewer mediarequests.Viewer, filter mediarequests.ListFilter) ([]*mediarequests.Request, error)
@@ -1278,7 +1308,7 @@ type DeviceLoginService interface {
 	DeviceLoginConfigured() bool
 	StartDeviceLogin(ctx context.Context, input auth.DeviceLoginStartInput) (*auth.DeviceLoginStartResult, error)
 	LookupDeviceLogin(ctx context.Context, input auth.DeviceLoginLookupInput) (*auth.DeviceLoginInfo, error)
-	PollDeviceLogin(ctx context.Context, deviceCode string) (*handlers.DeviceLoginPollView, error)
+	PollDeviceLogin(ctx context.Context, deviceCode, bindingSecret string) (*handlers.DeviceLoginPollView, error)
 	ApproveDeviceLogin(ctx context.Context, input auth.DeviceLoginLookupInput, userID int) (handlers.DeviceLoginDecision, error)
 	ApproveDeviceHandoff(ctx context.Context, input auth.DeviceLoginLookupInput, userID int, profileID string) (handlers.DeviceLoginDecision, error)
 	DenyDeviceLogin(ctx context.Context, input auth.DeviceLoginLookupInput, userID int) (handlers.DeviceLoginDecision, error)

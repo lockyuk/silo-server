@@ -73,6 +73,9 @@ type ApplePushRegistrationInput struct {
 	APNsEnvironment string
 	APNsTopic       string
 	PushMode        string
+	// LoginSessionID is the login session registering the device; empty for an
+	// API key. Push to the device stops when that session ends.
+	LoginSessionID string
 }
 
 type ApplePushDeviceRegistration struct {
@@ -83,20 +86,24 @@ type ApplePushDeviceRegistration struct {
 	APNsEnvironment string
 	APNsTopic       string
 	PushMode        string
+	LoginSessionID  string
 }
 
 type FCMPushRegistrationInput struct {
 	DeviceID string
 	FCMToken string
 	PushMode string
+	// LoginSessionID is as in ApplePushRegistrationInput.
+	LoginSessionID string
 }
 
 type FCMPushDeviceRegistration struct {
-	UserID    int
-	ProfileID string
-	DeviceID  string
-	FCMToken  string
-	PushMode  string
+	UserID         int
+	ProfileID      string
+	DeviceID       string
+	FCMToken       string
+	PushMode       string
+	LoginSessionID string
 	// Provider is PushProviderSiloRelay when empty.
 	Provider string
 }
@@ -234,6 +241,7 @@ func normalizeApplePushRegistration(input ApplePushRegistrationInput) (ApplePush
 		APNsEnvironment: environment,
 		APNsTopic:       topic,
 		PushMode:        pushMode,
+		LoginSessionID:  input.LoginSessionID,
 	}, nil
 }
 
@@ -266,9 +274,10 @@ func normalizeFCMPushRegistration(input FCMPushRegistrationInput) (FCMPushDevice
 	}
 
 	return FCMPushDeviceRegistration{
-		DeviceID: deviceID,
-		FCMToken: token,
-		PushMode: pushMode,
+		DeviceID:       deviceID,
+		FCMToken:       token,
+		PushMode:       pushMode,
+		LoginSessionID: input.LoginSessionID,
 	}, nil
 }
 
@@ -332,6 +341,14 @@ func (r *PushDeviceRepository) UpsertApple(ctx context.Context, registration App
 	}
 	if generation > 0 {
 		return nil, ErrPushLegacyWriter
+	}
+	// An installation reset by its owner stays reserved for that account.
+	var reservedFor int
+	if err := tx.QueryRow(ctx, `SELECT user_id FROM apple_push_installations WHERE device_id=$1`, registration.DeviceID).Scan(&reservedFor); err != nil {
+		return nil, err
+	}
+	if reservedFor != 0 && reservedFor != registration.UserID {
+		return nil, ErrPushGenerationConflict
 	}
 	if err := checkPushInstallationOwner(ctx, tx, registration.DeviceID, PushPlatformApple, registration.UserID); err != nil {
 		return nil, err
@@ -539,9 +556,10 @@ func (r *PushDeviceRepository) insertApple(ctx context.Context, tx pgx.Tx, regis
 			server_device_id,
 			push_mode,
 			enabled,
-			last_seen_at
+			last_seen_at,
+			login_session_id
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true, now())
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true, now(), NULLIF($13, ''))
 		ON CONFLICT (profile_id, device_id, platform) DO NOTHING
 		RETURNING `+pushDeviceColumns,
 		id,
@@ -556,6 +574,7 @@ func (r *PushDeviceRepository) insertApple(ctx context.Context, tx pgx.Tx, regis
 		apnsTokenHash(registration.APNsToken),
 		serverDeviceID,
 		registration.PushMode,
+		registration.LoginSessionID,
 	)
 	device, err := scanPushDevice(row)
 	if err != nil {
@@ -583,6 +602,7 @@ func (r *PushDeviceRepository) updateApple(ctx context.Context, tx pgx.Tx, regis
 			last_seen_at = now(),
 			last_failure_at = NULL,
 			last_failure_code = NULL,
+			login_session_id = NULLIF($9, ''),
 			updated_at = now()
 		WHERE id = $8
 		RETURNING `+pushDeviceColumns,
@@ -594,6 +614,7 @@ func (r *PushDeviceRepository) updateApple(ctx context.Context, tx pgx.Tx, regis
 		apnsTokenHash(registration.APNsToken),
 		registration.PushMode,
 		existing.ID,
+		registration.LoginSessionID,
 	)
 	device, err := scanPushDevice(row)
 	if err != nil {
@@ -623,9 +644,10 @@ func (r *PushDeviceRepository) insertFCM(ctx context.Context, tx pgx.Tx, registr
 			server_device_id,
 			push_mode,
 			enabled,
-			last_seen_at
+			last_seen_at,
+			login_session_id
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, now())
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, now(), NULLIF($11, ''))
 		ON CONFLICT (profile_id, device_id, platform) DO NOTHING
 		RETURNING `+pushDeviceColumns,
 		id,
@@ -638,6 +660,7 @@ func (r *PushDeviceRepository) insertFCM(ctx context.Context, tx pgx.Tx, registr
 		fcmTokenHash(registration.FCMToken),
 		serverDeviceID,
 		registration.PushMode,
+		registration.LoginSessionID,
 	)
 	device, err := scanPushDevice(row)
 	if err != nil {
@@ -663,6 +686,7 @@ func (r *PushDeviceRepository) updateFCM(ctx context.Context, tx pgx.Tx, registr
 			last_seen_at = now(),
 			last_failure_at = NULL,
 			last_failure_code = NULL,
+			login_session_id = NULLIF($7, ''),
 			updated_at = now()
 		WHERE id = $6
 		RETURNING `+pushDeviceColumns,
@@ -672,6 +696,7 @@ func (r *PushDeviceRepository) updateFCM(ctx context.Context, tx pgx.Tx, registr
 		fcmTokenHash(registration.FCMToken),
 		registration.PushMode,
 		existing.ID,
+		registration.LoginSessionID,
 	)
 	device, err := scanPushDevice(row)
 	if err != nil {
@@ -680,9 +705,11 @@ func (r *PushDeviceRepository) updateFCM(ctx context.Context, tx pgx.Tx, registr
 	return device, nil
 }
 
-func scanPushDevice(row pgx.Row) (*PushDevice, error) {
+// scanPushDevice reads pushDeviceColumns, then any extra columns the query
+// selected after them.
+func scanPushDevice(row pgx.Row, extra ...any) (*PushDevice, error) {
 	var device PushDevice
-	if err := row.Scan(
+	if err := row.Scan(append([]any{
 		&device.ID,
 		&device.UserID,
 		&device.ProfileID,
@@ -704,7 +731,7 @@ func scanPushDevice(row pgx.Row) (*PushDevice, error) {
 		&device.LastFailureCode,
 		&device.CreatedAt,
 		&device.UpdatedAt,
-	); err != nil {
+	}, extra...)...); err != nil {
 		return nil, err
 	}
 	return &device, nil

@@ -64,6 +64,7 @@ func recipeCardFixtureOpts(revision tonemap.SourceRevision) TranscodeOpts {
 func TestRecipeCardRoundTripOpts(t *testing.T) {
 	revision := tonemap.SourceRevision{MediaFileID: 77, FileSize: 100, FileModifiedUnixNano: 200, StreamSignature: "stream"}
 	opts := recipeCardFixtureOpts(revision)
+	opts.CopyAudioCodec = "aac"
 
 	card := NewRecipeCard(42, "profile-1", 77, "", opts)
 	if card.SessionID != "abc" || card.UserID != 42 || card.ProfileID != "profile-1" || card.MediaFileID != 77 {
@@ -141,6 +142,9 @@ func checkRoundTripRecipeOpts(t *testing.T, got, opts TranscodeOpts, revision to
 	}
 	if !got.HLSVariableSubstitution {
 		t.Error("HLSVariableSubstitution lost in round trip")
+	}
+	if got.CopyAudioCodec != opts.CopyAudioCodec {
+		t.Errorf("CopyAudioCodec = %q, want %q", got.CopyAudioCodec, opts.CopyAudioCodec)
 	}
 }
 
@@ -254,6 +258,8 @@ func TestRecipeCardClientMetadataStoredNotInClaims(t *testing.T) {
 	card.ClientBuild = "20260814"
 	card.ClientChannel = "beta"
 	card.ClientUserAgent = "Findroid/0.15"
+	card.DeviceID = "device-1"
+	card.DevicePlatform = "Android"
 
 	encoded, err := json.Marshal(card)
 	if err != nil {
@@ -263,13 +269,15 @@ func TestRecipeCardClientMetadataStoredNotInClaims(t *testing.T) {
 	if err := json.Unmarshal(encoded, &back); err != nil {
 		t.Fatalf("unmarshal card: %v", err)
 	}
-	if back.ClientName != "Findroid" || back.ClientVersion != "0.15" || back.ClientBuild != "20260814" || back.ClientChannel != "beta" || back.ClientUserAgent != "Findroid/0.15" {
+	if back.ClientName != "Findroid" || back.ClientVersion != "0.15" || back.ClientBuild != "20260814" || back.ClientChannel != "beta" || back.ClientUserAgent != "Findroid/0.15" ||
+		back.DeviceID != "device-1" || back.DevicePlatform != "Android" {
 		t.Fatalf("client metadata lost in stored-card round trip: %+v", back)
 	}
 
 	claims := card.ToClaims()
 	fromClaims := RecipeCardFromClaims(&claims)
-	if fromClaims.ClientName != "" || fromClaims.ClientVersion != "" || fromClaims.ClientBuild != "" || fromClaims.ClientChannel != "" || fromClaims.ClientUserAgent != "" {
+	if fromClaims.ClientName != "" || fromClaims.ClientVersion != "" || fromClaims.ClientBuild != "" || fromClaims.ClientChannel != "" || fromClaims.ClientUserAgent != "" ||
+		fromClaims.DeviceID != "" || fromClaims.DevicePlatform != "" {
 		t.Fatalf("client metadata must not travel via token claims: %+v", fromClaims)
 	}
 }
@@ -287,6 +295,8 @@ func TestReconstructSessionRestoresClientMetadata(t *testing.T) {
 	card.ClientBuild = "  20260814\x00  "
 	card.ClientChannel = "  beta\t  "
 	card.ClientUserAgent = "  Findroid/0.15 (Android)  "
+	card.DeviceID = "  device-1  "
+	card.DevicePlatform = "  Android  "
 
 	session := tm.ReconstructSession(clientip.SetContext(t.Context(), "203.0.113.20"), "sess-jf", 42, card)
 	if session == nil {
@@ -295,7 +305,8 @@ func TestReconstructSessionRestoresClientMetadata(t *testing.T) {
 	if session.ClientIP != "203.0.113.20" {
 		t.Fatalf("ClientIP = %q, want the rebuilding request's 203.0.113.20", session.ClientIP)
 	}
-	if session.ClientName != "Findroid" || session.ClientVersion != "0.15" || session.ClientBuild != "20260814" || session.ClientChannel != "beta" || session.ClientUserAgent != "Findroid/0.15 (Android)" {
+	if session.ClientName != "Findroid" || session.ClientVersion != "0.15" || session.ClientBuild != "20260814" || session.ClientChannel != "beta" || session.ClientUserAgent != "Findroid/0.15 (Android)" ||
+		session.DeviceID != "device-1" || session.DevicePlatform != "Android" {
 		t.Fatalf("client metadata not restored: %+v", session)
 	}
 	if !session.TranscodeAudio {
@@ -320,6 +331,7 @@ func TestRecipeCardClaimsRoundTrip(t *testing.T) {
 	opts.ToneMapSourceKind = tonemap.SourceHLG
 	opts.ToneMapFilter = "tonemapx"
 	opts.SourceAudioChannels, opts.TargetAudioChannels, opts.TargetAudioBitrateKbps = 8, 6, 320
+	opts.CopyAudioCodec = "aac"
 	card := NewRecipeCard(42, "profile-1", 77, "http://node:9000", opts)
 	card.RoutingWorkload = "video_transcode"
 	card.RoutingExecution = "transcode"
@@ -349,6 +361,7 @@ func TestRecipeCardClaimsRoundTrip(t *testing.T) {
 		got.SeekSeconds != card.SeekSeconds || got.StreamOriginSeconds != card.StreamOriginSeconds ||
 		got.CopySeekAnchorResolved != card.CopySeekAnchorResolved || got.TargetResolution != card.TargetResolution ||
 		got.TargetCodecVideo != card.TargetCodecVideo || got.TargetCodecAudio != card.TargetCodecAudio ||
+		got.CopyAudioCodec != "aac" ||
 		got.TargetAudioChannels != card.TargetAudioChannels || got.TargetAudioBitrateKbps != card.TargetAudioBitrateKbps ||
 		got.SegmentDuration != card.SegmentDuration || got.StartSegmentNumber != card.StartSegmentNumber ||
 		got.SubtitleTrackIndex != card.SubtitleTrackIndex || got.SubtitleBurnIn != card.SubtitleBurnIn ||

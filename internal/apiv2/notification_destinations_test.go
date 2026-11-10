@@ -17,6 +17,8 @@ type fakeNotificationDestinations struct {
 	user    int
 	profile string
 	limit   int
+	// loginSession is the login session the last subscribe recorded.
+	loginSession string
 }
 
 func (f *fakeNotificationDestinations) ListNotificationWebhookPage(_ context.Context, user int, profile string, limit int, after *notifications.Cursor) ([]notifications.Webhook, error) {

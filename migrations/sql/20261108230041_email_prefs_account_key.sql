@@ -32,7 +32,6 @@ UPDATE public.notification_email_prefs p SET
 WHERE EXISTS (
     SELECT 1 FROM (
         SELECT user_id, id AS profile_id FROM public.user_profiles
-        UNION SELECT user_id, profile_id FROM public.profile_series_interest
         UNION SELECT user_id, profile_id FROM public.notification_deliveries
         UNION SELECT user_id, profile_id FROM public.notification_preferences
         UNION SELECT user_id, profile_id FROM public.notification_email_verifications

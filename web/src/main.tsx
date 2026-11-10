@@ -4,7 +4,6 @@ import { installPreloadErrorReload } from "./lib/reloadOnPreloadError";
 import { initPointerCapability } from "./lib/pointerCapability";
 import "./fonts.css";
 import "./app.css";
-import "./styles/accent-themes.css";
 
 installPreloadErrorReload();
 // Before render, so the first paint already knows whether hover reveals apply.

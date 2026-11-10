@@ -28,7 +28,6 @@ import {
 
 import { CardOverlaySettings } from "./CardOverlaySettings";
 import { ChoiceButtons } from "./ChoiceButtons";
-import { AccentThemeSettings } from "./AccentThemeSettings";
 import { PosterCardPreview } from "./PosterCardPreview";
 import { ResetButton } from "./ResetButton";
 
@@ -104,7 +103,6 @@ export default function InterfaceSettings() {
           </div>
         </aside>
         <div className="min-w-0">
-          <AccentThemeSettings />
           <PosterSettings />
           <CardOverlaySettings onShortcutsPicked={flashShortcuts} />
           <MenuSettings />

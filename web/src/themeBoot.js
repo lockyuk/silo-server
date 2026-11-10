@@ -45,16 +45,4 @@
     "data-high-contrast",
     cached("silo-ui-high-contrast") === "true" ? "true" : "false",
   );
-  // The accent theme (the TV and phone apps' colour themes) is a per-device
-  // choice, not tied to a profile, so it is read without the cache namespace.
-  const accent = read("spoel-accent-theme");
-  if (
-    accent === "purple" ||
-    accent === "blue" ||
-    accent === "orange" ||
-    accent === "green" ||
-    accent === "red"
-  ) {
-    root.setAttribute("data-accent", accent);
-  }
 })();

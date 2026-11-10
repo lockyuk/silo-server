@@ -467,7 +467,6 @@ function NotificationsInbox() {
               setPage(0);
             }}
             pageSizeOptions={PAGE_SIZES}
-            itemNoun="notification"
             isFetching={turning || list.isFetchingNextPage}
           />
         </>

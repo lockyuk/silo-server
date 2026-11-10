@@ -16,7 +16,6 @@
  */
 import {
   Bell,
-  Music,
   Blocks,
   Database,
   Download,

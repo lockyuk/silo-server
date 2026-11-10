@@ -9896,7 +9896,7 @@ export interface paths {
     };
     /** Read the acting profile's email notification preferences. */
     get: operations["getNotificationEmailPreferences"];
-    /** Set the acting profile's email delivery mode. */
+    /** Set the acting profile's email delivery mode and what its emails include. */
     put: operations["updateNotificationEmailPreferences"];
     post?: never;
     delete?: never;
@@ -10103,8 +10103,8 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * List the series whose new episodes can notify the acting profile.
-     * @description Every series the profile favorited, put on its watchlist, is partway through, or waits on a next episode of, and every series it muted, filtered and sorted as asked (by title by default). Each carries its reasons, which of them the profile's notification preferences let notify, and whether the profile muted it. Series the viewer may not see are omitted.
+     * List the series the acting profile follows or muted.
+     * @description Every series the profile follows and every series it muted, filtered and sorted as asked (by title by default). Each says whether the profile follows it and whether it muted it. Series the viewer may not see are omitted.
      */
     get: operations["listNotificationSeries"];
     put?: never;
@@ -10125,13 +10125,13 @@ export interface paths {
     get?: never;
     /**
      * Mute new-episode notifications for one series.
-     * @description The acting profile gets no new-episode notification for the series on any channel, whatever its reasons, until it unmutes. Favorites, the watchlist, Home, and watch history are unchanged, and other profiles are unaffected. Muting a series already muted succeeds and changes nothing. A series the viewer may not see, or an item that is not a series, is 404.
+     * @description The acting profile gets no new-episode notification for the series on any channel, whether or not it follows it or asked for everything new, until it unmutes. Following a series lifts its mute. Other profiles are unaffected. Muting a series already muted succeeds and changes nothing. A series the viewer may not see, or an item that is not a series, is 404.
      */
     put: operations["muteNotificationSeries"];
     post?: never;
     /**
      * Unmute new-episode notifications for one series.
-     * @description The series notifies the acting profile again for its active reasons. The mute applies when notification delivery evaluates a new episode, normally within a minute of it arriving: an episode evaluated while the series was muted is not announced later, and one still waiting to be evaluated when the profile unmutes is announced. Unmuting a series that is not muted succeeds and changes nothing. No access check runs, so a profile can lift a mute on a series it can no longer see.
+     * @description The series notifies the acting profile again. The mute applies when notification delivery evaluates a new episode, normally within a minute of it arriving: an episode evaluated while the series was muted is not announced later, and one still waiting to be evaluated when the profile unmutes is announced. Unmuting a series that is not muted succeeds and changes nothing. No access check runs, so a profile can lift a mute on a series it can no longer see.
      */
     delete: operations["unmuteNotificationSeries"];
     options?: never;
@@ -19628,7 +19628,7 @@ export interface components {
     };
     AdminNotificationPushTestInputBody: {
       /**
-       * @description A profile on the authenticated account. A profile or device on another account answers 404, as a device that does not exist does.
+       * @description Opaque identifier
        * @example 1
        */
       profile_id: string;
@@ -23481,6 +23481,11 @@ export interface components {
       device_id: string;
       /** @enum {string} */
       platform: "android";
+      /**
+       * @description Who sends this installation's pushes. silo_relay (the default) uses the Silo push relay; fcm_direct is for app builds in the operator's own Firebase project and needs the server to list it in providers.
+       * @enum {string}
+       */
+      provider?: "silo_relay" | "fcm_direct";
       /** @enum {string} */
       push_mode?: "off" | "in_app_only" | "private_push";
       token: string;
@@ -23488,9 +23493,9 @@ export interface components {
     AndroidPushRegistrationCapability: {
       /** @description Whether the current principal may use the capability */
       allowed: boolean;
-      /** @description A registration applied at a new generation records the calling login session, and push to it stops when that session ends. A replay of the current generation records nothing, so an older registration binds only at a newer generation. */
-      binds_login_session: boolean;
       platforms: string[];
+      /** @description Push providers an Android registration may name. silo_relay is always listed; fcm_direct only when this server sends straight to its own Firebase project. */
+      providers: string[];
       /** @description Local ordered registration storage is configured; does not assert provider delivery availability. */
       registration_available: boolean;
       /** @description Opaque revision of this document */
@@ -23550,8 +23555,6 @@ export interface components {
     ApplePushRegistrationCapability: {
       /** @description Whether the current principal may use the capability */
       allowed: boolean;
-      /** @description resetApplePushInstallation is served: after a push_installation_key_mismatch refusal the app can reset its own installation and register again. */
-      installation_reset_available: boolean;
       /** @description Local ordered storage and current-login validation are configured; not provider delivery or cluster rollout readiness. */
       registration_available: boolean;
       /** @description Opaque revision of this document */
@@ -30143,6 +30146,11 @@ export interface components {
       available: boolean;
       /** Format: int64 */
       digest_hour: number;
+      /**
+       * Format: int64
+       * @description Day weekly digests go out, 0 = Sunday.
+       */
+      digest_weekday: number;
       modes: string[];
     };
     NotificationCapabilities: {
@@ -30150,7 +30158,6 @@ export interface components {
       allowed: boolean;
       android_push: components["schemas"]["NotificationPushCapability"];
       apple_push: components["schemas"]["NotificationPushCapability"];
-      discord: components["schemas"]["NotificationAccountChannelCapability"];
       email: components["schemas"]["NotificationAccountChannelCapability"];
       in_app: components["schemas"]["NotificationInAppCapability"];
       /** @description Opaque revision of this document */
@@ -30161,7 +30168,6 @@ export interface components {
        * @enum {string}
        */
       state: "available" | "disabled" | "not_configured" | "unsupported";
-      web_push: components["schemas"]["NotificationWebPushCapability"];
       webhooks: components["schemas"]["NotificationWebhookCapability"];
     };
     NotificationChannelModeInputBody: {
@@ -30205,10 +30211,36 @@ export interface components {
     };
     NotificationEmailPreferences: {
       can_edit_address: boolean;
+      /**
+       * @description What to email: shows the profile follows, or everything new it can open.
+       * @enum {string}
+       */
+      content: "followed" | "all";
       custom_email: string;
+      /** @description A daily digest. */
+      daily: boolean;
+      /** @description An email shortly after something new arrives. */
+      instant: boolean;
+      /** @description Libraries to include; empty includes every library the profile can open. */
+      library_ids: number[];
+      /**
+       * Format: int64
+       * @description How recently an item must have been added to count as new, in hours; 0 uses the server default.
+       */
+      max_age_hours: number;
       /** @enum {string} */
-      mode: "off" | "per_episode" | "daily_digest" | "per_episode_and_digest";
+      mode:
+        | "off"
+        | "per_episode"
+        | "daily_digest"
+        | "per_episode_and_digest"
+        | "weekly_digest"
+        | "per_episode_and_weekly_digest";
       pending_email: string;
+      /** @description Item types to include; empty includes both. */
+      types: string[];
+      /** @description A weekly digest. */
+      weekly: boolean;
     };
     NotificationEmailVerificationCapability: {
       /** @description Whether the current principal may use the capability */
@@ -30260,6 +30292,8 @@ export interface components {
       enabled: boolean;
     };
     NotificationItem: {
+      /** @description Buttons a rich notification offers, in display order. Clients skip action IDs they do not implement. */
+      actions?: components["schemas"]["NotificationAction"][];
       /**
        * Format: date-time
        * @description RFC 3339 instant in UTC with millisecond precision
@@ -30279,10 +30313,17 @@ export interface components {
        */
       id: string;
       /**
+       * Format: uri-reference
+       * @description Wide backdrop for a rich notification.
+       */
+      image_url?: string;
+      /**
        * @description Opaque identifier
        * @example 1
        */
       library_id?: string;
+      /** @description Synopsis of the episode, or of the movie, for a rich notification's text. */
+      overview?: string;
       poster_path?: string;
       poster_thumbhash?: string;
       /** Format: uri-reference */
@@ -30292,6 +30333,8 @@ export interface components {
        * @example 1
        */
       profile_id: string;
+      /** @description Text and image from the server's push settings; clients that read it show it in place of their own text. */
+      push?: components["schemas"]["NotificationPushContent"];
       /**
        * Format: date-time
        * @description RFC 3339 instant in UTC with millisecond precision, or null
@@ -30303,12 +30346,19 @@ export interface components {
       };
       /** Format: int64 */
       season_number?: number;
+      /** @description Channels that carried the notification besides the inbox: the alert emails that included it and phone push. Filled on inbox pages only. */
+      sent_via?: ("email_instant" | "email_daily" | "email_weekly" | "push")[];
       /**
        * @description Opaque identifier
        * @example 1
        */
       series_id?: string;
       series_title?: string;
+      /**
+       * Format: uri-reference
+       * @description Absolute poster link for a rich notification.
+       */
+      thumbnail_url?: string;
       type: string;
     };
     NotificationListOutputBody: {
@@ -30317,25 +30367,34 @@ export interface components {
       /** @description Cursor state; absent for bounded unpaginated collections */
       page?: components["schemas"]["PageInfo"];
       read_cutoff: string;
+      /**
+       * Format: int64
+       * @description Notifications in the whole list (every page), for page numbers.
+       */
+      total: number;
     };
     NotificationPreferences: {
       enabled: boolean;
-      notify_continue_watching: boolean;
-      notify_favorites: boolean;
-      notify_next_up: boolean;
-      notify_watchlist: boolean;
+      /** @description Every new episode the profile can open, followed or not. */
+      notify_new_episodes: boolean;
+      /** @description Every new movie the profile can open. */
+      notify_new_movies: boolean;
       /**
        * @description Opaque identifier
        * @example 1
        */
       profile_id: string;
+      /** @description Instant phone push. Off keeps notifications in the inbox only; email follows its own setting. */
+      push_enabled: boolean;
+      /** @description Libraries push covers; empty covers every library. */
+      push_library_ids: number[];
     };
     NotificationPreferencesPatch: {
       enabled?: boolean;
-      notify_continue_watching?: boolean;
-      notify_favorites?: boolean;
-      notify_next_up?: boolean;
-      notify_watchlist?: boolean;
+      notify_new_episodes?: boolean;
+      notify_new_movies?: boolean;
+      push_enabled?: boolean;
+      push_library_ids?: number[];
     };
     NotificationPushCapability: {
       available: boolean;
@@ -30344,6 +30403,8 @@ export interface components {
       supported_modes: string[];
     };
     NotificationPushDisplay: {
+      /** @description Buttons a rich notification offers, in display order. */
+      actions?: components["schemas"]["NotificationAction"][];
       body?: string;
       category: string;
       /**
@@ -30351,7 +30412,19 @@ export interface components {
        * @example 1
        */
       delivery_id: string;
+      /**
+       * Format: uri-reference
+       * @description Wide backdrop for a rich notification.
+       */
+      image_url?: string;
+      /** @description Text and image from the server's push settings. */
+      push?: components["schemas"]["NotificationPushContent"];
       thread_id?: string;
+      /**
+       * Format: uri-reference
+       * @description Poster for a rich notification.
+       */
+      thumbnail_url?: string;
       title: string;
       /** Format: uri-reference */
       url: string;
@@ -30382,18 +30455,12 @@ export interface components {
       relay_url: string;
     };
     NotificationSeries: {
-      /** @description The reasons the profile's notification preferences let notify; all false when they silence the series */
-      active_reasons: components["schemas"]["NotificationSeriesReasons"];
+      /** @description The profile follows the series: its new episodes notify the profile */
+      followed: boolean;
       /** @description The series as a catalog card */
       item: components["schemas"]["CatalogItem"];
-      /** @description The profile muted the series: it gets no new-episode notification for it, whatever the reasons, until it unmutes. active_reasons still names the reasons that would notify once unmuted. */
+      /** @description The profile muted the series: the profile hears nothing about it, followed or not, until it unmutes */
       muted: boolean;
-      /** @description With an active Next Up reason, the last episode the profile finished: on that reason alone, only a new episode after it notifies */
-      next_up_after?: components["schemas"]["NotificationEpisodeRef"];
-      /** @description True when at least one reason is active and the profile has not muted the series */
-      notifies: boolean;
-      /** @description The profile's relationships to the series */
-      reasons: components["schemas"]["NotificationSeriesReasons"];
     };
     NotificationSeriesCapability: {
       /** @description GET /notifications/series lists the series whose new episodes can notify the profile */
@@ -30506,11 +30573,8 @@ export interface components {
     };
     NotificationWebhookCreateInputBody: {
       name: string;
-      notify_continue_watching?: boolean;
-      notify_favorites?: boolean;
-      notify_next_up?: boolean;
+      notify_new_releases?: boolean;
       notify_requests?: boolean;
-      notify_watchlist?: boolean;
       /** @enum {string} */
       type?: "discord" | "generic";
       /** Format: uri */
@@ -30542,11 +30606,8 @@ export interface components {
        */
       last_success_at: string | null;
       name: string;
-      notify_continue_watching: boolean;
-      notify_favorites: boolean;
-      notify_next_up: boolean;
+      notify_new_releases: boolean;
       notify_requests: boolean;
-      notify_watchlist: boolean;
       /** @enum {string} */
       type: "discord" | "generic";
       url_host: string;
@@ -30557,11 +30618,8 @@ export interface components {
     NotificationWebhookUpdateInputBody: {
       enabled?: boolean;
       name?: string;
-      notify_continue_watching?: boolean;
-      notify_favorites?: boolean;
-      notify_next_up?: boolean;
+      notify_new_releases?: boolean;
       notify_requests?: boolean;
-      notify_watchlist?: boolean;
       /** Format: uri */
       url?: string;
     };
@@ -99372,15 +99430,6 @@ export interface operations {
           "application/problem+json": components["schemas"]["Problem"];
         };
       };
-      /** @description Too Many Requests */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -125093,8 +125142,12 @@ export interface operations {
     parameters: {
       query?: {
         cursor?: string;
+        /** @description Only notifications from this library. */
+        library_id?: string;
         /** @description Page size; default 50, maximum 200 */
         limit?: number;
+        /** @description Only notifications from the last this many days; 0 covers any age. */
+        max_age_days?: number;
         status?: "all" | "unread";
       };
       header: {
@@ -126155,7 +126208,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": components["schemas"]["NotificationChannelModeInputBody"];
+        "application/json": components["schemas"]["NotificationEmailPreferencesInputBody"];
       };
     };
     responses: {
@@ -127856,8 +127909,6 @@ export interface operations {
         poster_width?: number;
         /** @description Keeps the series whose title or sort title contains this text, case-insensitively */
         q?: string;
-        /** @description Keeps the series with this reason, whether or not the preferences let it notify; absent keeps every reason */
-        reason?: "favorite" | "watchlist" | "continue_watching" | "next_up";
         /** @description One field, descending with a leading '-'. added_at is when the series joined the catalog; latest_episode_added when it last gained an episode. A series without a year or an episode sorts last either way; ties order by title. */
         sort?:
           | "title"
@@ -127868,8 +127919,8 @@ export interface operations {
           | "-added_at"
           | "latest_episode_added"
           | "-latest_episode_added";
-        /** @description active keeps the series that notify; inactive keeps the ones that do not, because the profile's preferences silence every reason or the profile muted the series */
-        status?: "all" | "active" | "inactive";
+        /** @description followed keeps the series the profile follows; muted keeps the ones it muted */
+        status?: "all" | "followed" | "muted";
         /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
         still_width?: number;
       };

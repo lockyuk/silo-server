@@ -120,6 +120,19 @@ export function useLibraryRealtimeMonitoring() {
   });
 }
 
+/** A library's video files: size on disk and counts by resolution. */
+export function useLibraryMediaStats(id: number) {
+  return useQuery({
+    queryKey: adminKeys.libraryMediaStats(id),
+    queryFn: ({ signal }) =>
+      v2("GET /api/v2/libraries/{id}/media-stats", {
+        path: { id: String(id) },
+        signal,
+      }),
+    staleTime: 60_000,
+  });
+}
+
 /** A library's episode thumbnails counted by source and size band. */
 export function useLibraryEpisodeStillSizes(id: number) {
   return useQuery({

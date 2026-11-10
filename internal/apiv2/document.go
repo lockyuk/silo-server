@@ -747,6 +747,7 @@ func registerAll(reg *Registry) {
 	registerAdminThemeSongs(reg)
 	registerFilmography(reg)
 	registerLibraryEpisodeStillSizes(reg)
+	registerLibraryMediaStats(reg)
 	registerAdminInviteCodes(reg)
 	registerInvitations(reg)
 	registerPasswordResets(reg)

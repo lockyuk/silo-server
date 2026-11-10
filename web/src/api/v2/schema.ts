@@ -8828,6 +8828,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v2/libraries/{id}/media-stats": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Size on disk and file counts by resolution for the library's video files. */
+    get: operations["getLibraryMediaStats"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v2/libraries/{id}/metadata-match-queue": {
     parameters: {
       query?: never;
@@ -25945,6 +25962,38 @@ export interface components {
        * @example 1
        */
       library_id: string;
+    };
+    LibraryMediaStats: {
+      bands: components["schemas"]["LibraryMediaStatsBand"][];
+      /**
+       * Format: int64
+       * @description Video files in the library
+       * @example 19268
+       */
+      total_files: number;
+      /**
+       * Format: int64
+       * @description Space the library's video files take on disk
+       * @example 70000000000000
+       */
+      total_size_bytes: number;
+    };
+    LibraryMediaStatsBand: {
+      /**
+       * Format: int64
+       * @example 1200
+       */
+      files: number;
+      /**
+       * @description Resolution band of the video files
+       * @enum {string}
+       */
+      resolution: "4k" | "1080p" | "720p" | "sd" | "unknown";
+      /**
+       * Format: int64
+       * @example 3200000000000
+       */
+      size_bytes: number;
     };
     LibraryEpisodeStillSizeCount: {
       /**
@@ -112965,6 +113014,115 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["LibraryEpisodeStillSizes"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  getLibraryMediaStats: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        /** @description The library */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LibraryMediaStats"];
         };
       };
       /** @description Bad Request */

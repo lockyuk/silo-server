@@ -42,6 +42,7 @@ import { buildLibraryReorderEntries } from "./adminLibraryOrder";
 import MatchItemDialog from "@/components/MatchItemDialog";
 import { LibraryEditorDialog } from "@/components/admin/libraries/LibraryEditorDialog";
 import { LibraryRefreshDialog } from "@/components/admin/libraries/LibraryRefreshDialog";
+import LibraryMediaStats from "@/components/admin/libraries/LibraryMediaStats";
 import { RealtimeMonitoringBadge } from "@/components/admin/libraries/RealtimeMonitoringBadge";
 import { TrickplayLibraryBadge } from "@/components/admin/trickplay/TrickplayLibraryBadge";
 import { MetadataMatcherQueuesSection } from "@/components/admin/libraries/MetadataMatcherQueuesSection";
@@ -456,6 +457,7 @@ function LibrariesPage() {
                   <TableHead>Name</TableHead>
                   <TableHead>Paths</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Media</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last Scanned</TableHead>
                   <TableHead className="w-[15rem]">Actions</TableHead>
@@ -509,6 +511,9 @@ function LibrariesPage() {
                           </TableCell>
                           <TableCell>
                             <Badge variant="secondary">{lib.type}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <LibraryMediaStats libraryId={lib.id} />
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-col gap-1">
@@ -708,7 +713,7 @@ function LibrariesPage() {
                       if (lib.scan_warning_code === "partial_walk") {
                         return (
                           <TableRow key={`${lib.id}-warning`}>
-                            <TableCell colSpan={7} className="bg-destructive/5 text-sm">
+                            <TableCell colSpan={8} className="bg-destructive/5 text-sm">
                               <div className="flex flex-col gap-2 py-1">
                                 <div className="text-destructive font-medium">Partial scan</div>
                                 <div className="text-muted-foreground">
@@ -725,7 +730,7 @@ function LibrariesPage() {
                         mountCheckMutation.isPending && mountCheckMutation.variables === lib.id;
                       return (
                         <TableRow key={`${lib.id}-warning`}>
-                          <TableCell colSpan={7} className="bg-destructive/5 text-sm">
+                          <TableCell colSpan={8} className="bg-destructive/5 text-sm">
                             <div className="flex flex-col gap-2 py-1">
                               <div className="text-destructive font-medium">
                                 {lib.scan_warning_code === "dead_root"
@@ -1092,7 +1097,7 @@ function LibraryActiveWorkRow({
 }) {
   return (
     <TableRow className="hover:bg-transparent">
-      <TableCell colSpan={7} className="bg-muted/20 px-4 py-2">
+      <TableCell colSpan={8} className="bg-muted/20 px-4 py-2">
         <div className="text-muted-foreground flex flex-col gap-1.5 pl-12 text-[11px]">
           {activeRefreshJob ? (
             <div className="flex min-w-0 items-start gap-1.5">

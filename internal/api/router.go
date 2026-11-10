@@ -41,6 +41,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/diagnostics"
 	"github.com/Silo-Server/silo-server/internal/downloads"
 	"github.com/Silo-Server/silo-server/internal/episodeframes"
+	"github.com/Silo-Server/silo-server/internal/librarystats"
 	evt "github.com/Silo-Server/silo-server/internal/events"
 	"github.com/Silo-Server/silo-server/internal/filmography"
 	"github.com/Silo-Server/silo-server/internal/historyimport"
@@ -2849,6 +2850,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 		}
 		if deps.DB != nil {
 			v2deps.LibraryEpisodeStillSizes = episodeframes.NewSizes(deps.DB)
+			v2deps.LibraryMediaStats = librarystats.New(deps.DB)
 		}
 		v2deps.NotificationEmailVerification = deps.Notifications.EmailVerification
 		v2deps.NotificationEmailLinks = handlers.NewEmailLinkHandler(deps.Notifications)

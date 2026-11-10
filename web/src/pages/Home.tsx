@@ -3,7 +3,7 @@ import { memo, startTransition, useEffect, useMemo, useRef, useState } from "rea
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { LayoutDashboard } from "lucide-react";
-import HomeHero from "@/components/HomeHero";
+import HeroBanner from "@/components/HeroBanner";
 import SectionRow from "@/components/SectionRow";
 import TasteSeedBanner from "@/components/TasteSeedBanner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -496,7 +496,7 @@ function renderHeroSlot(
 
   if (hero.state === "ready" && hero.section) {
     return (
-      <HomeHero
+      <HeroBanner
         items={hero.section.items}
         maxSlides={hero.layout.item_limit}
         onRefreshItems={() => refreshSection(hero.layout.id)}

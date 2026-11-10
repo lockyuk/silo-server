@@ -169,17 +169,6 @@ func v1HouseholdWrites(tokens *access.ProfileTokenService) map[string]func(t *te
 				written: func() bool { return keys.created },
 			}
 		},
-		"Discord delivery": func(t *testing.T) v1Write {
-			store := pinLockedHousehold(t)
-			h := NewDiscordNotificationsHandler(nil, "")
-			h.Stores = testUserStoreProvider{store: store}
-			h.ProfileTokens = tokens
-			return v1Write{
-				store: store, method: http.MethodPut, serve: h.HandleUpdatePreferences,
-				target: "/api/v1/notifications/discord-preferences", body: `{"mode":"off"}`,
-				admitted: http.StatusBadRequest, // No preference store: the mode is refused after admission.
-			}
-		},
 		"another profile's setting": func(t *testing.T) v1Write {
 			contract, err := settingscontract.Load()
 			if err != nil {

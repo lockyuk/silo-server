@@ -89,6 +89,9 @@ type Report struct {
 	Framed     int // frames saved
 	ProviderOK int // provider images kept: full HD, or no smaller than the frame
 	Failed     int
+	// Paused is set when the batch stopped early because someone is playing:
+	// background work yields to playback.
+	Paused bool
 }
 
 // Generator decides, episode by episode, between the provider still and a
@@ -134,6 +137,10 @@ type candidate struct {
 // can be reserved.
 func (g *Generator) Generate(ctx context.Context, measureLimit, frameLimit int) (Report, error) {
 	var report Report
+	if g.playbackActive(ctx) {
+		report.Paused = true
+		return report, nil
+	}
 	lock, acquired, err := pglock.TryAcquire(ctx, g.pool, lockKey)
 	if err != nil || !acquired {
 		return report, err
@@ -156,6 +163,12 @@ func (g *Generator) Generate(ctx context.Context, measureLimit, frameLimit int) 
 	for _, c := range pending {
 		if ctx.Err() != nil {
 			return report, ctx.Err()
+		}
+		// Playback always comes first: stop between episodes the moment
+		// anyone starts watching.
+		if g.playbackActive(ctx) {
+			report.Paused = true
+			return report, nil
 		}
 		report.Checked++
 		outcome, err := g.process(ctx, c)
@@ -479,4 +492,21 @@ func meetsQuality(width, height int, quality string) bool {
 		targetWidth, targetHeight = 3840, 2160
 	}
 	return width >= targetWidth || height >= targetHeight
+}
+
+// playbackActive reports whether any playback session was live in the last
+// two minutes. Frame extraction and image measuring wait for it to end so they
+// never compete with someone watching. A check that fails counts as playback
+// being active, since stopping is the safe answer.
+func (g *Generator) playbackActive(ctx context.Context) bool {
+	var live bool
+	err := g.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM playback_session_lifecycle
+			WHERE state <> 'stopped' AND updated_at > now() - interval '2 minutes'
+		)`).Scan(&live)
+	if err != nil {
+		return ctx.Err() == nil
+	}
+	return live
 }

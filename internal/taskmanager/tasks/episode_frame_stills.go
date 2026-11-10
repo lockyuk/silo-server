@@ -22,10 +22,12 @@ type GenerateEpisodeFrameStillsTask struct {
 	generator    EpisodeFrameStillGenerator
 	measureLimit int
 	frameLimit   int
+	// pauseWait is how long the task waits when a batch yielded to playback.
+	pauseWait time.Duration
 }
 
 func NewGenerateEpisodeFrameStillsTask(generator EpisodeFrameStillGenerator, measureLimit, frameLimit int) *GenerateEpisodeFrameStillsTask {
-	return &GenerateEpisodeFrameStillsTask{generator: generator, measureLimit: measureLimit, frameLimit: frameLimit}
+	return &GenerateEpisodeFrameStillsTask{generator: generator, measureLimit: measureLimit, frameLimit: frameLimit, pauseWait: 20 * time.Second}
 }
 
 func (t *GenerateEpisodeFrameStillsTask) Key() string  { return "generate_episode_frame_stills" }
@@ -61,6 +63,16 @@ func (t *GenerateEpisodeFrameStillsTask) Execute(ctx context.Context, progress t
 		total.Framed += report.Framed
 		total.ProviderOK += report.ProviderOK
 		total.Failed += report.Failed
+		if report.Paused && ctx.Err() == nil {
+			// Someone is playing: wait for them to finish rather than compete,
+			// then carry on where the work left off.
+			progress.Report(0, fmt.Sprintf("Waiting for playback to finish (%d frames saved so far)", total.Framed))
+			select {
+			case <-ctx.Done():
+			case <-time.After(t.pauseWait):
+			}
+			continue
+		}
 		batches++
 		if ctx.Err() != nil {
 			progress.Report(100, t.summary(total, batches, "stopped"))

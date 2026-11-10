@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/Silo-Server/silo-server/internal/episodeframes"
 )
@@ -13,6 +14,7 @@ type sequenceGenerator struct {
 	calls   int
 	cancel  context.CancelFunc
 	cancelAt int
+	pauseWait bool
 }
 
 func (g *sequenceGenerator) Generate(context.Context, int, int) (episodeframes.Report, error) {
@@ -66,5 +68,18 @@ func TestEpisodeFrameStillsEndsWhenABatchMakesNoProgress(t *testing.T) {
 	}
 	if g.calls != 1 {
 		t.Fatalf("batches = %d, want 1", g.calls)
+	}
+}
+
+func TestEpisodeFrameStillsWaitsOutPlayback(t *testing.T) {
+	// A paused batch (someone is playing) is retried, not treated as the end.
+	g := &sequenceGenerator{reports: []episodeframes.Report{{Paused: true}, {Framed: 2}, {}}, pauseWait: true}
+	task := NewGenerateEpisodeFrameStillsTask(g, 5000, 150)
+	task.pauseWait = time.Millisecond
+	if err := task.Execute(context.Background(), quietProgress{}); err != nil {
+		t.Fatal(err)
+	}
+	if g.calls != 3 {
+		t.Fatalf("batches = %d, want 3 (paused, work, empty)", g.calls)
 	}
 }

@@ -19,6 +19,13 @@ const (
 	EpisodeStillSourceHighQuality   = "high_quality"
 )
 
+// The episode thumbnail size a library asks for (MediaFolder.EpisodeStillQuality).
+const (
+	EpisodeStillQualityHD     = "hd"
+	EpisodeStillQualityFullHD = "full_hd"
+	EpisodeStillQualityUHD    = "uhd"
+)
+
 // When a library takes episode thumbnails from a frame of the video
 // (MediaFolder.EpisodeFrameStills; internal/episodeframes).
 const (
@@ -59,6 +66,10 @@ type MediaFolder struct {
 	// into the episode, in percent, the frame is taken.
 	EpisodeFrameStills   string
 	EpisodeFramePosition int
+	// EpisodeStillQuality is the thumbnail size the library asks for
+	// (EpisodeStillQuality*): a provider image below it goes on to the next
+	// source, then a frame of the video, and the largest image found stays.
+	EpisodeStillQuality string
 	// AutoCollectionsEnabled has the automatic sync build one collection per
 	// TMDB collection (franchise) the library holds two or more films of.
 	AutoCollectionsEnabled bool

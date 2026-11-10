@@ -130,6 +130,7 @@ type UpdateFolderInput struct {
 	EpisodeStillSource       *string   // models.EpisodeStillSource*; nil = no change
 	EpisodeFrameStills       *string   // models.EpisodeFrameStills*; nil = no change
 	EpisodeFramePosition     *int      // percent into the episode; nil = no change
+	EpisodeStillQuality      *string   // models.EpisodeStillQuality*; nil = no change
 	AutoCollectionsEnabled   *bool
 	CollectionArtworkEnabled *bool
 	// RealtimeMonitoring is nil on the frozen /api/v1 update path, which
@@ -199,7 +200,7 @@ func normalizeTrailerKindsInput(kinds []string) []string {
 
 // folderColumns is the list of columns returned by all SELECT queries.
 // Kept in one place so scanFolder stays in sync.
-const folderColumns = `id, type, name, enabled, metadata_language, auto_translate_metadata, chapter_thumbnails_enabled, intro_detection_enabled, trickplay_enabled, realtime_monitoring, trailer_kinds, episode_still_source, episode_frame_stills, episode_frame_position, auto_collections_enabled, collection_artwork_enabled, poster_path, last_scanned_at,
+const folderColumns = `id, type, name, enabled, metadata_language, auto_translate_metadata, chapter_thumbnails_enabled, intro_detection_enabled, trickplay_enabled, realtime_monitoring, trailer_kinds, episode_still_source, episode_frame_stills, episode_frame_position, episode_still_quality, auto_collections_enabled, collection_artwork_enabled, poster_path, last_scanned_at,
 	scan_warning_code, scan_warning_message, scan_warning_at, allow_empty_cleanup_once, sort_order`
 
 // scanFolder scans a single row into a *models.MediaFolder.
@@ -221,6 +222,7 @@ func scanFolder(row pgx.Row) (*models.MediaFolder, error) {
 		&f.EpisodeStillSource,
 		&f.EpisodeFrameStills,
 		&f.EpisodeFramePosition,
+		&f.EpisodeStillQuality,
 		&f.AutoCollectionsEnabled,
 		&f.CollectionArtworkEnabled,
 		&f.PosterPath,
@@ -262,6 +264,7 @@ func scanFolders(rows pgx.Rows) ([]*models.MediaFolder, error) {
 			&f.EpisodeStillSource,
 			&f.EpisodeFrameStills,
 			&f.EpisodeFramePosition,
+			&f.EpisodeStillQuality,
 			&f.AutoCollectionsEnabled,
 			&f.CollectionArtworkEnabled,
 			&f.PosterPath,
@@ -541,6 +544,11 @@ func (r *FolderRepository) Update(ctx context.Context, id int, input UpdateFolde
 	if input.EpisodeFramePosition != nil {
 		setClauses = append(setClauses, fmt.Sprintf("episode_frame_position = $%d", argIndex))
 		args = append(args, *input.EpisodeFramePosition)
+		argIndex++
+	}
+	if input.EpisodeStillQuality != nil {
+		setClauses = append(setClauses, fmt.Sprintf("episode_still_quality = $%d", argIndex))
+		args = append(args, *input.EpisodeStillQuality)
 		argIndex++
 	}
 	if input.EpisodeStillSource != nil {
@@ -1618,4 +1626,18 @@ func extractConstraint(err error) string {
 		return pgErr.ConstraintName
 	}
 	return "unknown"
+}
+
+// ResetEpisodeFrameStillChecks makes the frame-still task judge a library's
+// provider stills again: it forgets "provider image is big enough" verdicts,
+// which depend on the library's thumbnail size target.
+func (r *FolderRepository) ResetEpisodeFrameStillChecks(ctx context.Context, folderID int) error {
+	_, err := r.pool.Exec(ctx, `
+		DELETE FROM episode_frame_still_checks
+		WHERE outcome = 'provider_ok'
+		  AND content_id IN (SELECT episode_id FROM episode_libraries WHERE media_folder_id = $1)`, folderID)
+	if err != nil {
+		return fmt.Errorf("resetting episode frame still checks: %w", err)
+	}
+	return nil
 }

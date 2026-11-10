@@ -116,6 +116,8 @@ type candidate struct {
 	StillSource   string
 	Mode          string
 	Position      int
+	// Quality is the library's thumbnail size target (EpisodeStillQuality*).
+	Quality string
 	FileID        int
 	Duration      int
 	// Displaced is the provider source a frame still replaced, for a frame
@@ -183,13 +185,13 @@ func (g *Generator) listCandidates(ctx context.Context, limit int) ([]candidate,
 	rows, err := g.pool.Query(ctx, `
 		SELECT e.content_id, e.series_id, e.season_number, e.episode_number,
 		       COALESCE(e.still_path, ''), e.still_source_path,
-		       f.episode_frame_stills, f.episode_frame_position,
+		       f.episode_frame_stills, f.episode_frame_position, f.episode_still_quality,
 		       mf.id, COALESCE(mf.duration, 0)::int,
 		       COALESCE(c.source_path, ''),
 		       COALESCE(s.width, 0), COALESCE(s.height, 0)
 		FROM episodes e
 		JOIN LATERAL (
-			SELECT f.episode_frame_stills, f.episode_frame_position
+			SELECT f.episode_frame_stills, f.episode_frame_position, f.episode_still_quality
 			FROM episode_libraries el
 			JOIN media_folders f ON f.id = el.media_folder_id
 			WHERE el.episode_id = e.content_id
@@ -233,7 +235,7 @@ func (g *Generator) listCandidates(ctx context.Context, limit int) ([]candidate,
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (candidate, error) {
 		var c candidate
 		err := row.Scan(&c.ContentID, &c.SeriesID, &c.SeasonNumber, &c.EpisodeNumber,
-			&c.StillPath, &c.StillSource, &c.Mode, &c.Position, &c.FileID, &c.Duration, &c.Displaced,
+			&c.StillPath, &c.StillSource, &c.Mode, &c.Position, &c.Quality, &c.FileID, &c.Duration, &c.Displaced,
 			&c.Width, &c.Height)
 		return c, err
 	})
@@ -251,7 +253,7 @@ func (g *Generator) process(ctx context.Context, c candidate) (string, error) {
 
 	providerWidth := 0
 	if !isFrame && c.StillSource != "" {
-		if isFullHD(c.Width, c.Height) {
+		if meetsQuality(c.Width, c.Height, c.Quality) {
 			return outcomeProviderOK, g.record(ctx, c.ContentID, displaced, outcomeProviderOK, c.Width, 0, nil)
 		}
 		providerWidth = c.Width
@@ -465,6 +467,16 @@ func (g *Generator) takeFrame(ctx context.Context, file *models.MediaFile, durat
 	return best, bestSize.X, bestSize.Y, nil
 }
 
-func isFullHD(width, height int) bool {
-	return width >= fullHDWidth || height >= fullHDHeight
+// meetsQuality reports whether an image of this size reaches the library's
+// thumbnail size target: hd is 1280x720, uhd is 3840x2160, anything else
+// (full_hd, or an unset value) is 1920x1080.
+func meetsQuality(width, height int, quality string) bool {
+	targetWidth, targetHeight := fullHDWidth, fullHDHeight
+	switch quality {
+	case models.EpisodeStillQualityHD:
+		targetWidth, targetHeight = 1280, 720
+	case models.EpisodeStillQualityUHD:
+		targetWidth, targetHeight = 3840, 2160
+	}
+	return width >= targetWidth || height >= targetHeight
 }

@@ -25715,6 +25715,12 @@ export interface components {
        */
       episode_frame_position: number;
       /**
+       * @description The episode thumbnail size the library asks for: hd (1280x720), full_hd (1920x1080) or uhd (3840x2160). A provider image below it falls through to the next source, then to a frame of the video when the library takes frames; if nothing reaches the target the largest image found is kept.
+       * @example full_hd
+       * @enum {string}
+       */
+      episode_still_quality: "hd" | "full_hd" | "uhd";
+      /**
        * @description When an episode's thumbnail is taken from a frame of its video: never, only when no provider has an image, or also when the provider image is smaller than full HD (1920x1080)
        * @example off
        * @enum {string}
@@ -26339,6 +26345,11 @@ export interface components {
        * @example 20
        */
       episode_frame_position?: number;
+      /**
+       * @description The episode thumbnail size the library asks for: hd (1280x720), full_hd (1920x1080) or uhd (3840x2160)
+       * @enum {string}
+       */
+      episode_still_quality?: "hd" | "full_hd" | "uhd";
       /**
        * @description When an episode's thumbnail is taken from a frame of its video; taking fewer queues a full metadata refresh that restores provider images
        * @example below_full_hd

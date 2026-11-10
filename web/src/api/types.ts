@@ -3395,6 +3395,8 @@ export interface Library {
   episode_frame_stills?: EpisodeFrameStills;
   /** How far into the episode, in percent, a frame thumbnail is taken. */
   episode_frame_position?: number;
+  /** The episode thumbnail size the library asks for. */
+  episode_still_quality?: EpisodeStillQuality;
   /** Build a collection for each TMDB collection the library holds two or more films of. */
   auto_collections_enabled?: boolean;
   /** Automatic collections use TMDB's poster and backdrop; off, a collage. */
@@ -3537,6 +3539,7 @@ export interface StaleMediaID {
 
 export type EpisodeStillSource = "provider_order" | "high_quality";
 export type EpisodeFrameStills = "off" | "missing" | "below_full_hd";
+export type EpisodeStillQuality = "hd" | "full_hd" | "uhd";
 
 export interface CreateLibraryRequest {
   paths: string[];
@@ -3553,6 +3556,7 @@ export interface CreateLibraryRequest {
   episode_still_source?: EpisodeStillSource;
   episode_frame_stills?: EpisodeFrameStills;
   episode_frame_position?: number;
+  episode_still_quality?: EpisodeStillQuality;
   /** Update only; sent only when changed. */
   auto_collections_enabled?: boolean;
   collection_artwork_enabled?: boolean;

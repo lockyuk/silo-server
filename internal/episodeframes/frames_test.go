@@ -46,19 +46,26 @@ func TestLumaStats(t *testing.T) {
 	}
 }
 
-func TestIsFullHD(t *testing.T) {
+func TestMeetsQuality(t *testing.T) {
 	for _, tt := range []struct {
-		w, h int
-		want bool
+		w, h    int
+		quality string
+		want    bool
 	}{
-		{1920, 1080, true},
-		{1920, 800, true},  // scope
-		{1440, 1080, true}, // 4:3
-		{1280, 720, false},
-		{640, 360, false},
+		{1920, 1080, "full_hd", true},
+		{1920, 800, "full_hd", true},  // scope
+		{1440, 1080, "full_hd", true}, // 4:3
+		{1280, 720, "full_hd", false},
+		{640, 360, "full_hd", false},
+		{1280, 720, "", false}, // unset means full_hd
+		{1280, 720, "hd", true},
+		{960, 540, "hd", false},
+		{1920, 1080, "uhd", false},
+		{3840, 2160, "uhd", true},
+		{3840, 1600, "uhd", true}, // scope
 	} {
-		if got := isFullHD(tt.w, tt.h); got != tt.want {
-			t.Errorf("isFullHD(%d, %d) = %v, want %v", tt.w, tt.h, got, tt.want)
+		if got := meetsQuality(tt.w, tt.h, tt.quality); got != tt.want {
+			t.Errorf("meetsQuality(%d, %d, %q) = %v, want %v", tt.w, tt.h, tt.quality, got, tt.want)
 		}
 	}
 }

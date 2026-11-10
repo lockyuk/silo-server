@@ -254,6 +254,7 @@ type updateLibraryRequest struct {
 	EpisodeStillSource   *string `json:"-"`
 	EpisodeFrameStills   *string `json:"-"`
 	EpisodeFramePosition *int    `json:"-"`
+	EpisodeStillQuality  *string `json:"-"`
 	// AutoCollectionsEnabled and CollectionArtworkEnabled are set only by
 	// the v2 updateLibrary operation.
 	AutoCollectionsEnabled   *bool `json:"-"`
@@ -326,6 +327,7 @@ type libraryResponse struct {
 	EpisodeStillSource   string `json:"-"`
 	EpisodeFrameStills   string `json:"-"`
 	EpisodeFramePosition int    `json:"-"`
+	EpisodeStillQuality  string `json:"-"`
 	// AutoCollectionsEnabled and CollectionArtworkEnabled are read by the v2
 	// library view only.
 	AutoCollectionsEnabled   bool `json:"-"`
@@ -474,6 +476,7 @@ func toLibraryResponse(f *models.MediaFolder) libraryResponse {
 		EpisodeStillSource:         f.EpisodeStillSource,
 		EpisodeFrameStills:         f.EpisodeFrameStills,
 		EpisodeFramePosition:       f.EpisodeFramePosition,
+		EpisodeStillQuality:        f.EpisodeStillQuality,
 		AutoCollectionsEnabled:     f.AutoCollectionsEnabled,
 		CollectionArtworkEnabled:   f.CollectionArtworkEnabled,
 	}

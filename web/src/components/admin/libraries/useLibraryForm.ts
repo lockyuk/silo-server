@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import type {
   CreateLibraryRequest,
   EpisodeFrameStills,
+  EpisodeStillQuality,
   EpisodeStillSource,
   Library,
   LibraryProviderChainResponse,
@@ -190,6 +191,9 @@ export function useLibraryForm({
   const savedFrameStills = library?.episode_frame_stills ?? "off";
   const [episodeFrameStills, setEpisodeFrameStills] =
     useState<EpisodeFrameStills>(savedFrameStills);
+  const savedStillQuality = library?.episode_still_quality ?? "full_hd";
+  const [episodeStillQuality, setEpisodeStillQuality] =
+    useState<EpisodeStillQuality>(savedStillQuality);
   const savedFramePosition = library?.episode_frame_position ?? 20;
   const [episodeFramePosition, setEpisodeFramePosition] = useState(savedFramePosition);
   const savedAutoCollections = library?.auto_collections_enabled ?? false;
@@ -361,6 +365,9 @@ export function useLibraryForm({
     if (library && episodeFrameStills !== savedFrameStills) {
       body.episode_frame_stills = episodeFrameStills;
     }
+    if (library && episodeStillQuality !== savedStillQuality) {
+      body.episode_still_quality = episodeStillQuality;
+    }
     if (library && episodeFramePosition !== savedFramePosition) {
       body.episode_frame_position = episodeFramePosition;
     }
@@ -439,6 +446,8 @@ export function useLibraryForm({
     setEpisodeFrameStills,
     episodeFramePosition,
     setEpisodeFramePosition,
+    episodeStillQuality,
+    setEpisodeStillQuality,
     autoCollectionsEnabled,
     setAutoCollectionsEnabled,
     collectionArtworkEnabled,

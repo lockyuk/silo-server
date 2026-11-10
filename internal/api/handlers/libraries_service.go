@@ -221,6 +221,7 @@ func (h *LibraryHandler) UpdateLibrary(ctx context.Context, id, userID int, req 
 		EpisodeStillSource:       req.EpisodeStillSource,
 		EpisodeFrameStills:       req.EpisodeFrameStills,
 		EpisodeFramePosition:     req.EpisodeFramePosition,
+		EpisodeStillQuality:      req.EpisodeStillQuality,
 		AutoCollectionsEnabled:   req.AutoCollectionsEnabled,
 		CollectionArtworkEnabled: req.CollectionArtworkEnabled,
 	})
@@ -264,6 +265,13 @@ func (h *LibraryHandler) UpdateLibrary(ctx context.Context, id, userID int, req 
 	// refresh, which also covers a language change made alongside it. So does
 	// taking fewer thumbnails from video frames: the refresh puts the provider
 	// images back. Taking more needs no refresh; the frame task finds them.
+	if oldFolder.EpisodeStillQuality != folder.EpisodeStillQuality {
+		// The size target moves what counts as big enough, so the frame task
+		// has to judge the library's provider images again.
+		if err := h.folderRepo.ResetEpisodeFrameStillChecks(ctx, folder.ID); err != nil {
+			slog.WarnContext(ctx, "reset episode frame still checks failed", "component", "api", "library_id", folder.ID, "error", err)
+		}
+	}
 	stillSourceChanged := oldFolder.EpisodeStillSource != folder.EpisodeStillSource ||
 		frameStillsRank(folder.EpisodeFrameStills) < frameStillsRank(oldFolder.EpisodeFrameStills)
 	if h.JobRepo != nil && (languageChanged || stillSourceChanged) {

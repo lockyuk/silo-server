@@ -25,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { EpisodeFrameStills, EpisodeStillSource } from "@/api/types";
+import type { EpisodeFrameStills, EpisodeStillQuality, EpisodeStillSource } from "@/api/types";
 import { Switch } from "@/components/ui/switch";
 import { useLibraryRealtimeMonitoring } from "@/hooks/queries/admin/libraries";
 import { cn } from "@/lib/utils";
@@ -437,6 +437,30 @@ export function MetadataFields({ form }: { form: LibraryFormController }) {
       )}
       {form.library && (form.type === "series" || form.type === "mixed") && (
         <div className="space-y-1.5">
+          <Label htmlFor="episode-still-quality">Episode image quality</Label>
+          <Select
+            value={form.episodeStillQuality}
+            onValueChange={(value) => form.setEpisodeStillQuality(value as EpisodeStillQuality)}
+          >
+            <SelectTrigger id="episode-still-quality" className="w-full sm:w-64">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="hd">HD (1280×720)</SelectItem>
+              <SelectItem value="full_hd">Full HD (1920×1080)</SelectItem>
+              <SelectItem value="uhd">4K (3840×2160)</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-muted-foreground text-xs">
+            The size you want for episode thumbnails. If one source&apos;s image is smaller, the
+            next source is tried, then a frame from the video when &ldquo;Thumbnails from the
+            video&rdquo; is on. If nothing reaches the size, the largest image found is kept.
+            Changing it makes the background task look at every episode again.
+          </p>
+        </div>
+      )}
+      {form.library && (form.type === "series" || form.type === "mixed") && (
+        <div className="space-y-1.5">
           <Label htmlFor="episode-frame-stills">Thumbnails from the video</Label>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Select
@@ -449,7 +473,7 @@ export function MetadataFields({ form }: { form: LibraryFormController }) {
               <SelectContent>
                 <SelectItem value="off">Never</SelectItem>
                 <SelectItem value="missing">Only when there is no image</SelectItem>
-                <SelectItem value="below_full_hd">When there is no Full HD image</SelectItem>
+                <SelectItem value="below_full_hd">When the image is below the quality above</SelectItem>
               </SelectContent>
             </Select>
             {form.episodeFrameStills !== "off" && (

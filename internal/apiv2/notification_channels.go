@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/Silo-Server/silo-server/internal/notifications"
-	"github.com/Silo-Server/silo-server/internal/userstore"
 )
 
 type NotificationChannelService interface {

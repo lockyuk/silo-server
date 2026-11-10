@@ -278,7 +278,7 @@ func (reg *Registry) listHistoryWatches(ctx context.Context, in *HistoryWatchesI
 		last := page[len(page)-1]
 		after = &userstore.HistoryKey{WatchedAt: last.WatchedAt, ID: last.ID}
 	}
-	views, err := reg.deps.History.HistoryWatchViews(ctx, sectionViewer(ctx, in.Artwork()), entries)
+	views, err := reg.deps.History.HistoryWatchViews(ctx, sectionViewer(ctx, in.Artwork(), SectionClient{}), entries)
 	if err != nil {
 		return nil, serviceProblem(err)
 	}

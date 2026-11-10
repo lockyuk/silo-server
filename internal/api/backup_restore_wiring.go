@@ -84,16 +84,11 @@ func wireBackupRestore(deps Dependencies, admin *handlers.AdminHandler, librarie
 }
 
 // importedChanges is what a profile's restored or imported data sets off
-// after it commits: one rebuild of the profile's notification interest,
-// coalesced with any already queued (notifications.InterestUpdater
-// .QueueProfileRebuild), rather than a recompute per item it names, and one
-// recommendations refresh, since its ratings, favorites, and history are
-// taste signals. Neither grows with the data imported.
-func importedChanges(system *notifications.System, rec *recommendations.Worker) backup.ItemsChanged {
+// after it commits: one recommendations refresh, since its ratings,
+// favorites, and history are taste signals. Notification follows are an
+// explicit list, so nothing about them needs rebuilding.
+func importedChanges(_ *notifications.System, rec *recommendations.Worker) backup.ItemsChanged {
 	return func(userID int, profileID string, _ []string) {
-		if system != nil && system.Interest != nil {
-			system.Interest.QueueProfileRebuild(userID, profileID)
-		}
 		rec.NotifySignalsChanged(context.Background(), userID, profileID)
 	}
 }

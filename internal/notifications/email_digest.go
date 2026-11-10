@@ -219,7 +219,7 @@ func (s *System) SetEmailSends(ctx context.Context, userID int, profileID string
 		return ErrEmailModeNotAllowed
 	}
 	if instant || daily || weekly {
-		prefs, err := s.EmailPrefs.Get(ctx, profileID)
+		prefs, err := s.EmailPrefs.Get(ctx, userID, profileID)
 		if err != nil {
 			return err
 		}

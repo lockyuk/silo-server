@@ -367,14 +367,14 @@ func (s *System) SavePushStyleSettings(ctx context.Context, settings pushstyle.S
 // SendPushStyleTest sends a test push to each of profileID's Android
 // devices. Each carries the profile's newest notification, rendered with
 // the saved settings; quiet hours and batching do not hold it.
-func (s *System) SendPushStyleTest(ctx context.Context, profileID string) (sent, devices int, err error) {
+func (s *System) SendPushStyleTest(ctx context.Context, userID int, profileID string) (sent, devices int, err error) {
 	if s == nil || s.pool == nil {
 		return 0, 0, ErrPushDeliveryUnavailable
 	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT server_device_id FROM push_devices
-		WHERE profile_id = $1 AND platform = $2 AND enabled AND push_mode = $3
-		ORDER BY last_seen_at DESC NULLS LAST`, profileID, PushPlatformAndroid, PushModePrivatePush)
+		WHERE user_id = $1 AND profile_id = $2 AND platform = $3 AND enabled AND push_mode = $4
+		ORDER BY last_seen_at DESC NULLS LAST`, userID, profileID, PushPlatformAndroid, PushModePrivatePush)
 	if err != nil {
 		return 0, 0, fmt.Errorf("list push devices: %w", err)
 	}
@@ -383,7 +383,7 @@ func (s *System) SendPushStyleTest(ctx context.Context, profileID string) (sent,
 		return 0, 0, fmt.Errorf("list push devices: %w", err)
 	}
 	for _, id := range ids {
-		result, err := s.SendAndroidPushTest(ctx, profileID, id)
+		result, err := s.SendAndroidPushTest(ctx, userID, profileID, id)
 		if err != nil {
 			return sent, len(ids), err
 		}

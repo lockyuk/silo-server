@@ -14,7 +14,7 @@ import (
 type AdminPushStyleService interface {
 	PushStyleSettings(context.Context) (pushstyle.Settings, error)
 	SavePushStyleSettings(context.Context, pushstyle.Settings) (pushstyle.Settings, error)
-	SendPushStyleTest(context.Context, string) (int, int, error)
+	SendPushStyleTest(context.Context, int, string) (int, int, error)
 }
 
 // PushStyleSettings mirrors pushstyle.Settings field for field.
@@ -158,7 +158,7 @@ func registerAdminPushStyle(reg *Registry) {
 			if p != nil {
 				return nil, p
 			}
-			sent, devices, err := svc.SendPushStyleTest(ctx, in.Body.ProfileID)
+			sent, devices, err := svc.SendPushStyleTest(ctx, claimsFrom(ctx).UserID, in.Body.ProfileID)
 			if errors.Is(err, notifications.ErrPushDeliveryUnavailable) {
 				return nil, NewProblem(TypeConflict, "Android push is switched off or not configured.")
 			}

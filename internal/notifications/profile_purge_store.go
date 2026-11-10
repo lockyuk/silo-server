@@ -466,3 +466,13 @@ func (s *interestTrackingStore) ApplyJellycompatParent(ctx context.Context, prof
 	}
 	return writer.ApplyJellycompatParent(ctx, profileID, edit)
 }
+
+// ItemUserFlags forwards the one-statement list and played read, reporting
+// false when the backing store has none so callers make the per-table reads.
+func (s *interestTrackingStore) ItemUserFlags(ctx context.Context, profileID string, mediaItemIDs, playedIDs []string) (map[string]userstore.ItemUserFlags, bool, error) {
+	reader, ok := s.UserStore.(userstore.ItemUserFlagStore)
+	if !ok {
+		return nil, false, nil
+	}
+	return reader.ItemUserFlags(ctx, profileID, mediaItemIDs, playedIDs)
+}

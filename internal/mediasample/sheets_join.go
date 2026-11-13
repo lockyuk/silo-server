@@ -643,6 +643,9 @@ func (a *sheetAssembler) finish() ([]Sheet, SheetFrames, *AttemptError) {
 	if a.droppedKeyframes && !a.sampled {
 		share = maxDroppedKeyframeShare
 	}
+	if a.out.AcceptSparse {
+		share = maxSparseShare
+	}
 	if limit := max(1, int(share*float64(len(a.times)))); a.filled > limit {
 		return fail(ReasonEmpty, fmt.Errorf("ffmpeg decoded frames for only %d of %d samples", len(a.times)-a.filled, len(a.times)))
 	}

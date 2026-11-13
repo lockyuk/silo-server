@@ -178,7 +178,9 @@ func (a *Admin) LibraryStatuses(ctx context.Context) ([]LibraryStatus, error) {
 			       CASE WHEN mf.missing_since IS NULL AND mf.probe_updated_at IS NOT NULL AND mf.duration > 0
 			              AND jsonb_typeof(mf.video_tracks) = 'array' AND jsonb_array_length(mf.video_tracks) > 0
 			            THEN COALESCE(t.state, 'pending')
-			            WHEN t.media_file_id IS NOT NULL THEN 'unusable' END AS state
+			            -- A file gone from disk (renamed or removed, awaiting cleanup) is not a failed
+			            -- preview, so it is left out of the counts.
+			            WHEN t.media_file_id IS NOT NULL AND mf.missing_since IS NULL THEN 'unusable' END AS state
 			FROM public.media_folders f
 			LEFT JOIN public.media_files mf ON mf.media_folder_id = f.id
 			LEFT JOIN public.media_file_trickplay t ON t.media_file_id = mf.id

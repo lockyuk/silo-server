@@ -401,7 +401,10 @@ func (s *Service) generate(ctx context.Context, job *Job) (Published, error) {
 	}
 	columns, rows := recipe.Grid()
 	perSheet := columns * rows
-	sheets := &mediasample.SheetsOutput{TileWidth: recipe.Width, TileHeight: height, Columns: columns, Rows: rows, Quality: Quality, UseInputAspect: true}
+	sheets := &mediasample.SheetsOutput{TileWidth: recipe.Width, TileHeight: height, Columns: columns, Rows: rows, Quality: Quality, UseInputAspect: true,
+		// A file that has failed this many times in a row is whole but sparse in keyframes:
+		// publish what it yields instead of retrying for days.
+		AcceptSparse: job.Failures >= acceptSparseAfterFailures}
 	sheets.ToneMap = sheetsToneMap(&models.MediaFile{HDR: job.HDR, VideoTracks: job.VideoTracks})
 	published := Published{Recipe: recipe, StoreIdentity: s.store.Identity(), Height: height, Count: len(times)}
 	var revision int64
@@ -500,6 +503,10 @@ func leaseAware(ctx context.Context, err error) error {
 	}
 	return err
 }
+
+// acceptSparseAfterFailures is how many consecutive failures make a file's previews
+// acceptable even when most cells repeat a neighbouring frame.
+const acceptSparseAfterFailures = 3
 
 // readThrough reports whether job's samples are read in one pass instead
 // of seeking to each (see mediasample.Samples.ReadThrough). Seeking reads a

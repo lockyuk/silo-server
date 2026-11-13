@@ -508,7 +508,11 @@ func (a attemptRun) readSheets(req Request, times []float64, plan listPlan, onDi
 	if req.Window != nil {
 		offset = req.Window.StartSeconds
 	}
-	assembler := newSheetAssembler(*req.Sheets, times, req.Samples != nil, offset, sampledSheetsList.span)
+	sheetsOut := *req.Sheets
+	if a.hw.Accel != "" {
+		sheetsOut.AcceptSparse = false
+	}
+	assembler := newSheetAssembler(sheetsOut, times, req.Samples != nil, offset, sampledSheetsList.span)
 	if req.Samples != nil {
 		assembler.plan = plan
 		assembler.onDisorder = onDisorder

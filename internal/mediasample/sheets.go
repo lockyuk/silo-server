@@ -28,6 +28,12 @@ type SheetsOutput struct {
 	// TileWidth, including a 90-degree display matrix. Result reports the
 	// actual tile height. Without it the caller's exact dimensions apply.
 	UseInputAspect bool `json:"use_input_aspect,omitzero"`
+	// AcceptSparse lets a software run publish even when most cells had no frame of
+	// their own and show the nearest earlier one (maxSparseShare). A file that
+	// keeps failing for that reason is whole but has few keyframes, and such a
+	// preview beats none. Hardware runs ignore it, so a sparse hardware read still
+	// falls back to software first.
+	AcceptSparse bool `json:"accept_sparse,omitzero"`
 	// ToneMap converts an HDR source to SDR, after scaling, so software tone
 	// mapping only handles thumbnail-sized frames. Nil keeps the decoded
 	// colors.
@@ -65,11 +71,14 @@ type SheetFrames struct {
 // Bounds of a SheetsOutput. A sheet of the widest tiles in the largest grid
 // stays within a size every JPEG decoder takes.
 const (
-	minSheetTile    = 16
-	maxSheetTile    = 1920
-	maxSheetCells   = 16
-	maxSheetPixels  = 16384
-	maxFilledShare  = 0.1
+	minSheetTile   = 16
+	maxSheetTile   = 1920
+	maxSheetCells  = 16
+	maxSheetPixels = 16384
+	maxFilledShare = 0.1
+	// maxSparseShare replaces it when AcceptSparse is set: only a run that decoded
+	// almost nothing is a broken file.
+	maxSparseShare  = 0.92
 	sheetMetadataID = "sheets"
 	// maxSheetsRunPixels bounds the tile pixels of one run, which holds
 	// every tile it decodes, about 1.5 bytes a pixel, until its repairs are

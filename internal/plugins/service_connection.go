@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -24,6 +25,17 @@ var ErrConnectionTestUnsupported = errors.New("plugin connection test unsupporte
 const (
 	metadataProviderCapability = "metadata_provider.v1"
 	markerProviderCapability   = "marker_provider.v1"
+	httpRoutesCapability       = "http_routes.v1"
+)
+
+// HTTPRoutesConnectionCheckKey is the http_routes.v1 capability metadata key a
+// routes-only plugin sets to true to take part in connection checks. Silo then
+// sends the plugin's started test instance POST HTTPRoutesConnectionCheckPath
+// with the config key under test in the "key" query parameter; a 2xx answers
+// success, anything else fails with the JSON body's "error" (or "message").
+const (
+	HTTPRoutesConnectionCheckKey  = "connection_check"
+	HTTPRoutesConnectionCheckPath = "/__silo/connection-check"
 )
 
 type ConnectionTestError struct {
@@ -49,6 +61,7 @@ func runPluginConnectionCheck(
 	ctx context.Context,
 	client pluginClient,
 	manifest *pluginv1.PluginManifest,
+	configKey string,
 ) error {
 	capability, err := connectionCheckCapability(manifest)
 	if err != nil {
@@ -57,6 +70,9 @@ func runPluginConnectionCheck(
 	capabilityID := capability.GetId()
 	if capability.GetType() == markerProviderCapability {
 		return runMarkerProviderConnectionCheck(ctx, client, capabilityID)
+	}
+	if capability.GetType() == httpRoutesCapability {
+		return runHTTPRoutesConnectionCheck(ctx, client, capabilityID, configKey)
 	}
 	if !metadataProviderSupportsConnectionProbe(capability, "movie") {
 		slog.DebugContext(ctx,
@@ -169,7 +185,7 @@ func (s *Service) TestGlobalConfigWithClears(
 		}
 	}()
 
-	return runPluginConnectionCheck(ctx, client, manifest)
+	return runPluginConnectionCheck(ctx, client, manifest, key)
 }
 
 // prepareStagedGlobalConfig applies one staged global config entry the way
@@ -297,6 +313,13 @@ func connectionCheckCapability(manifest *pluginv1.PluginManifest) (*pluginv1.Cap
 			}
 		}
 	}
+	// A routes-only plugin opts in through its capability metadata.
+	for _, capability := range manifest.GetCapabilities() {
+		if capability.GetType() == httpRoutesCapability &&
+			capability.GetMetadata().GetFields()[HTTPRoutesConnectionCheckKey].GetBoolValue() {
+			return capability, nil
+		}
+	}
 	return nil, &ConnectionTestError{
 		Message: connectionCheckUnsupportedMessage,
 		Cause:   ErrConnectionTestUnsupported,
@@ -304,6 +327,59 @@ func connectionCheckCapability(manifest *pluginv1.PluginManifest) (*pluginv1.Cap
 }
 
 const connectionCheckUnsupportedMessage = "Connection checks are not supported for this plugin yet."
+
+// runHTTPRoutesConnectionCheck asks a routes-only plugin to check the staged
+// settings for configKey through its connection-check route.
+func runHTTPRoutesConnectionCheck(ctx context.Context, client pluginClient, capabilityID, configKey string) error {
+	routes, err := client.HTTPRoutes(capabilityID)
+	if err != nil {
+		return &ConnectionTestError{
+			Message: fmt.Sprintf("Failed to initialize the plugin routes: %v", err),
+			Cause:   err,
+		}
+	}
+	query, err := structpb.NewStruct(map[string]any{"key": configKey})
+	if err != nil {
+		return err
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	resp, err := routes.Handle(probeCtx, &pluginv1.HandleHTTPRequest{
+		Method: "POST",
+		Path:   HTTPRoutesConnectionCheckPath,
+		Query:  query,
+	})
+	if err != nil {
+		if status.Code(err) == codes.Unimplemented {
+			return &ConnectionTestError{Message: connectionCheckUnsupportedMessage, Cause: ErrConnectionTestUnsupported}
+		}
+		return &ConnectionTestError{
+			Message: "Connection check failed: " + status.Convert(err).Message(),
+			Cause:   err,
+		}
+	}
+	if code := resp.GetStatusCode(); code >= 200 && code < 300 {
+		return nil
+	}
+	return &ConnectionTestError{Message: "Connection check failed: " + httpRoutesCheckMessage(resp)}
+}
+
+// httpRoutesCheckMessage reads a failed check's reason from its JSON body.
+func httpRoutesCheckMessage(resp *pluginv1.HandleHTTPResponse) string {
+	var body struct {
+		Error   string `json:"error"`
+		Message string `json:"message"`
+	}
+	if json.Unmarshal(resp.GetBody(), &body) == nil {
+		if msg := strings.TrimSpace(body.Error); msg != "" {
+			return msg
+		}
+		if msg := strings.TrimSpace(body.Message); msg != "" {
+			return msg
+		}
+	}
+	return fmt.Sprintf("the plugin answered HTTP %d", resp.GetStatusCode())
+}
 
 // runMarkerProviderConnectionCheck asks a marker provider for its account
 // statistics, which need the provider's credentials, so a success shows that

@@ -184,6 +184,7 @@ type fakePluginClient struct {
 	manifest              *pluginv1.PluginManifest
 	metadataProviderCalls int
 	markerProvider        *pluginhost.MarkerProviderClient
+	httpRoutes            *pluginhost.HTTPRoutesClient
 }
 
 func (f *fakePluginClient) Manifest() *pluginv1.PluginManifest {
@@ -228,7 +229,7 @@ func (f *fakePluginClient) AuthProvider(string) (*pluginhost.AuthProviderClient,
 }
 
 func (f *fakePluginClient) HTTPRoutes(string) (*pluginhost.HTTPRoutesClient, error) {
-	return nil, nil
+	return f.httpRoutes, nil
 }
 
 func (f *fakePluginClient) WatchSyncProvider(string) (*pluginhost.WatchSyncProviderClient, error) {

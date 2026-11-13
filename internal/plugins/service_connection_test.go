@@ -730,6 +730,72 @@ func TestServiceTestGlobalConfigChecksMarkerProviderAccount(t *testing.T) {
 	}
 }
 
+type fakeCheckRoutes struct {
+	pluginv1.HttpRoutesClient
+	resp  *pluginv1.HandleHTTPResponse
+	got   *pluginv1.HandleHTTPRequest
+	calls int
+}
+
+func (f *fakeCheckRoutes) Handle(_ context.Context, in *pluginv1.HandleHTTPRequest, _ ...grpc.CallOption) (*pluginv1.HandleHTTPResponse, error) {
+	f.calls++
+	f.got = in
+	return f.resp, nil
+}
+
+func TestServiceTestGlobalConfigChecksHTTPRoutesPlugin(t *testing.T) {
+	for _, tt := range []struct {
+		name        string
+		optIn       bool
+		resp        *pluginv1.HandleHTTPResponse
+		wantMessage string
+		wantCalls   int
+	}{
+		{name: "check passes", optIn: true, resp: &pluginv1.HandleHTTPResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)}, wantCalls: 1},
+		{
+			name: "check fails with the plugin's reason", optIn: true,
+			resp:        &pluginv1.HandleHTTPResponse{StatusCode: 502, Body: []byte(`{"error":"Radarr refused the API key"}`)},
+			wantMessage: "Connection check failed: Radarr refused the API key", wantCalls: 1,
+		},
+		{name: "routes plugin without opt-in", optIn: false, wantMessage: "Connection checks are not supported for this plugin yet."},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := connectionTestManifest(t, "community.automation", "1.1.0")
+			meta, _ := structpb.NewStruct(map[string]any{HTTPRoutesConnectionCheckKey: tt.optIn})
+			manifest.Capabilities = []*pluginv1.CapabilityDescriptor{{
+				Type: "http_routes.v1", Id: "automation", DisplayName: "Automation", Metadata: meta,
+			}}
+			routes := &fakeCheckRoutes{resp: tt.resp}
+			host := &fakeServiceHost{startResult: &fakePluginClient{
+				manifest:   manifest,
+				httpRoutes: pluginhost.NewHTTPRoutesClient(routes, 5*time.Second),
+			}}
+			service := &Service{installations: installedPluginStore(t, 4, manifest), host: host}
+
+			err := service.TestGlobalConfig(context.Background(), 4, "connection", map[string]any{"api_key": "draft"})
+			if tt.wantMessage == "" {
+				if err != nil {
+					t.Fatalf("TestGlobalConfig() error = %v, want success", err)
+				}
+			} else {
+				var connectionErr *ConnectionTestError
+				if !errors.As(err, &connectionErr) || connectionErr.Error() != tt.wantMessage {
+					t.Fatalf("TestGlobalConfig() error = %v, want message %q", err, tt.wantMessage)
+				}
+			}
+			if routes.calls != tt.wantCalls {
+				t.Fatalf("route calls = %d, want %d", routes.calls, tt.wantCalls)
+			}
+			if tt.wantCalls > 0 {
+				if routes.got.GetMethod() != "POST" || routes.got.GetPath() != HTTPRoutesConnectionCheckPath ||
+					routes.got.GetQuery().GetFields()["key"].GetStringValue() != "connection" {
+					t.Fatalf("check request = %v", routes.got)
+				}
+			}
+		})
+	}
+}
+
 // connectionConfigService serves manifest as installation 7 with stored saved
 // under its "connection" key.
 func connectionConfigService(t *testing.T, manifest *pluginv1.PluginManifest, stored map[string]any) (*Service, *fakeServiceConfigStore) {

@@ -157,6 +157,12 @@ func NewMarkerProviderClient(client pluginv1.MarkerProviderClient) *MarkerProvid
 	return &MarkerProviderClient{client: client, timeout: DefaultMarkerProviderTimeout}
 }
 
+// NewHTTPRoutesClient wraps an HTTP routes connection with a call timeout,
+// for callers that hold the gRPC client directly.
+func NewHTTPRoutesClient(client pluginv1.HttpRoutesClient, timeout time.Duration) *HTTPRoutesClient {
+	return &HTTPRoutesClient{client: client, timeout: timeout}
+}
+
 func (c *Client) MarkerProvider(capabilityID string) (*MarkerProviderClient, error) {
 	if err := c.requireCapability("marker_provider.v1", capabilityID); err != nil {
 		return nil, err

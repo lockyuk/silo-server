@@ -1685,6 +1685,9 @@ func main() {
 		// it is the process that knows what the library is, and its own view of
 		// a media mount is the one that is authoritative.
 		resourceSampler := nodemetrics.NewSampler(nodemetrics.Options{
+			// SILO_RESOURCE_SAMPLE_INTERVAL (a Go duration such as "1s") samples
+			// more often for live dashboards; empty keeps the 5s default.
+			Interval: resourceSampleInterval(),
 			// Read per sample rather than captured: in integrated mode this host
 			// is the one transcoding, and playback.transcode_dir is
 			// hot-reloadable. A startup snapshot would keep reporting headroom on
@@ -5391,4 +5394,19 @@ type audiobooksSettingsAdapter struct {
 
 func (a *audiobooksSettingsAdapter) GetString(ctx context.Context, key string) (string, error) {
 	return a.repo.Get(ctx, key)
+}
+
+// resourceSampleInterval reads SILO_RESOURCE_SAMPLE_INTERVAL, clamped to
+// 1s..60s; zero (unset or invalid) means the sampler's default.
+func resourceSampleInterval() time.Duration {
+	raw := strings.TrimSpace(os.Getenv("SILO_RESOURCE_SAMPLE_INTERVAL"))
+	if raw == "" {
+		return 0
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil || d <= 0 {
+		slog.Warn("ignoring invalid SILO_RESOURCE_SAMPLE_INTERVAL", "value", raw)
+		return 0
+	}
+	return min(max(d, time.Second), time.Minute)
 }

@@ -324,9 +324,9 @@ func sectionOf(v handlers.SectionView, sel ratingsources.Selection) Section {
 	items := make([]CatalogItem, 0, len(v.Items))
 	for _, item := range v.Items {
 		card := catalogItemOfSection(item, sel)
-		if resumeRow {
-			withResumeEpisodeBackdrop(&card, item)
-		}
+		// Continue Watching and Next Up keep the episode's own still. Upstream swaps
+		// it for the season or series backdrop here; this server shows the episode.
+		_ = resumeRow
 		items = append(items, card)
 	}
 	return Section{ID: v.ID, SectionType: v.SectionType, Title: v.Title, Featured: v.Featured, ItemLimit: v.ItemLimit, TotalCount: v.TotalCount, IsCustom: v.IsCustom, Customized: v.Customized, SectionTitleKey: sectionTitleKeyOf(v.TitleKey, v.TitleArgs), Items: items, HasMore: v.HasMore}
